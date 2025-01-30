@@ -74,11 +74,15 @@ We begin by specifying a number of options for the forecasting exercise, as defi
 
 -   **`n.forecasts`** is the number of days or periods for which forecasts are to be made. E.g., if `n.forecasts = 14`, forecasts will be generated for up to 14 days following `estimation.date.end`.
 
--   **`q`** is the signal-to-noise ratio, which controls the smoothness of the estimated trend. A lower value will lead to more smoothness. By default, we use `q = 0.005`, which in our experience ensures a good balance between the smoothness of the trend and the speed with which changes in estimates respond to new observations. Alongside, `q` can be estimated and compared with the default value.
+-   **`q`** is the signal-to-noise ratio, which controls the smoothness of the estimated trend. A lower value will lead to more smoothness. By default, `q = 0.005` is used, which is known to ensure a good balance between the smoothness of the trend and the speed with which changes in estimates respond to new observations (Harvey & Kattuman, 2020). Alongside, `q` can be estimated and compared with the default value.
 
 -   **`confidence.level`** sets the coverage of the confidence intervals for $\ln(g_t)$ which is then used to generate the prediction intervals for forecasts. Here, we use 0.68, corresponding to the probability that the forecast lies within one standard deviation of the point forecast.
 
 -   **`plt.length`** sets a truncation date to enhance the clarity of plots, e.g. showing only the last 30 days of the estimation sample. The date range for plotting can be set as `plt.length` days upto `estimation.date.end`.
+
+-   Optional: **`sea.type`** specifies the type of seasonality and can take `trigonometric` (default) or `none` if there is no seasonal component. 
+
+-   Optional: **`sea.period`** can be used to set the seasonality period by days (default is `7` for weekly patterns), and is not required if `sea.type = 0`
 
 ```{r parameters, echo=TRUE, message = FALSE, warning = FALSE}
 # Load data
@@ -95,6 +99,9 @@ n.forecasts <- 14
 q <- 0.005
 confidence.level <- 0.68
 plt.length <- 30
+
+# Seasonality paramters are excluded from this example
+
 ```
 
 ## Estimating
@@ -110,7 +117,7 @@ model <- SSModelDynamicGompertz$new(Y = y, q = q)
 res <- model$estimate()
 ```
 
-To enable forecast comparisons, create an evaluation sample. This is simply a subset from the actual data of cases *AFTER** the estimation period, converted to the log growth rate.
+To enable forecast comparisons, create an evaluation sample. This is simply a subset from the actual data of cases **AFTER** the estimation period, converted to the log growth rate.
 
 ```{r eval_sample, echo=TRUE, message = FALSE, warning = FALSE}
 # From the original data, subset dates greater than estimation end date and convert to growth rates
@@ -118,7 +125,6 @@ y.eval <- Y %>%
   subset(index(.) > estimation.date.end) %>% # subset
   tsgc::df2ldl() # log growth rate conversion
 ```
-
 
 ## Results
 
