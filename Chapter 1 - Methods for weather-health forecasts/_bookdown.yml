@@ -1,0 +1,12 @@
+
+book_filename: "__my_book"
+chapter_name: ""
+output_dir: "__my_book"
+rmd_files: ["00-index.Rmd", "01-chapter.Rmd", "02-chapter.Rmd", "03-chapter.Rmd", "04-chapter.Rmd"]
+delete_merged_file: true
+
+# NB: If you are using custom order, make sure you run 
+# bookdown::render_book("00-index.Rmd") to update in system
+
+
+

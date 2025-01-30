@@ -1,0 +1,3 @@
+# Climate-health modelling with `dnlm`
+
+Here we will demonstrate how epidemiologists model climate-health for causal inference and pathway research. These models are currently being adapted to produce forecasts, but these studies have yet to be published.

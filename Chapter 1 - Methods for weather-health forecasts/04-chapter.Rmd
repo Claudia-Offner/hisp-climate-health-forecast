@@ -1,0 +1,4 @@
+
+# Multivariate Forecasting with `tsgc`
+
+Here we will propose model developments to the `tsgc` package to account for exogenous exposures and demographic controls.

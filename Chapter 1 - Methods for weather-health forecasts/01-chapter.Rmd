@@ -1,0 +1,9 @@
+# Introduction
+
+**Here we will briefly introduce the motivation for climate-health forecasts and the methodological challenges with this.**
+
+As climate change increases the frequency and severity of extreme weather events, health systems increasingly require real time responses to weather-related peaks in health care demand. Accurate real-time forecasting of the trajectory of weather-dependent illness over the near future is of great value in this regard.
+
+The R package, tsgc, was developed to monitor and forecast the progress of epidemics, including the detection of new waves and turning points. It develops and implements time series growth curve methods first reported in Harvey and Kattuman (2020). This class of time series models predicts future values of a variable which, when cumulated, is subject to an unknown saturation level. While initially developed to forecast the COVID-19 pandemic, models in this family are relevant for many other disciplines, including weather-related health.
+
+
