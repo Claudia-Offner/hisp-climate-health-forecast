@@ -1,3 +1,9 @@
+---
+output:
+  bookdown::pdf_book: default
+  bookdown::html_document: default
+  bookdown::word_document: default
+---
 ```{r config, include=FALSE}
 # Hide warnings and messages throughout notebook
 knitr::opts_chunk$set(message = FALSE, warning = FALSE, fig.align = 'center')
@@ -100,13 +106,50 @@ q <- 0.005
 confidence.level <- 0.68
 plt.length <- 30
 
-# Seasonality paramters are excluded from this example
+# Seasonality parameters are excluded from this example
 
 ```
 
 ## Estimating
+### Model maths
+So what are we going to do with our data, given the parameters above?
 
-We begin by selecting the data series (`Y`) for the defined sample period. Then we estimate the model using a diffuse prior distribution for the initial state vector, using a signal-to-noise ratio of $0.005$ (maintained throughout this example). As mentioned, this value strikes a useful balance between the smoothness of the estimate of the slope parameter $\gamma$, and the speed with which it adapts to new observations.
+The dynamic Gompertz curve model with an integrated random walk (IRW) trend is defined by:
+
+${ \ln g_{t} = \delta_{t} + \varepsilon_{t}, \quad \varepsilon_{t} \sim NID(0, \sigma_{\varepsilon}^2), \quad t = 2, \ldots, T }$
+
+Where:
+- $\delta_t = \delta_{t-1} + \gamma_{t-1}$
+- $\gamma_t = \gamma_{t-1} + \zeta_t$
+  - $\zeta_t \sim NID(0, \sigma_{\zeta}^2)$
+  
+  Here, the observation disturbances $\varepsilon_t$ and the slope disturbances $\zeta_t$
+  are assumed to be independently and identically distributed (iid) normal variables, and
+mutually independent.
+
+The signal-to-noise ratio, $q_{\zeta} = \frac{\sigma_{\zeta}^2}{\sigma_{\varepsilon}^2}$,
+controls how quickly the slope $\gamma_t$ responds to new data:
+- A **larger ratio** leads to faster changes in the slope.
+- A **smaller ratio** results in a smoother slope.
+
+If the model does not include seasonal terms (`sea.type = 'none'`), the priors are:
+  
+  ${ \begin{pmatrix} \delta_1 \\ \gamma_1 \end{pmatrix} \sim N(a_1, P_1) }$
+  
+  The **diffuse prior** has $P_1 = \kappa I_{2 \times 2}$, where $\kappa \to \infty$.
+This diffuse prior is handled by the `KFAS` package (Helske, 2017).
+
+If the model has a seasonal component (`sea.type = 'trigonometric'`), the vector of prior
+means $a_1$ and the prior covariance matrix $P_1$ are extended accordingly.
+
+For more details on the variance matrix $Q$, please refer to the vignette.
+
+The irregular variance is given by $H = \sigma^2_{\varepsilon}$.
+
+
+### Model fit
+
+Now that we understand what the model will do, we begin by selecting the data series (`Y`) for the defined sample period. Then we estimate the model using a diffuse prior distribution for the initial state vector, using a signal-to-noise ratio of $0.005$ (maintained throughout this example). As mentioned, this value strikes a useful balance between the smoothness of the estimate of the slope parameter $\gamma$, and the speed with which it adapts to new observations.
 
 ```{r model_est, echo=TRUE, message = FALSE, warning = FALSE}
 # Subset sample period 
