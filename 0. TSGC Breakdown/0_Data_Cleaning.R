@@ -4,7 +4,7 @@
 
 
 # SET WORKING DIRECTORY
-setwd('C:/Users/offne/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
+setwd('C:/Users/claer14/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 
 # 0. Load dependencies ####
 # install.packages('ggmap')
@@ -233,6 +233,10 @@ write.csv(results, file = "agy_adm4_NHS-Scotland_2015-2025_daily-hosptial-ae.csv
 # poly <- st_read('201_heal/NHS Scotland/agy_adm2_NHS-Scotland_HealthBoards_2019.shp')
 # weather <- read.csv('202_temp/agy_adm3_NHS-Scotland_2015-2020_daily-temperature.csv')
 # health <- read.csv('201_heal/agy_adm4_NHS-Scotland_2015-2025_daily-hosptial-ae.csv')
+# 
+# # Get buffer (for weather)
+# pnt_10k <- st_buffer(pnt, 10000)
+# st_write(pnt_10k, "201_heal/NHS Scotland/agy_adm4_NHS-Scotland_hosptials-10K-BUFFER.shp")
 
 # CLEAN DATA FOR MERGES & VISUALISING
 ### Transform from ONS British National Grid to WGS84 (for ggmap use)
