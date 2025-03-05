@@ -119,7 +119,7 @@ plot(df_weekly[[date]], df_weekly[[out_list[1]]])
 plot(results$date, results[,3])
 
 # Export the data frame to a CSV file
-write.csv(results, file = "eng_adm0_ONS_2019-2010_daily-national-mortality.csv", row.names = FALSE)
+write.csv(results, file = "eng_adm0_ONS_2010-2019_daily-national-mortality.csv", row.names = FALSE)
 
 
 # 2. SCOTLAND: Simulate Daily A&E - National Level ####
@@ -216,11 +216,23 @@ write.csv(results, file = "agy_adm4_NHS-Scotland_2015-2025_daily-hosptial-ae.csv
 
 # 4. SCOTLAND: Combine hospital & weather time series with locations ####
 
-# Open shape files and csv
-pnt <- st_read('201_heal/NHS Scotland/agy_adm4_NHS-Scotland_hosptials.shp')
-poly <- st_read('201_heal/NHS Scotland/agy_adm2_NHS-Scotland_HealthBoards_2019.shp')
-weather <- read.csv('202_temp/agy_adm3_NHS-Scotland_2015-2020_daily-temperature.csv')
-health <- read.csv('201_heal/agy_adm4_NHS-Scotland_2015-2025_daily-hosptial-ae.csv')
+# # Open shape files and csv: ENGLAND
+# weather <- read.csv('202_temp/eng_adm0_GEE_ERA5_daily-national-2m-temp_2010-01-01_to_2020-07-09.csv')
+# health <- read.csv('201_heal/eng_adm0_ONS_2019-2010_daily-national-mortality.csv')
+# health$date <- as.Date(health$date)
+# weather$date <- as.Date(weather$date)
+# final <- health %>%
+#   left_join(weather, by=c('date')) %>%
+#   select(date, weekday, w_total_deaths, c_total_deaths, w_resp_deaths, c_resp_deaths, temperature_C) %>%
+#   rename(temp = temperature_C)
+# 
+# write.csv(final, file = "eng_adm0_ONS_2010-2019_daily-national-mortality&temp.csv", row.names = FALSE)
+
+# # Open shape files and csv: SCOTLAND
+# pnt <- st_read('201_heal/NHS Scotland/agy_adm4_NHS-Scotland_hosptials.shp')
+# poly <- st_read('201_heal/NHS Scotland/agy_adm2_NHS-Scotland_HealthBoards_2019.shp')
+# weather <- read.csv('202_temp/agy_adm3_NHS-Scotland_2015-2020_daily-temperature.csv')
+# health <- read.csv('201_heal/agy_adm4_NHS-Scotland_2015-2025_daily-hosptial-ae.csv')
 
 # CLEAN DATA FOR MERGES & VISUALISING
 ### Transform from ONS British National Grid to WGS84 (for ggmap use)
