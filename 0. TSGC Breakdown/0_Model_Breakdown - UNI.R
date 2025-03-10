@@ -1,19 +1,23 @@
 
 # Set working directory
-setwd('C:/Users/offne/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
+setwd('C:/Users/claer14/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 
-# testing 
 # ------------------------------------------------------------------------------ 
 # -------------------------------- DEPENDENCIES --------------------------------
 # ------------------------------------------------------------------------------
 
-# LOAD PACKAGES
+# LOAD PACKAGES ####
 
 library(KFAS)
 library(dplyr)
 library(xts)
+library(abind)
+library(ggplot2)
+library(ggthemes)
+library(zoo)
+library(utils)
 
-# LOAD MODEL FUNCTIONS
+# LOAD MODEL FUNCTIONS ####
 
 ### Function specifying dynamic Gompertz model
 get_dynamic_gompertz_model <- function(y, q = NULL, sea.type = 'trigonometric', sea.period = 7, 
@@ -185,10 +189,10 @@ update <- function(pars, model, q, sea.type) {
   return(model)
 }
 
-# LOAD FORMATTING FUNCTIONS
+# LOAD FORMATTING FUNCTIONS ####
 
 ### Function predicting y cases, state variables & conditional state covariance matrices
-predict_all <- function(index, output, n.ahead, sea.on = FALSE, return.all = FALSE) {
+predict_all_UNI <- function(index, output, n.ahead, sea.on=FALSE, return.all =FALSE) {
   
   # Description:
   # Function returning the incidence variable y, the state variables 
@@ -212,9 +216,10 @@ predict_all <- function(index, output, n.ahead, sea.on = FALSE, return.all = FAL
   model <- output
   
   new.model <- output$model
-  new.model$y <- rbind(new.model$y, 
-                       matrix(NA, ncol = ncol(new.model$y), nrow = n.ahead) %>% 
-                         as.ts())
+  
+  # Extend Y, Z and N
+  new.model$y <- rbind(new.model$y, matrix(NA, ncol = ncol(new.model$y), nrow = n.ahead) %>% as.ts())
+  
   attr(new.model, 'n') <- length(output$model$y) + n.ahead %>%
     as.integer()
   model_output <- KFS(new.model)
@@ -229,11 +234,21 @@ predict_all <- function(index, output, n.ahead, sea.on = FALSE, return.all = FAL
       n.ahead = n.ahead, level = 0.68, states = 'level')
   }
   
+  if (sea.on == TRUE) {
+    y.hat.kfas <- predict(
+      output$model, interval = 'prediction',
+      n.ahead = n.ahead, level = 0.68, states = 'all')
+  } else {
+    y.hat.kfas <- predict(
+      output$model, interval = 'prediction',
+      n.ahead = n.ahead, level = 0.68, states = 'level')
+  }
+
   n <- attr(model$model, "n")
   dates <- seq(idx[1], by = 'day', length.out = (n + n.ahead))
   
   # Assumes time invariant Z.t
-  y.t.t <- output$att %*% drop(output$model$Z)
+  y.t.t <- output$att %*% output$model$Z[1,,1] #!!!!!!!!!!wrong
   
   y.hat <- xts::xts(
     rbind(y.t.t, y.hat.kfas[, 1] %>% as.matrix()),
@@ -267,7 +282,7 @@ predict_all <- function(index, output, n.ahead, sea.on = FALSE, return.all = FAL
 }
 
 ### Function predicting level of cumulative cases 
-predict_level <- function(index, output, y.cum, n.ahead, confidence.level, return.diff = FALSE) {
+predict_level_UNI <- function(index, output, y.cum, n.ahead, confidence.level, sea.on=FALSE, return.diff=FALSE) {
   
   # Description:
   # Function to predict the level of a cumulative variable
@@ -279,14 +294,14 @@ predict_level <- function(index, output, y.cum, n.ahead, confidence.level, retur
   # return.diff: If TRUE, returns the difference (incidence) instead of cumulative values
   
   # Return: xts object containing the point forecasts and upper and lower bounds of the forecast interval.
-
+  
   model <- output$model
   n <- attr(model, "n")
   p <- attr(model, "p")
   
   freq <- unclass(periodicity(y.cum))$label
   endtime <- end(model$y) + c(0, n.ahead)
-  filtered.out <- predict_all(index, output, n.ahead, sea.on = TRUE, return.all = TRUE)
+  filtered.out <- predict_all_UNI(index, output, n.ahead, sea.on=sea.on, return.all = TRUE)
   
   # Extract parameters.
   timespan <- n + 0:n.ahead
@@ -307,7 +322,7 @@ predict_level <- function(index, output, y.cum, n.ahead, confidence.level, retur
   
   y.hat <- xts(matrix(NA, nrow = n.ahead + 1, ncol = 3),
                order.by = v_dates_end)
-  y.hat[v_dates_end[1],] <- y.cum[v_dates_end[1]]
+  y.hat[v_dates_end[1],] <- y.cum[v_dates_end[1],1]
   for (i in seq_len(length(v_dates_end[-1]))) {
     date.forecast <- v_dates_end[i + 1]
     date.lag <- date.forecast - 1
@@ -335,8 +350,6 @@ predict_level <- function(index, output, y.cum, n.ahead, confidence.level, retur
   names(y.hat)[2:3] <- list('lower', 'upper')
   
   return(as.xts(y.hat))
-  
-  
   
 }
 
@@ -460,6 +473,307 @@ get_gy_ci <- function(index, output, smoothed = FALSE, confidence_level = 0.68) 
   return(pred)
 }
 
+# LOAD PLOTTING FUNCTIONS ####
+
+### Function plotting actual and filtered values of the log cumulative growth rate
+plot_forecast_UNI <- function(index, output, y.eval, n.ahead = 14, plt.start.date=NULL, title="", caption = "") {
+  
+  # Description: Function plots actual and filtered values of the log cumulative growth rate 
+  # (ln(g_t)) within the estimation sample, along with forecasted and realised 
+  # values outside the estimation sample.
+  #
+  # Parameters:
+  # - res: Results object estimated using the estimate() method.
+  # - y.eval: Out-of-sample realisation of the log growth rate of the cumulated variable 
+  #           (actual values for comparison with forecasts).
+  # - n.ahead: Number of time periods ahead to forecast from the end of the sample 
+  #            (default is 14).
+  # - plt.start.date: Start date for the plot (default: NULL, meaning the start of 
+  #                   the estimation sample).
+  # - title: Title for the plot (entered as a text string).
+  # - caption: Caption for the plot (entered as a text string).
+  #
+  # Returns: A ggplot2 plot visualizing the forecast and realised values of the 
+  # log cumulative growth rate.
+  
+  Date <- NULL
+  model <- output$model
+  est.date.index <- index
+  
+  y <- xts::xts(output$model$y %>% as.numeric(), order.by = est.date.index)
+  p <- attr(output$model, 'p')
+  
+  y.hat.all <- predict_all_UNI(index, output, n.ahead, return.all = TRUE)
+  y.pred <-  subset(y.hat.all$y.hat,index(y.hat.all$y.hat) > tail(index,1))
+  filtered.level <- y.hat.all$level
+  
+  if (p == 1) {
+    EstimationSample <- FilteredLevel <- Forecast <- RealisedData <- NULL
+    d <- cbind(y, filtered.level, y.pred,
+               y.eval[index(y.eval)>tail(index(est.date.index),1),])
+    if (!is.null(plt.start.date)) { d <- d[index(d) > plt.start.date] }
+    d <- d[index(d) <= tail(index(y.pred),1)]
+    names(d) <- c(
+      'EstimationSample', 'FilteredLevel', 'Forecast', 'RealisedData'
+    )
+    
+    df_plot <- as.data.frame(d)
+    df_plot$Date <- as.Date(rownames(df_plot))
+    
+    p1 <- ggplot2::ggplot(data = df_plot, aes(x = Date)) +
+      ggplot2::geom_line(aes(
+        y = EstimationSample, color = "Estimation\nSample"), lwd = 0.85) +
+      ggplot2::geom_line(aes(y = FilteredLevel, color = "Filtered\nLevel"),
+                         lwd = 0.85) +
+      ggplot2::geom_line(aes(y = Forecast, color = "Forecast"), lwd = 0.85) +
+      ggplot2::geom_line(aes(y = RealisedData, color = "Realised\nData"),
+                         lwd = 0.85) +
+      ggplot2::scale_color_manual(values = c(1, 2, 3, 'grey')) +
+      scale_linetype_manual(
+        values = c("solid", "solid", "solid", "dashed")) +
+      scale_x_date(labels = scales::date_format("%d %b %y")) +
+      labs(x = "Date", y = "Log Growth Rate", caption = caption,
+           title = title
+      ) +
+      theme_economist_white(gray_bg = FALSE) +
+      scale_fill_economist() +
+      theme(legend.title = element_blank()) +
+      theme(
+        text = element_text(size = rel(1)),
+        axis.text = element_text(size = rel(1)),
+        axis.title.y = element_text(size = rel(1),margin = margin(r=10)),
+        axis.title.x = element_text(size = rel(1),margin = margin(t=10)),
+        plot.title = element_text(margin=margin(b=5)),
+        plot.caption = element_text(size = rel(1)),
+      )
+  } else if (p == 2) {
+    g_1 <- g_2 <- delta <- Forecast <- RealisedData <- NULL
+    d <- cbind(y, filtered.level, y.pred[,2],
+               y.eval[index(y.eval)>tail(index(est.date.index),1),2])
+    d <- d[index(d) <= tail(index(y.pred),1)]
+    names(d) <- c('g_1', 'g_2', 'delta', 'Forecast', 'RealisedData')
+    
+    df_plot <- as.data.frame(d)
+    df_plot$Date <- as.Date(rownames(df_plot))
+    
+    p1 <- ggplot2::ggplot(data = df_plot, aes(x = Date)) +
+      ggplot2::geom_line(aes(y = g_1, color = "g_1")) +
+      ggplot2::geom_line(aes(y = g_2, color = "g_2")) +
+      ggplot2::geom_line(aes(y = g_2, color = "delta")) +
+      ggplot2::geom_line(aes(y = Forecast, color = "Forecast")) +
+      ggplot2::geom_line(aes(y = RealisedData, color = "Realised\nData")) +
+      ggplot2::scale_color_manual(
+        values = c(1, 2, 3, 4, 'grey')) +
+      ggplot2::scale_linetype_manual(
+        values = c("solid", "solid", "solid", "solid", "dashed")
+      ) +
+      ggplot2::scale_x_date(labels = scales::date_format("%d %b %y")) +
+      labs(x = "Date", y = "Log Growth Rate", caption = caption,
+           title = title
+      ) +
+      theme_economist_white(gray_bg = FALSE) +
+      scale_fill_economist() +
+      theme(legend.title = element_blank()) +
+      theme(
+        text = element_text(size = rel(1.)),
+        axis.text = element_text(size = rel(1)),
+        axis.title.y = element_text(size = rel(1),margin = margin(r=10)),
+        axis.title.x = element_text(size = rel(1),margin = margin(t=10)),
+        plot.title = element_text(margin=margin(b=5)),
+        plot.caption = element_text(size = rel(1))
+      )
+  } else { stop('NotImplemented Error') }
+  
+  return(p1)
+}
+
+### Function plotting new cases
+plot_new_cases_UNI <- function(index, output, Y, n.ahead, confidence.level = 0.68, date_format = "%Y-%m-%d", title=NULL, plt.start.date=NULL) {
+  
+  # Description: Function plots the actual and forecasted values of new cases 
+  # (i.e., the difference in the cumulated variable). It includes forecasts with 
+  # and without seasonal adjustments and shows forecast intervals.
+  #
+  # Parameters:
+  # - res: Results object estimated using the estimate() method.
+  # - Y: Cumulated variable (time series data).
+  # - n.ahead: Number of future periods to forecast.
+  # - confidence.level: Confidence level for the prediction intervals (default is 0.68, approximately one standard deviation).
+  # - date_format: Format for date labels on the plot (default: '%Y-%m-%d').
+  # - title: Title for the plot (default: NULL, meaning no title).
+  # - plt.start.date: Start date for the actual data shown in the plot 
+  #
+  # Returns: A ggplot2 plot visualizing the forecast.
+  
+  Date <- Data <- Forecast <- ForecastTrend <- lower <- upper <- NULL
+  if (is.null(title)) {title <- ""}
+  est.date.index <- index %>% as.Date()
+  estimation.date.end <- tail(est.date.index, 1)
+  y.level.est <- Y[est.date.index]
+  if (is.null(plt.start.date)) {plt.start.date <- head(est.date.index, 1)}
+  
+  y.hat.diff.final.ci <- predict_level_UNI(index, output, y.cum=y.level.est, 
+                                           n.ahead, confidence.level, 
+                                           return.diff = TRUE)
+  y.hat.diff.final <- predict_level_UNI(index, output, y.cum=y.level.est, 
+                                        n.ahead, confidence.level, 
+                                        return.diff=TRUE, sea.on=TRUE)
+  
+  tmp.date <- min(estimation.date.end - 4, plt.start.date)
+  s <- sprintf("%s/", format(tmp.date, "%Y-%m-%d"))
+  d.plot <- cbind(
+    diff(y.level.est)[s],
+    y.hat.diff.final[, 1],
+    y.hat.diff.final.ci[, 1]
+  )
+  names(d.plot) <- c('Data', 'Forecast', 'ForecastTrend')
+  
+  ci <- as.data.frame(cbind(zoo::coredata(y.hat.diff.final.ci[, 2:3]),
+                            (as.Date(index(y.hat.diff.final.ci),
+                                     format = date_format))))
+  colnames(ci) <- c('lower', 'upper', 'date')
+  ci[, 'date'] <- as.Date(
+    ci[, 'date'], format = date_format, origin = "1970-01-01"
+  )
+  
+  df_plot <- as.data.frame(d.plot)
+  df_plot$Date <- as.Date(rownames(df_plot), format = date_format)
+  
+  ggplot2::ggplot(data = df_plot, aes(x = Date)) +
+    ggplot2::geom_line(aes(y = Data, color = "Data"), lwd = 0.85) +
+    ggplot2::geom_line(aes(y = Forecast, color = "Forecast"), lwd = 0.85) +
+    ggplot2::geom_line(
+      aes(y = ForecastTrend, color = "Forecast\nTrend"), lwd = 0.85
+    ) +
+    ggplot2::scale_color_manual(values = c("black", "grey", "#AA2045")) +
+    ggplot2::geom_ribbon(data = ci, aes(x = date, ymin = lower, ymax = upper),
+                         linetype = 0, linewidth = 0, fill = "#AA2045", alpha = 0.1) +
+    labs(x = "Date", y = "New Cases", title = title) +
+    theme_economist_white(gray_bg = FALSE, base_size = 12) +
+    theme(legend.title = element_blank()) +
+    theme(
+      text = element_text(size = rel(1.1)),
+      axis.text = element_text(size = rel(1)),
+      axis.title.y = element_text(size = rel(1),margin = margin(r=10)),
+      axis.title.x = element_text(size = rel(1),margin = margin(t=10)),
+      plot.title = element_text(margin=margin(b=5)),
+      plot.caption = element_text(size = rel(1))
+    ) +
+    ggplot2::scale_linetype_manual(
+      values = c("solid", "solid", "solid")) +
+    ggplot2::scale_x_date(labels = scales::date_format("%d %b %y")) +
+    ggplot2::scale_size_manual(values = c(1, 1, 1))
+  
+}
+
+# Function plotting percentage prediction error
+plot_holdout_UNI <- function(index, output, Y, Y.eval, confidence.level = 0.68, date_format = "%Y-%m-%d", series.name = NULL, title= NULL, caption = NULL) {
+  
+  # Description: Function plots the forecast of new cases (difference in the cumulated variable) 
+  # over a holdout sample. It includes actual values, forecasted values (with and 
+  # without seasonal components), forecast intervals, and actual outcomes from 
+  # the holdout sample. Additionally, it reports the mean absolute percentage 
+  # prediction error over the holdout sample.
+  #
+  # Parameters:
+  # - res: Results object estimated using the estimate() method.
+  # - Y: Values of the cumulated variable used in the estimation window.
+  # - Y.eval: Values of the cumulated variable in the holdout sample 
+  #           (actual values for comparison with forecasts).
+  # - confidence.level: Width of the prediction interval for ln(g_t) used in 
+  #                     forecasts of y_t = ΔY_t (default: 0.68, approximately 
+  #                     one standard deviation).
+  # - series.name: Name of the variable being forecasted, used for the y-axis 
+  #                label (e.g., "Cases" results in "New Cases" on the y-axis).
+  # - date_format: Format for date labels on the plot (default: '%Y-%m-%d').
+  # - title: Title for the forecast plot (entered as a text string, default: NULL, 
+  #          meaning no title).
+  # - caption: Caption for the forecast plot (entered as a text string, default: NULL, 
+  #            meaning no caption).
+  #
+  # Returns: A ggplot2 plot visualizing the forecast, actual values, and prediction 
+  # intervals over the holdout sample.
+  
+  
+  Date <- Actual <- Forecast <- ForecastTrend <- lower <- upper <- NULL
+  
+  model <- output$model
+  est.date.index <- index
+  
+  y.level.est <- Y[est.date.index]
+  
+  p <- attr(output$model, 'p')
+  if(p!=1) { stop('NotImplementedError') }
+  
+  n.ahead <- tail(index(Y.eval),1)-tail(index(y.level.est),1)
+  
+  y.eval.diff <- diff(Y.eval) %>% na.omit
+  
+  est.date.index <- index %>% as.Date()
+  estimation.date.end <- tail(est.date.index, 1)
+  
+  y.hat.diff.final.ci <- predict_level_UNI(index, output, y.cum = y.level.est, 
+                                           n.ahead, confidence.level, 
+                                           return.diff = TRUE)
+  y.hat.diff.final <- predict_level_UNI(index, output, y.cum = y.level.est, 
+                                    n.ahead, confidence.level, 
+                                    return.diff = TRUE, sea.on = TRUE)
+
+  d <- cbind(
+    y.eval.diff[index(y.eval.diff)>estimation.date.end,],
+    y.hat.diff.final[, 1],
+    y.hat.diff.final.ci[, 1]
+  )
+  names(d) <- c('Actual', 'Forecast', 'ForecastTrend')
+  
+  df_plot <- as.data.frame(d)
+  df_plot$Date <- as.Date(rownames(df_plot), format = date_format)
+  
+  d.eval <- na.omit(d)
+  mape.trend <- 100*(abs(d.eval$Actual - d.eval$`ForecastTrend`)/
+                       d.eval$Actual) %>% mean %>% round(2)
+  mape.sea <- 100*(abs(d.eval$Actual - d.eval$Forecast)/d.eval$Actual) %>%
+    mean %>% round(2)
+  
+  ci <- as.data.frame(cbind(zoo::coredata(y.hat.diff.final.ci[, 2:3]),
+                            (as.Date(index(y.hat.diff.final.ci),
+                                     format = date_format))))
+  colnames(ci) <- c('lower', 'upper', 'date')
+  ci[, 'date'] <- as.Date(ci[, 'date'], format = date_format,
+                          origin = "1970-01-01")
+  
+  p1 <- ggplot2::ggplot(data = df_plot, aes(x = Date)) +
+    ggplot2::geom_line(aes(y = Actual, color = "Actual"),lwd = 0.85) +
+    ggplot2::geom_line(aes(y = Forecast, color = "Forecast"),lwd = 0.85) +
+    ggplot2::geom_line(
+      aes(y = ForecastTrend, color = "Forecast\nTrend"),lwd = 0.85) +
+    ggplot2::scale_color_manual(values = c("black", "grey", "#AA2045")) +
+    ggplot2::geom_ribbon(data = ci, aes(x = date, ymin = lower, ymax = upper),
+                         linetype = 0, linewidth = 0, fill = "#AA2045",
+                         alpha = 0.1) +
+    labs(x = "Date", y = paste("New",series.name), title = title,
+         subtitle = paste("MAPE: ",mape.sea,"%. Trend MAPE: ",
+                          mape.trend,"%.",sep="")) +
+    theme_economist_white(gray_bg = FALSE, base_size = 14) +
+    theme(legend.title = element_blank()) +
+    theme(
+      text = element_text(size = rel(1)),
+      axis.text = element_text(size = rel(1)),
+      axis.title.y = element_text(size = rel(1), margin = margin(r=10)),
+      axis.title.x = element_text(size = rel(1), margin = margin(t=10)),
+      plot.title = element_text(margin=margin(b=5)),
+      plot.subtitle = element_text(
+        size = rel(1), hjust=0,  margin = margin(t=3))
+    ) +
+    scale_linetype_manual(
+      values = c("solid", "solid", "solid")) +
+    scale_x_date(labels = scales::date_format("%d %b %y")) +
+    scale_size_manual(values = c(1, 1.5, 1))
+  
+  
+  return(p1)
+}
+
 
 # ------------------------------------------------------------------------------ 
 # --------------------------------- PART 1 ------------------------------------- 
@@ -481,11 +795,11 @@ df <- df[ , -2] # Drop irrelevant data
 df$date <- as.Date(df$date, format = "%Y-%m-%d")  # Adjust format as needed
 Y <- xts(df[ , -1], order.by = df$date)
 
+# 1. Set model parameters ####
+
 # Select outcome and subset desired dates
 Y <- Y["2017-02-01/2020-02-01"]
 Y <- Y$c_NumberOfAttendancesEpisode
-
-# 1. Fit base model ####
 
 # Set parameters 
 estimation.date.start <- as.Date("2018-01-01")
@@ -496,15 +810,21 @@ confidence.level <- 0.68
 plt.length <- 30
 sea.type <- 'trigonometric'
 
-# Set sample period & get log growth rate of cumulative series
+# Set sample period
 y.cum <- Y[estimation.date.start <= index(Y) & index(Y) <= estimation.date.end]
-y.lg <- tsgc::df2ldl(y.cum) 
+
+# Get growth rate
+y.lg <- tsgc::df2ldl(y.cum)
+
+# Get data post-sample period & convert to growth rates (for accuracy evaluation)
+y.eval <- Y %>% 
+  subset(index(.) > estimation.date.end) %>%
+  tsgc::df2ldl() 
+
+# 2. Fit & update model with known/unknown state-space param estimates ####
 
 # Fit initial state-space model
 model <- get_dynamic_gompertz_model(y.lg, q)
-
-
-# 2. Update  model with known state-space param estimates ####
 
 # Partial update of known params (seasonal, observational & slope noise)
 updatefn <- purrr::partial(update, ... =, q = q, sea.type = sea.type)
@@ -513,16 +833,16 @@ updatefn <- purrr::partial(update, ... =, q = q, sea.type = sea.type)
 model_fit <- fitSSM(model$model, inits = model$inits, updatefn = updatefn,
                     method = 'BFGS')
 
-# 3. Run the Kalman Filter ####
+# Kalman filter
 output <- KFS(model_fit$model)
 
-# 4. Filter results for reporting tables and figures ####
+# 3. Filter results for reporting tables and figures ####
 
 # Get truncated index from model, if using a reinitialisation in self$get_model
 index <- if (!is.null(model$index)) { model$index } else { index(y.lg) }
 
 # Check kalman noise variance parameters
-print_estimation_results(index, output)
+# print_estimation_results(index, output)
 
 # Get the smoothed growth rate of cases, with delta & gamma parameters
 get_growth_y(index, output, smoothed = TRUE, return.components = TRUE)
@@ -531,67 +851,21 @@ get_growth_y(index, output, smoothed = TRUE, return.components = TRUE)
 get_gy_ci(index, output)
 
 # Get predicted n.ahead cumulative cases, with CIs
-predict_level(index, output, y.cum, n.ahead, confidence.level, return.diff = FALSE)
+predict_level_UNI(index, output, y.cum, n.ahead, confidence.level, return.diff = FALSE)
 
 # Get full KFS model with predicted n.ahead values (no CI)
-predict_all(index, output, n.ahead, sea.on = FALSE, return.all = FALSE)
+predict_all_UNI(index, output, n.ahead, sea.on = FALSE, return.all = FALSE)
+
+# 4. Visuals ####
+
+plot_forecast_UNI(output=output, index=index, y.eval=y.eval, n.ahead=n.ahead,
+              plt.start.date=estimation.date.end - plt.length)
+
+plot_new_cases_UNI(output=output, index=index, Y=y.cum, n.ahead=n.ahead,
+               confidence.level=confidence.level, date_format = "%Y-%m-%d",
+               plt.start.date = estimation.date.end - plt.length)
+
+plot_holdout_UNI(output=output, index=index, Y=y.cum, Y.eval=Y[(estimation.date.end+0:n.ahead)],
+             confidence.level = 0.68, date_format = "%Y-%m-%d")
 
 
-
-
-
-
-# ------------------------------------------------------------------------------ 
-# --------------------------------- PART 2 ------------------------------------- 
-#    Multivariate model of mortality & temperature in England, nationally
-# ------------------------------------------------------------------------------
-
-# 0. Import & clean data ####
-
-# Load data
-df <- read.csv('eng_adm0_ONS_2010-2019_daily-national-mortality&temp.csv')
-
-# Set date type, create XTS object & select outcome
-df <- df[ , -2] # Drop irrelevant data
-df$date <- as.Date(df$date, format = "%Y-%m-%d")  # Adjust format as needed
-Y <- xts(df[ , -1], order.by = df$date)
-
-# Select outcome and subset desired dates
-Y <- Y["2017-02-01/2019-12-27"]
-
-# 1. Fit base model ####
-
-# Set parameters 
-estimation.date.start <- as.Date("2018-01-01")
-estimation.date.end <- as.Date("2018-05-25")
-n.ahead <- 14
-q <- 0.005
-confidence.level <- 0.68
-plt.length <- 30
-sea.type <- 'trigonometric'
-sea.period <- 7
-
-# Set sample period & get log growth rate of cumulative series
-y.cum <- Y[estimation.date.start <= index(Y) & index(Y) <= estimation.date.end]
-y.lg <- tsgc::df2ldl(y.cum$c_total_deaths) 
-
-################################################################################
-
-y <- as.numeric(tsgc::df2ldl(y.cum$c_total_deaths))
-x1 <- as.numeric(y.cum$temp)
-
-model <- SSModel(y ~ SSMregression(~ x1, Q = diag(NA,1)) + 
-                   SSMtrend(degree = 2, Q = list(matrix(0), matrix(NA))) +
-                   SSMseasonal(period = sea.period, Q = NA, sea.type = sea.type), H=matrix(NA))
-
-updatefn <- purrr::partial(update, ... =, q = q, sea.type = sea.type)
-model_fit <- fitSSM(model, inits = c(0,0), updatefn = updatefn, method = 'BFGS')
-
-output <- KFS(model_fit$model)
-output$model
-
-ts.plot(output$alphahat[,1])
-
-index <- if (!is.null(model$index)) { model$index } else { index(y.lg) }
-
-predict_level(index, output, y.cum$c_total_deaths, n.ahead, confidence.level, return.diff = FALSE)

@@ -3,10 +3,9 @@
 ### ---------------------------------### 
 
 # SET WORKING DIRECTORY
-setwd('C:/Users/offne/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/201_heal')
+setwd('C:/Users/claer14/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/201_heal')
 
 # 0. LOAD DEPENDENCIES ####
-
 library(tsgc)
 library(here)
 library(zoo)
@@ -88,6 +87,7 @@ y <- Y[estimation.date.start <= index(Y) & index(Y) <= estimation.date.end]
 # Fit model with subset & smoothing ratio
 model <- SSModelDynamicGompertz$new(Y = y, q = q)
 res <- model$estimate()
+res$output$model$y
 
 # From the original data, subset dates greater than estimation end date and convert to growth rates
 y.eval <- Y %>% 
