@@ -70,8 +70,8 @@ ggplot(data = df.f, aes(x = Date)) +
 # 3. PARAMETERS & ESTIMATION ####
 
 # Set sample period (dates)
-estimation.date.start <- as.Date("2018-01-01")
-estimation.date.end <- as.Date("2018-05-25")
+estimation.date.start <- as.Date("2018-08-01")
+estimation.date.end <- as.Date("2018-12-10")
 
 # Set forecast period (days)
 n.forecasts <- 14

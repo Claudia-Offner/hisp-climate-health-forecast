@@ -486,6 +486,56 @@ get_gy_ci <- function(index, output, smoothed = FALSE, confidence_level = 0.68) 
 
 # LOAD PLOTTING FUNCTIONS ####
 
+### Function for plotting data with moving average
+plot_moving_avg <- function(variable, MA=7, y.lab="", plt.start.date=NULL){
+  
+  # Determine plot length
+  if (is.null(plt.start.date)) {plt.start.date <- head(est.date.index, 1)}
+  tmp.date <- min(estimation.date.end - 4, plt.start.date)
+  s <- sprintf("%s/", format(tmp.date, "%Y-%m-%d"))
+  variable <- variable[s]
+  
+  # Calculate the 7 day centered moving average
+  ma.cent <- zoo::rollmean(variable, MA, align = "center") 
+
+  # Create df for plot (actual data vs. MA data)
+  d <- setNames(cbind(variable, ma.cent), c('New Cases', 'Centered 7-day MA'))
+  df.f <- data.frame(Date = index(d), 
+                     New.Cases = coredata(d[,1]),
+                     Centered.7.day.MA = coredata(d[,2]))
+  
+  
+  # Plot Figure 1
+  p1 <- ggplot(data = df.f, aes(x = Date)) +
+    geom_line(aes(y = New.Cases, color = "Real data"), linewidth=0.1) +
+    geom_line(aes(y = Centered.7.day.MA, color = "Centered 7 day MA"), linewidth=1) +
+    scale_y_continuous(n.breaks = 6) +
+    xlab("Day") +
+    ylab(y.lab) +
+    scale_color_manual(name='', values=c('Real data'='black', 'Centered 7 day MA'='red')) +
+    theme_light(base_size = 12) +
+    theme(legend.position = c(.2, 0.85)) +
+    theme(legend.title=element_text(size=2),legend.text=element_text(size=10)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+          plot.title = element_text(face = "bold")) +
+    theme_economist_white(gray_bg = FALSE, base_size = 12) +
+    theme(legend.title = element_blank()) +
+    theme(
+      text = element_text(size = rel(1.1)),
+      axis.text = element_text(size = rel(1)),
+      axis.title.y = element_text(size = rel(1),margin = margin(r=10)),
+      axis.title.x = element_text(size = rel(1),margin = margin(t=10)),
+      plot.title = element_text(margin=margin(b=5)),
+      plot.caption = element_text(size = rel(1))
+    )+
+    ggplot2::scale_linetype_manual(
+      values = c("solid", "solid", "solid")) +
+    ggplot2::scale_x_date(labels = scales::date_format("%d %b %y")) +
+    ggplot2::scale_size_manual(values = c(1, 1, 1))
+  
+  return(p1) 
+}
+
 ### Function plotting actual and filtered values of the log cumulative growth rate
 plot_forecast_MULTI <- function(index, output, y.eval, n.ahead = 14, plt.start.date=NULL, title="", caption = "") {
   
@@ -513,8 +563,8 @@ plot_forecast_MULTI <- function(index, output, y.eval, n.ahead = 14, plt.start.d
   
   y <- xts::xts(output$model$y %>% as.numeric(), order.by = est.date.index)
   p <- attr(output$model, 'p')
-  
-  y.hat.all <- predict_all_MULTI(index, output, n.ahead, new.data, sea.on = FALSE, return.all = TRUE)
+
+    y.hat.all <- predict_all_MULTI(index, output, n.ahead, new.data, sea.on = FALSE, return.all = TRUE)
   
   y.pred <-  subset(y.hat.all$y.hat,index(y.hat.all$y.hat) > tail(index,1))
   filtered.level <- y.hat.all$level
@@ -533,20 +583,16 @@ plot_forecast_MULTI <- function(index, output, y.eval, n.ahead = 14, plt.start.d
     df_plot$Date <- as.Date(rownames(df_plot))
     
     p1 <- ggplot2::ggplot(data = df_plot, aes(x = Date)) +
-      ggplot2::geom_line(aes(
-        y = EstimationSample, color = "Estimation\nSample"), lwd = 0.85) +
-      ggplot2::geom_line(aes(y = FilteredLevel, color = "Filtered\nLevel"),
-                         lwd = 0.85) +
-      ggplot2::geom_line(aes(y = Forecast, color = "Forecast"), lwd = 0.85) +
-      ggplot2::geom_line(aes(y = RealisedData, color = "Realised\nData"),
-                         lwd = 0.85) +
-      ggplot2::scale_color_manual(values = c(1, 2, 3, 'grey')) +
-      scale_linetype_manual(
-        values = c("solid", "solid", "solid", "dashed")) +
+      ggplot2::geom_line(aes(y = EstimationSample, color = "Data"), lwd = 0.5) +
+      ggplot2::geom_line(aes(y = FilteredLevel, color = "Filtered\nTrend"), lwd = 0.85) +
+      ggplot2::geom_line(aes(y = Forecast, color = "Forecast\nTrend"), lwd = 0.85) +
+      ggplot2::geom_line(aes(y = RealisedData, color = "Forecast"), lwd = 0.75) +
+      ggplot2::scale_color_manual(
+        values = c("Data"=1, "Filtered\nTrend"=2, 'Forecast\nTrend'=3,'Forecast'='grey'),
+        limits = c("Data", "Filtered\nTrend",'Forecast\nTrend', 'Forecast')) +
+      scale_linetype_manual(values = c("solid", "solid", "solid", "dashed")) +
       scale_x_date(labels = scales::date_format("%d %b %y")) +
-      labs(x = "Date", y = "Log Growth Rate", caption = caption,
-           title = title
-      ) +
+      labs(x = "Date", y = "Log Growth Rate", caption = caption, title = title) +
       theme_economist_white(gray_bg = FALSE) +
       scale_fill_economist() +
       theme(legend.title = element_blank()) +
@@ -634,14 +680,16 @@ plot_new_cases_MULTI <- function(index, output, Y, n.ahead, confidence.level = 0
   tmp.date <- min(estimation.date.end - 4, plt.start.date)
   s <- sprintf("%s/", format(tmp.date, "%Y-%m-%d"))
   d.plot <- cbind(
-    diff(y.level.est)[s],
+    diff(y.level.est[,1])[s],
+    y.level.est[,2][s],
     y.hat.diff.final[, 1],
     y.hat.diff.final.ci[, 1]
   )
   names(d.plot) <- c('Data', 'Expl', 'Forecast', 'ForecastTrend')
   
-  ci <- as.data.frame(cbind(zoo::coredata(y.hat.diff.final.ci[, 2:3]),
-                            (as.Date(index(y.hat.diff.final.ci),
+  # Replace with y.hat.diff.final.ci for trend
+  ci <- as.data.frame(cbind(zoo::coredata(y.hat.diff.final[, 2:3]),
+                            (as.Date(index(y.hat.diff.final),
                                      format = date_format))))
   colnames(ci) <- c('lower', 'upper', 'date')
   ci[, 'date'] <- as.Date(
@@ -652,15 +700,13 @@ plot_new_cases_MULTI <- function(index, output, Y, n.ahead, confidence.level = 0
   df_plot$Date <- as.Date(rownames(df_plot), format = date_format)
   
   ggplot2::ggplot(data = df_plot, aes(x = Date)) +
-    ggplot2::geom_line(aes(y = Data, color = "Data"), lwd = 0.85) +
+    ggplot2::geom_line(aes(y = Data, color = "Data"), lwd = 0.5) +
     ggplot2::geom_line(aes(y = Forecast, color = "Forecast"), lwd = 0.85) +
-    ggplot2::geom_line(
-      aes(y = ForecastTrend, color = "Forecast\nTrend"), lwd = 0.85
-    ) +
-    ggplot2::scale_color_manual(values = c("black", "grey", "#AA2045")) +
+    # ggplot2::geom_line(aes(y = ForecastTrend, color = "Forecast\nTrend"), lwd = 0.85) +
+    ggplot2::scale_color_manual(values = c("black", "#AA2045")) +
     ggplot2::geom_ribbon(data = ci, aes(x = date, ymin = lower, ymax = upper),
                          linetype = 0, linewidth = 0, fill = "#AA2045", alpha = 0.1) +
-    labs(x = "Date", y = "New Cases", title = title) +
+    labs(x = "Date", y = "New A&E Cases", title = title) +
     theme_economist_white(gray_bg = FALSE, base_size = 12) +
     theme(legend.title = element_blank()) +
     theme(
@@ -747,25 +793,25 @@ plot_holdout_MULTI <- function(index, output, Y, Y.eval, confidence.level = 0.68
   mape.sea <- 100*(abs(d.eval$Actual - d.eval$Forecast)/d.eval$Actual) %>%
     mean %>% round(2)
   
-  ci <- as.data.frame(cbind(zoo::coredata(y.hat.diff.final.ci[, 2:3]),
-                            (as.Date(index(y.hat.diff.final.ci),
+  # Replace with y.hat.diff.final.ci for trend
+  ci <- as.data.frame(cbind(zoo::coredata(y.hat.diff.final[, 2:3]),
+                            (as.Date(index(y.hat.diff.final),
                                      format = date_format))))
   colnames(ci) <- c('lower', 'upper', 'date')
   ci[, 'date'] <- as.Date(ci[, 'date'], format = date_format,
                           origin = "1970-01-01")
   
   p1 <- ggplot2::ggplot(data = df_plot, aes(x = Date)) +
-    ggplot2::geom_line(aes(y = Actual, color = "Actual"),lwd = 0.85) +
+    ggplot2::geom_line(aes(y = Actual, color = "Actual"),lwd = 0.75) +
     ggplot2::geom_line(aes(y = Forecast, color = "Forecast"),lwd = 0.85) +
-    ggplot2::geom_line(
-      aes(y = ForecastTrend, color = "Forecast\nTrend"),lwd = 0.85) +
-    ggplot2::scale_color_manual(values = c("black", "grey", "#AA2045")) +
+    # ggplot2::geom_line(aes(y = ForecastTrend, color = "Forecast\nTrend"),lwd = 0.85) +
+    ggplot2::scale_color_manual(values = c("black", "#AA2045")) +
     ggplot2::geom_ribbon(data = ci, aes(x = date, ymin = lower, ymax = upper),
                          linetype = 0, linewidth = 0, fill = "#AA2045",
                          alpha = 0.1) +
     labs(x = "Date", y = paste("New",series.name), title = title,
-         subtitle = paste("MAPE: ",mape.sea,"%. Trend MAPE: ",
-                          mape.trend,"%.",sep="")) +
+         subtitle = paste("MAPE: ",mape.sea, #"%. Trend MAPE: ", mape.trend,
+                          "%.",sep="")) +
     theme_economist_white(gray_bg = FALSE, base_size = 14) +
     theme(legend.title = element_blank()) +
     theme(
@@ -774,12 +820,10 @@ plot_holdout_MULTI <- function(index, output, Y, Y.eval, confidence.level = 0.68
       axis.title.y = element_text(size = rel(1), margin = margin(r=10)),
       axis.title.x = element_text(size = rel(1), margin = margin(t=10)),
       plot.title = element_text(margin=margin(b=5)),
-      plot.subtitle = element_text(
-        size = rel(1), hjust=0,  margin = margin(t=3))
-    ) +
-    scale_linetype_manual(
-      values = c("solid", "solid", "solid")) +
-    scale_x_date(labels = scales::date_format("%d %b %y")) +
+      plot.subtitle = element_text(size = rel(1), hjust=0.5,  margin = margin(t=3))) +
+    scale_linetype_manual(values = c("solid", "solid", "solid")) +
+    scale_x_date( labels = scales::date_format("%d %b %y"),
+                  breaks = seq(min(df_plot$Date), max(df_plot$Date), by = "4 days")) +
     scale_size_manual(values = c(1, 1.5, 1))
   
   
@@ -787,48 +831,62 @@ plot_holdout_MULTI <- function(index, output, Y, Y.eval, confidence.level = 0.68
 }
 
 # ------------------------------------------------------------------------------ 
-# --------------------------------- PART 2 ------------------------------------- 
+# -------------------------------- MAIN CODE -----------------------------------
 #    Multivariate model of mortality & temperature in England, nationally
 # ------------------------------------------------------------------------------
 
 # 0. Import & clean data ####
 
 # Load data
-df <- read.csv('eng_adm0_ONS_2010-2019_daily-national-mortality&temp.csv')
+df <- read.csv('agy_pnt_Crosshouse-Hospital_2015-2024_daily-AE&temp.csv')
+# df <- read.csv('agy_adm0_NHS-Scotland_2015-2025_daily-national-ae.csv')
 
 # Set date type, create XTS object & select outcome
 df <- df[ , -2] # Drop irrelevant data
 df$date <- as.Date(df$date, format = "%Y-%m-%d")  # Adjust format as needed
+colnames(df)[colnames(df) == 'c_NumberOfAttendancesEpisode'] <- 'c_AE_attendance'
+colnames(df)[colnames(df) == 'w_NumberOfAttendancesEpisode'] <- 'w_AE_attendance'
 Y <- xts(df[ , -1], order.by = df$date)
 
-# 1. Set model parameters ####
+# Exclude COVID years
+Y <- Y["2015-02-01/2019-12-31"]
+
+# 1. Descriptive Stats ####
+# summary(Y$w_AE_attendance)
+# plot_moving_avg(diff(Y$c_AE_attendance), y.lab='A&E Attendance')
+# sd(Y$w_AE_attendance)
+# 
+# summary(Y$temp)
+# plot_moving_avg(Y$temp, y.lab='Temperature')
+# sd(Y$temp)
+# 2. Set model parameters ####
 
 # Select outcome and subset desired dates
-# Y <- Y["2017-02-01/2019-12-27"]
-Y <- subset(Y, select=c('c_total_deaths', 'temp'))
+Y <- subset(Y, select=c('c_AE_attendance', 'temp'))
 
-# Set parameters 
+# Set parameters
 estimation.date.start <- as.Date("2018-01-01")
 estimation.date.end <- as.Date("2018-05-25")
 n.ahead <- 14
-q <- 0.005
-confidence.level <- 0.68
-plt.length <- 30
+q <- 0.01
+confidence.level <- 0.95
+plt.length <- 40
 sea.type <- 'trigonometric'
 sea.period <- 7
+plt.start.date <- estimation.date.end - plt.length
 
 # Set sample period
 y.cum <- Y[estimation.date.start <= index(Y) & index(Y) <= estimation.date.end]
 
 # Get growth rate
-y.lg <- tsgc::df2ldl(y.cum$c_total_deaths) 
+y.lg <- tsgc::df2ldl(y.cum$c_AE_attendance) 
 
 # Get data post-sample period & convert to growth rates (for accuracy evaluation)
-y.eval <- Y$c_total_deaths %>%
+y.eval <- Y$c_AE_attendance %>%
   subset(index(.) > estimation.date.end) %>%
   tsgc::df2ldl() 
 
-# 2. Fit & update model with known/unknown state-space param estimates ####
+# 3. Fit & update model with known/unknown state-space param estimates ####
 
 # Format y & x variables for model
 y <- as.numeric(y.lg)
@@ -841,7 +899,6 @@ model <- SSModel(y ~ SSMregression(~ x1, Q = diag(NA,1)) +
                    SSMtrend(degree = 2, Q = list(matrix(0), matrix(NA))) +
                    SSMseasonal(period = sea.period, Q = NA, sea.type = sea.type), H=matrix(NA))
 
-
 # Partial update of known params (seasonal, observational & slope noise)
 updatefn <- purrr::partial(update, ... =, q = q, sea.type = sea.type)
 
@@ -853,29 +910,101 @@ output <- KFS(model_fit$model)
 # diff(output$model$y)
 # mean(output$alphahat[, 1] )
 
-# 3. Filter results for reporting tables and figures ####
+# 4. Filter results for reporting tables and figures ####
 
 # Get truncated index from model, if using a re-initialisation in self$get_model
 index <- if (!is.null(model$index)) { model$index } else { index(y.lg) }
 
 # New data
-new.data <- Y$temp["2018-05-26/2018-06-08"]
+new.period <- paste0(estimation.date.end+1, '/', estimation.date.end+14)
+new.data <- Y$temp[new.period]
 
 # Get predicted n.ahead cumulative cases, with CIs
-predict_level_MULTI(index, output, y.cum, n.ahead, new.data, confidence.level, return.diff = FALSE)
+predict_level_MULTI(index, output, y.cum, n.ahead, new.data, confidence.level, return.diff = TRUE)
 
 # Get full KFS model with predicted n.ahead values (no CI)
-predict_all_MULTI(index, output, n.ahead, new.data, sea.on = FALSE, return.all = FALSE)
+(x_all <- predict_all_MULTI(index, output, n.ahead, new.data, sea.on = FALSE, return.all = FALSE))
 
 
-# 4. Visuals ####
+
+# 5. Visuals ####
 
 plot_forecast_MULTI(output=output, index=index, y.eval=y.eval, n.ahead=n.ahead,
-                    plt.start.date=estimation.date.end - plt.length)
+                    plt.start.date=plt.start.date)
 
-plot_new_cases_MULTI(output=output, index=index, Y=y.cum, n.ahead=n.ahead, 
+plot_new_cases_MULTI(output=output, index=index, Y=y.cum, n.ahead=n.ahead,
                      confidence.level=confidence.level, date_format = "%Y-%m-%d",
-                     plt.start.date = estimation.date.end - plt.length)
+                     plt.start.date=plt.start.date)
 
 plot_holdout_MULTI(output=output, index=index, Y=y.cum, Y.eval=Y[(estimation.date.end+0:n.ahead)],
-             confidence.level = 0.68, date_format = "%Y-%m-%d")
+             confidence.level=confidence.level, date_format = "%Y-%m-%d", series.name='A&E Cases')
+
+################################################################################
+
+# Visualise temperature-A&E (descriptive)
+v <- Y
+v$c_AE_attendance <- diff(v$c_AE_attendance)
+
+# Get seasons
+v$month <- as.numeric(format(index(v), "%m"))  # Numeric month (1-12)
+v_df <- data.frame(Date = index(v), coredata(v))
+season_names <- c('Jan/Feb', 'Jan/Feb', 'Mar/Apr', 'Mar/Apr', 
+                  'May/Jun', 'May/Jun', 'Jul/Aug', 'Jul/Aug', 
+                  'Sept/Oct', 'Sept/Oct', 'Nov/Dec', 'Nov/Dec')
+names(season_names) <- 1:12  # Assign the names 1 to 12 as the month numbers
+v_df$month_name <- factor(season_names[v_df$month], levels = unique(unname(season_names)))
+
+ggplot(data = v_df, aes(x = as.numeric(temp), y = as.numeric(c_AE_attendance), color = month_name)) +
+  geom_point(colour='darkgrey', alpha = 0.6) +  # Scatter plot
+  geom_smooth(method = "lm", se=FALSE) +  # Linear trend line
+  labs(title = "", x = "Temperature (C)", y = "New A&E cases", colour="Seasons") +
+  theme_minimal()
+
+
+# Determine plot length
+p <- paste0(estimation.date.end - plt.length, '/', estimation.date.end+14)
+v <- v[p]
+
+tmp.date <- min(estimation.date.end - 4, plt.start.date)
+s <- sprintf("%s/", format(tmp.date, "%Y-%m-%d"))
+v <- v[s]
+
+# Calculate the 7 day centered moving average
+ma.cent.AE <- zoo::rollmean(v[,1], 7, align = "center") 
+ma.cent.temp <- zoo::rollmean(v[,2], 7, align = "center") 
+
+# Create df for plot (actual data vs. MA data)
+d <- setNames(cbind(v[,1], ma.cent.AE, v[,2], ma.cent.temp), 
+              c('New_AE', 'MA_AE', 'Temp', 'MA_Temp'))
+df.f <- data.frame(Date = index(d), 
+                   New_AE = coredata(d[,1]),
+                   MA_AE = coredata(d[,2]),#
+                   Temp= coredata(d[,3]),
+                   MA_Temp = coredata(d[,4]))
+scale_factor <- 10
+# Plot Figure 1
+ggplot(data = df.f, aes(x = Date)) +
+  # Add data
+  geom_line(aes(y = Temp*scale_factor, size='Real data'), color = 'darkblue') +
+  geom_line(aes(y = MA_Temp*scale_factor, size='Centered 7 day MA'), color='blue') +
+  geom_line(aes(y = New_AE, size='Real data'), color='darkred') +
+  geom_line(aes(y = MA_AE, size='Centered 7 day MA'), color='red') +
+  # Add axis titles and legend
+  xlab("Date") +
+  scale_y_continuous(n.breaks = 5, name = "New A&E Cases", 
+                     sec.axis = ggplot2::sec_axis(~ . / scale_factor, 
+                                                  name = "Temperature (C)", 
+                                                  breaks = seq(-10, 30, by = 5) )) +
+  scale_size_manual(name='', values=c('Real data'=0.1, 'Centered 7 day MA'=1)) +
+  ggplot2::scale_x_date(labels = scales::date_format("%d %b %y")) +
+  guides(size = guide_legend(override.aes = list(color = "black")))+
+  theme_economist_white(gray_bg = FALSE, base_size = 12) +
+  theme(
+    text = element_text(size = rel(0.8)),
+    axis.text = element_text(size = rel(1)),
+    axis.title.y.left = element_text(size = rel(1), color = "red", margin = margin(r=10)),  # Primary y-axis (left)
+    axis.title.y.right = element_text(size = rel(1), color = "blue", angle=270, margin = margin(l = 10)),   # Secondary y-axis (right)
+    axis.title.x = element_text(size = rel(1),margin = margin(t=10)),
+    plot.title = element_text(margin=margin(b=5)),
+    plot.caption = element_text(size = rel(1))
+  )

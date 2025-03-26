@@ -798,15 +798,17 @@ Y <- xts(df[ , -1], order.by = df$date)
 # 1. Set model parameters ####
 
 # Select outcome and subset desired dates
-Y <- Y["2017-02-01/2020-02-01"]
+# Y <- Y["2017-02-01/2020-02-01"]
 Y <- Y$c_NumberOfAttendancesEpisode
 
 # Set parameters 
 estimation.date.start <- as.Date("2018-01-01")
 estimation.date.end <- as.Date("2018-05-25")
+# estimation.date.start <- as.Date("2015-07-01")
+# estimation.date.end <- as.Date("2016-02-15")
 n.ahead <- 14
 q <- 0.005
-confidence.level <- 0.68
+confidence.level <- 0.95
 plt.length <- 30
 sea.type <- 'trigonometric'
 
@@ -866,6 +868,6 @@ plot_new_cases_UNI(output=output, index=index, Y=y.cum, n.ahead=n.ahead,
                plt.start.date = estimation.date.end - plt.length)
 
 plot_holdout_UNI(output=output, index=index, Y=y.cum, Y.eval=Y[(estimation.date.end+0:n.ahead)],
-             confidence.level = 0.68, date_format = "%Y-%m-%d")
+             confidence.level=confidence.level, date_format = "%Y-%m-%d")
 
 

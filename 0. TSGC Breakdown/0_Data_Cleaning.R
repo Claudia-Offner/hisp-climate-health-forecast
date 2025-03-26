@@ -213,20 +213,52 @@ plot(results$date, results$w_NumberOfAttendancesEpisode, main='Crosshouse Hospit
 write.csv(results, file = "agy_adm4_NHS-Scotland_2015-2025_daily-hosptial-ae.csv", row.names = FALSE)
 
 
+# 4. SCOTLAND: Merge temperature data (for Crosshouse Hospital) ####
 
-# 4. SCOTLAND: Combine hospital & weather time series with locations ####
+# Get file list
+file_list <- list.files(path='202_temp/PCAP/', pattern = '\\.csv$', full.names = TRUE)
 
-# # Open shape files and csv: ENGLAND
-# weather <- read.csv('202_temp/eng_adm0_GEE_ERA5_daily-national-2m-temp_2010-01-01_to_2020-07-09.csv')
-# health <- read.csv('201_heal/eng_adm0_ONS_2019-2010_daily-national-mortality.csv')
-# health$date <- as.Date(health$date)
-# weather$date <- as.Date(weather$date)
-# final <- health %>%
-#   left_join(weather, by=c('date')) %>%
-#   select(date, weekday, w_total_deaths, c_total_deaths, w_resp_deaths, c_resp_deaths, temperature_C) %>%
-#   rename(temp = temperature_C)
-# 
-# write.csv(final, file = "eng_adm0_ONS_2010-2019_daily-national-mortality&temp.csv", row.names = FALSE)
+# Read all files and combine them into a single dataframe without column names
+df_temp <- do.call(rbind, lapply(file_list, function(file) {
+  read.csv(file)
+}))
+
+# Create data frame
+temp <- as.data.frame(cbind(df_temp[,2], df_temp[,4]))
+colnames(temp) <- c('date', 'temp')
+temp$temp <- as.numeric(temp$temp)
+temp$date <- as.Date(temp$date, format="%Y/%m/%d")
+
+# Calculate Celsius from Kelvin
+temp$temp <- temp$temp-273.15
+
+# Remove duplicates
+temp <- temp[!duplicated(temp$date), ] 
+
+# Export
+write.csv(temp, file = "202_temp/PCAP/agy_pnt_PCAP_CrosshouseHospital_2015-2024_daily-temp.csv", row.names = FALSE)
+
+
+# 5. SCOTLAND: Combine hospital & weather time series with locations ####
+
+# Open shape files and csv: CROSSHOUSE HOSPITAL
+weather <- read.csv('202_temp/PCAP/agy_pnt_PCAP_CrosshouseHospital_2015-2024_daily-temp.csv')
+health <- read.csv('201_heal/agy_adm0_NHS-Scotland_2015-2025_daily-national-ae.csv')
+health$date <- as.Date(health$date)
+weather$date <- as.Date(weather$date)
+
+# Select hospital
+health <- health %>%
+  filter(sitecode=='A111H') %>% # relevant sites
+  select(-sitecode)
+
+# Join & remove NAs
+final <- health %>%
+  left_join(weather, by=c('date')) %>%
+  select(date, weekday, w_NumberOfAttendancesEpisode, c_NumberOfAttendancesEpisode, temp)
+final <- final[complete.cases(final), ]
+
+write.csv(final, file = "agy_pnt_Crosshouse-Hospital_2015-2024_daily-AE&temp.csv", row.names = FALSE)
 
 # # Open shape files and csv: SCOTLAND
 # pnt <- st_read('201_heal/NHS Scotland/agy_adm4_NHS-Scotland_hosptials.shp')
@@ -238,47 +270,47 @@ write.csv(results, file = "agy_adm4_NHS-Scotland_2015-2025_daily-hosptial-ae.csv
 # pnt_10k <- st_buffer(pnt, 10000)
 # st_write(pnt_10k, "201_heal/NHS Scotland/agy_adm4_NHS-Scotland_hosptials-10K-BUFFER.shp")
 
-# CLEAN DATA FOR MERGES & VISUALISING
-### Transform from ONS British National Grid to WGS84 (for ggmap use)
-poly <- st_transform(poly, crs = 4326 ) # transform
-pnt <- st_transform(pnt, crs = 4326 ) 
-pnt$long <- st_coordinates(pnt)[,1] # get lat/long
-pnt$lat <- st_coordinates(pnt)[,2]
-### Visualize the data & choose health catchment boundary (HealthBoards)
-pnt <- pnt %>% filter(sitecode %in% unique(health$sitecode)) # relevant sites
-# pnt <- distinct(pnt, hbname, .keep_all= TRUE) # get specific 
-# st_bbox(pnt)
-tmap_mode("view") # set to interactive
-tm_shape(poly) + 
-  tm_polygons(col = "blue", alpha = 0.3, border.col = "darkblue") + 
-  tm_shape(pnt) +
-  tm_symbols(col = "red", size = 0.5) +
-  tm_layout(title = "Interactive Map of Hospitals & Health Authority Boundaries")
-
-# SPATIAL JOIN (ensure HBCodes are correct)
-pnt <- st_join(pnt, poly, join = st_within)
-pnt <- as(pnt, 'Spatial') # make spatial object
-poly <- as(poly, 'Spatial') 
-
-# MERGE WEATHER & POLYGONS
-l_weather <- poly@data %>%
-  left_join(weather, by=c('HBCode', 'HBName')) %>%
-  rename(hbcode=HBCode, hbname=HBName)
-
-# MERGE HEATLH & POINTS
-l_health <- health %>%
-  left_join(pnt@data, by = 'sitecode') %>%
-  select(-hbcode, -hbname) %>%
-  rename(hbcode=HBCode, hbname=HBName, 
-         w_Num_AE_Attend=w_NumberOfAttendancesEpisode, 
-         c_Num_AE_Attend=c_NumberOfAttendancesEpisode)
-
-# MERGE WEATHER & HEALTH
-final <- l_health %>%
-  left_join(l_weather, by=c('hbname', 'hbcode', 'date')) %>%
-  select(hbcode, hbname, sitecode, postcode, long, lat, sitename, type, date, weekday,
-         temp, w_Num_AE_Attend, c_Num_AE_Attend)
-
+# # CLEAN DATA FOR MERGES & VISUALISING
+# ### Transform from ONS British National Grid to WGS84 (for ggmap use)
+# poly <- st_transform(poly, crs = 4326 ) # transform
+# pnt <- st_transform(pnt, crs = 4326 ) 
+# pnt$long <- st_coordinates(pnt)[,1] # get lat/long
+# pnt$lat <- st_coordinates(pnt)[,2]
+# ### Visualize the data & choose health catchment boundary (HealthBoards)
+# pnt <- pnt %>% filter(sitecode %in% unique(health$sitecode)) # relevant sites
+# # pnt <- distinct(pnt, hbname, .keep_all= TRUE) # get specific 
+# # st_bbox(pnt)
+# tmap_mode("view") # set to interactive
+# tm_shape(poly) + 
+#   tm_polygons(col = "blue", alpha = 0.3, border.col = "darkblue") + 
+#   tm_shape(pnt) +
+#   tm_symbols(col = "red", size = 0.5) +
+#   tm_layout(title = "Interactive Map of Hospitals & Health Authority Boundaries")
+# 
+# # SPATIAL JOIN (ensure HBCodes are correct)
+# pnt <- st_join(pnt, poly, join = st_within)
+# pnt <- as(pnt, 'Spatial') # make spatial object
+# poly <- as(poly, 'Spatial') 
+# 
+# # MERGE WEATHER & POLYGONS
+# l_weather <- poly@data %>%
+#   left_join(weather, by=c('HBCode', 'HBName')) %>%
+#   rename(hbcode=HBCode, hbname=HBName)
+# 
+# # MERGE HEATLH & POINTS
+# l_health <- health %>%
+#   left_join(pnt@data, by = 'sitecode') %>%
+#   select(-hbcode, -hbname) %>%
+#   rename(hbcode=HBCode, hbname=HBName, 
+#          w_Num_AE_Attend=w_NumberOfAttendancesEpisode, 
+#          c_Num_AE_Attend=c_NumberOfAttendancesEpisode)
+# 
+# # MERGE WEATHER & HEALTH
+# final <- l_health %>%
+#   left_join(l_weather, by=c('hbname', 'hbcode', 'date')) %>%
+#   select(hbcode, hbname, sitecode, postcode, long, lat, sitename, type, date, weekday,
+#          temp, w_Num_AE_Attend, c_Num_AE_Attend)
+# 
 
 head(final, 10)
 
