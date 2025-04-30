@@ -3,7 +3,7 @@
 ### ---------------------------------### 
 
 # SET WORKING DIRECTORY
-setwd('C:/Users/claer14/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/201_heal')
+setwd('C:/Users/claer14/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/201_heal/- Archive')
 
 # 0. LOAD DEPENDENCIES ####
 library(tsgc)

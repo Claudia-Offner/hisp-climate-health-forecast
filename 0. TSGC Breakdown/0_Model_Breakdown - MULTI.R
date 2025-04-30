@@ -1,6 +1,9 @@
 
 # Set working directory
-setwd('C:/Users/claer14/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
+setwd('C:/Users/claer14/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/- Archive')
+
+# Set seed for reproducibility
+set.seed(123)
 
 # ------------------------------------------------------------------------------ 
 # -------------------------------- DEPENDENCIES --------------------------------
@@ -220,8 +223,8 @@ predict_all_MULTI <- function(index, output, n.ahead, new.data=NULL, sea.on=FALS
   # Extend Y, Z and N
   new.model$y <- rbind(new.model$y, matrix(NA, ncol = ncol(new.model$y), nrow = n.ahead) %>% as.ts())
   
-  new.Z <- array(NA, dim = c(1, 9, n.ahead))
-  new.Z[, 2:9, ] <- new.model$Z[, 2:9, 1]
+  new.Z <- array(NA, dim = c(1, ncol(new.model$Z), n.ahead))
+  new.Z[, 2:ncol(new.model$Z), ] <- new.model$Z[, 2:ncol(new.model$Z), 1]
   new.model$Z <- abind(new.model$Z, new.Z, along = 3)
   
   attr(new.model, 'n') <- length(output$model$y) + n.ahead %>%
@@ -229,7 +232,7 @@ predict_all_MULTI <- function(index, output, n.ahead, new.data=NULL, sea.on=FALS
   model_output <- KFS(new.model)
   
   # For explanatory variables
-  new <- SSModel(rep(NA,length(new.data)) ~ SSMregression(~ new.data, Q = diag(NA,1)) + 
+  new <- SSModel(rep(NA,n.ahead) ~ SSMregression(~ new.data, Q = diag(NA,1)) + 
                    SSMtrend(degree = 2, Q = list(matrix(0), matrix(NA))) +
                    SSMseasonal(period = sea.period, Q = NA, sea.type = sea.type), H=matrix(NA))
   updatefn <- purrr::partial(update, ... =, q = q, sea.type = sea.type)
@@ -782,7 +785,7 @@ plot_holdout_MULTI <- function(index, output, Y, Y.eval, confidence.level = 0.68
     y.hat.diff.final[, 1],
     y.hat.diff.final.ci[, 1]
   )
-  names(d) <- c('Actual', 'Temp', 'Forecast', 'ForecastTrend')
+  names(d) <- c('Actual', 'Temp', 'Rain', 'Forecast', 'ForecastTrend')
   
   df_plot <- as.data.frame(d)
   df_plot$Date <- as.Date(rownames(df_plot), format = date_format)
@@ -848,6 +851,29 @@ colnames(df)[colnames(df) == 'c_NumberOfAttendancesEpisode'] <- 'c_AE_attendance
 colnames(df)[colnames(df) == 'w_NumberOfAttendancesEpisode'] <- 'w_AE_attendance'
 Y <- xts(df[ , -1], order.by = df$date)
 
+# Add randomly generated rainfall data for model testing
+dates <- seq.Date(from = start(Y), to = end(Y), by = "day")
+months <- as.numeric(format(dates, "%m"))
+# Define seasonal probabilities and intensities of rain (monthly)
+rain_prob_by_month <- c(Jan = 0.35, Feb = 0.35, Mar = 0.4, Apr = 0.3, May = 0.2, Jun = 0.1, 
+                        Jul = 0.05, Aug = 0.1, Sep = 0.15, Oct = 0.25, Nov = 0.4, Dec = 0.45)
+rain_scale_by_month <- c(Jan = 6, Feb = 6, Mar = 5.5, Apr = 5,May = 3, Jun = 2, 
+                         Jul = 1.5, Aug = 2, Sep = 3, Oct = 4, Nov = 5.5, Dec = 6.5)
+
+# Map probabilities and intensities to each day
+rain_prob <- sapply(months, function(m) rain_prob_by_month[m])
+rain_scale <- sapply(months, function(m) rain_scale_by_month[m])
+
+# Simulate rainfall amount using gamma distribution (shape fixed at 2)
+rain_flag <- rbinom(length(dates), 1, prob = rain_prob) # simulate weather it rains
+u <- runif(length(dates)) # Random values from 0-1
+lambda <- 0.15 # Steepness of the exponential distribution
+rain_amount <- rain_flag * (-log(1 - u) / lambda)
+
+# Merge with other
+Y <- cbind(Y, round(pmin(rain_amount, 25), 2))
+colnames(Y)[ncol(Y)] <- "rain"
+
 # Exclude COVID years
 Y <- Y["2015-02-01/2019-12-31"]
 
@@ -862,7 +888,7 @@ Y <- Y["2015-02-01/2019-12-31"]
 # 2. Set model parameters ####
 
 # Select outcome and subset desired dates
-Y <- subset(Y, select=c('c_AE_attendance', 'temp'))
+Y <- subset(Y, select=c('c_AE_attendance', 'temp', 'rain'))
 
 # Set parameters
 estimation.date.start <- as.Date("2018-01-01")
@@ -891,11 +917,13 @@ y.eval <- Y$c_AE_attendance %>%
 # Format y & x variables for model
 y <- as.numeric(y.lg)
 x1 <- as.numeric(y.cum$temp)
+x2 <- as.numeric(y.cum$rain)
+
 # Y <- as.data.frame(cbind(y, x1))
 # rownames(Y) <- as.Date(index)
 
 # Set state-space model
-model <- SSModel(y ~ SSMregression(~ x1, Q = diag(NA,1)) + 
+model <- SSModel(y ~ SSMregression(~ x1+x2, Q = diag(NA,1)) + 
                    SSMtrend(degree = 2, Q = list(matrix(0), matrix(NA))) +
                    SSMseasonal(period = sea.period, Q = NA, sea.type = sea.type), H=matrix(NA))
 
@@ -906,7 +934,7 @@ updatefn <- purrr::partial(update, ... =, q = q, sea.type = sea.type)
 model_fit <- fitSSM(model, inits = c(0,0), updatefn = updatefn, method = 'BFGS')
 
 # Kalman filter
-output <- KFS(model_fit$model)
+(output <- KFS(model_fit$model))
 # diff(output$model$y)
 # mean(output$alphahat[, 1] )
 
@@ -917,7 +945,7 @@ index <- if (!is.null(model$index)) { model$index } else { index(y.lg) }
 
 # New data
 new.period <- paste0(estimation.date.end+1, '/', estimation.date.end+14)
-new.data <- Y$temp[new.period]
+new.data <- cbind(Y$temp[new.period], Y$rain[new.period])
 
 # Get predicted n.ahead cumulative cases, with CIs
 predict_level_MULTI(index, output, y.cum, n.ahead, new.data, confidence.level, return.diff = TRUE)
