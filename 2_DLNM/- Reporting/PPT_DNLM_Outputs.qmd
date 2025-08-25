@@ -1,0 +1,84 @@
+---
+title: "DLNM Analysis"
+author: "Claudia Offner"
+format:
+  pptx:
+    reference-doc: template.pptx
+editor: visual
+---
+
+```{r setup}
+# Path
+user <- 'claer14'
+path <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 2 - Causal Inference/')
+setwd(path)
+
+```
+
+## Agenda
+
+-   Project update
+-   Chapter 2 aims and research questions
+-   DLNM Model and preliminary results
+
+## Project update
+
+-   **Re-analysis**: The TSGC model remains inaccurate, even with weather data adjustments (2015-2016 only). I have decided to take a step back and examine the causal structure of our data to better understand why this is the case (will present more shortly).
+
+-   **Weather data**: Downloaded most of the relevant BigThaw data from 2015-2023, but still missing 2017 and 2018 (hope to resolve this week). This will give us more confidence in the model results.
+
+-   **Hospital Data**: Verbal approval from Anees to access patient level, daily data A&E and/or hosptial data with treatment codes within a 10 year period. I have seen the 2024/25 data and it looks viable.
+
+## Chapter 2: Research questions
+
+-   **Exposure-response: How do different levels of the exposure variables affect the outcome?** *E.g. How does the risk of hospital admissions change when temperature increases from 20°C to 30°C?*
+
+-   **Lag-response: How is the effect of a single exposure at time t distributed across future time points (lags)?** *E.g. If it's hot today, does the health impact occur immediately, or does it show up in 2–3 days?*
+
+-   **Do these exposure–lag effects vary across vulnerable groups?** *E.g. Are children under 5 or the elderly more sensitive to specific temperatures or lag durations compared to the general population?*
+
+-   **Do these exposures interact to produce compounding or synergistic effects?** *E.g. Does the combined effect of high temperature and heavy rainfall exceed the sum of their individual effects on healthcare demand?*
+
+## Distributed Lag Non-linear Models (DLNM)
+
+$$
+f(\mu_t) \;=\; \alpha + \sum_{j=1}^J s_j(x_{tj}; \beta_j) + \sum_{k=1}^K \gamma_k u_{tk} \tag{1}
+$$
+
+where $\mu_t = E(Y_t)$, $f$ is a link function, and $Y_t$ is a series of outcomes with $t = 1, \ldots, n$, assumed to arise from an exponential distribution family.
+
+The function $s_j(\cdot)$ specifies the relationship between non-linear variables $x_j$ and the linear predictor, defined by the parameter vectors $\beta_j$.
+
+The variables $u_k$ include other predictors assuming a linear relationship with coefficients $\gamma_k$.
+
+## **Exposure-response**
+
+![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/total_patients_exp_rep.png){width="150%" height="150%"}
+
+## **Lag-response**
+
+![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/total_patients_lag_rep.png){width="150%" height="150%"}
+
+## Temperature: Do exposure effects vary across vulnerable groups?
+
+![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/exp_rep_t2m.png){width="100%" height="100%"}
+
+## Rainfall: Do exposure effects vary across vulnerable groups?
+
+![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/exp_rep_tp.png){width="100%" height="100%"}
+
+## Windspeed: Do exposure effects vary across vulnerable groups?
+
+![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/exp_rep_fg10.png){width="100%" height="100%"}
+
+## Temperature: Do lag effects vary across vulnerable groups?
+
+![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/lag_rep_t2m.png){width="100%" height="100%"}
+
+## Rainfall: Do lag effects vary across vulnerable groups?
+
+![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/lag_rep_tp.png){width="100%" height="100%"}
+
+## Windspeed: Do lag effects vary across vulnerable groups?
+
+![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/lag_rep_fg10.png){width="100%" height="100%"}
