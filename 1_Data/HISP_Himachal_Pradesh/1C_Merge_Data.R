@@ -7,7 +7,10 @@
 options(scipen=999)
 
 # Set data path
-user <- 'offne'
+user <- 'claer14'
+weat_import <- 'ind_5km_JASMIN-BigThaw_2015-2023_anom.csv'
+heal_import <- 'ind_adm4_HISP-HP_2015-2023_patient_visits_chamba_clean'
+file_export <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp'
 path <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 setwd(path)
 
@@ -19,34 +22,20 @@ library(lubridate)
 ####  MAIN CODE ####
 
 # 1. Merge weather-health data sets ####
-# df1_daily_weat <- read.csv('202_weat/ind_30km_JASMIN-ERA5_1979-2023_HISP_anom.csv')
-df1_daily_weat <- read.csv('202_weat/ind_10km_BigThaw_2015-2016_anom.csv')
-
-# df_heal <- read.csv('201_heal/ind_adm4_HISP-HP_2015-2023_patient_visits_chamba_clean.csv', check.names = FALSE, fileEncoding = 'UTF-8')
-df_heal_w <- read.csv('201_heal/ind_adm4_HISP-HP_2015-2023_patient_visits_chamba_clean_wide.csv', check.names = FALSE, fileEncoding = 'UTF-8')
-# df_heal_l <- read.csv('201_heal/ind_adm4_HISP-HP_2015-2023_patient_visits_chamba_clean_long.csv', check.names = FALSE, fileEncoding = 'UTF-8')
+df1_daily_weat <- read.csv(paste0('202_weat/', weat_import))
+df_heal_w <- read.csv(paste0('201_heal/', heal_import, '_wide.csv'), check.names = FALSE, fileEncoding = 'UTF-8')
+df_heal_l <- read.csv(paste0('201_heal/', heal_import, '_long.csv'), check.names = FALSE, fileEncoding = 'UTF-8')
+df_heal <- read.csv(paste0('201_heal/', heal_import, '.csv'), check.names = FALSE, fileEncoding = 'UTF-8')
 
 # Fix dtypes
-# (column_types <- sapply(df_heal, class))
-(column_types <- sapply(df_heal_w, class))
-# (column_types <- sapply(df_heal_l, class))
 (column_types <- sapply(df1_daily_weat, class))
+(column_types <- sapply(df_heal_w, class))
+(column_types <- sapply(df_heal_l, class))
+(column_types <- sapply(df_heal, class))
 df1_daily_weat$date <- as.Date(df1_daily_weat$date)
-# df_heal$date <- as.Date(df_heal$date)
 df_heal_w$date <- as.Date(df_heal_w$date)
-# df_heal_l$date <- as.Date(df_heal_l$date)
-
-# # Join dfs
-# df_all <- df_heal %>%
-#   left_join(df1_daily_weat %>% distinct(location, date, .keep_all = TRUE), by = c('location', 'date')) %>%
-#   select(-lat, -lon, everything(), lat, lon)  %>%
-#   select(location, date, year, season, month, week, weekday, day, everything())
-# 
-# df_long <- df_heal_l %>%
-#   select(-weekday) %>%
-#   left_join(df1_daily_weat %>% distinct(location, date, .keep_all = TRUE), by = c('location', 'date')) %>%
-#   select(-lat, -lon, everything(), lat, lon) %>%
-#   select(location, date, year, season, month, week, weekday, day, everything())
+df_heal_l$date <- as.Date(df_heal_l$date)
+df_heal$date <- as.Date(df_heal$date)
 
 df_wide <- df_heal_w %>%
   dplyr::select(-weekday) %>%
@@ -54,20 +43,20 @@ df_wide <- df_heal_w %>%
   # dplyr::select(-lat, -lon, everything(), lat, lon) %>%
   dplyr::select(location, date, year, season, month, week, weekday, day, everything())
 
+df_long <- df_heal_l %>%
+  select(-weekday) %>%
+  left_join(df1_daily_weat %>% distinct(location, date, .keep_all = TRUE), by = c('location', 'date')) %>%
+  # select(-lat, -lon, everything(), lat, lon) %>%
+  select(location, date, year, season, month, week, weekday, day, everything())
 
-# Export
-# write.csv(df_all, file='203_comb/ind_30km_HISP-HP_2015-2023_hosp-era5_chamba_all.csv', row.names = FALSE)
-# write.csv(df_long, file='203_comb/ind_30km_HISP-HP_2015-2023_hosp-era5_chamba_long.csv', row.names = FALSE)
-# write.csv(df_wide, file='203_comb/ind_30km_HISP-HP_2015-2023_hosp-era5_chamba_wide.csv', row.names = FALSE)
-write.csv(df_wide, file='203_comb/ind_10km_HISP-HP_2015-2027_hosp-bigthaw_chamba_wide.csv', row.names = FALSE)
+# Join dfs
+df_all <- df_heal %>%
+  left_join(df1_daily_weat %>% distinct(location, date, .keep_all = TRUE), by = c('location', 'date')) %>%
+  # select(-lat, -lon, everything(), lat, lon)  %>%
+  select(location, date, year, season, month, week, weekday, day, everything())
 
 
-# 2. Subset data for model####
-
-# # Load data
-# df_wide <- read.csv('203_comb/ind_30km_HISP-HP_2015-2023_hosp-era5_chamba_wide.csv', check.names = FALSE, fileEncoding = 'UTF-8')
-# (column_types <- sapply(df_wide, class))
-# df_wide$date <- as.Date(df_wide$date)
+# 2. Subset data for model ####
 
 # Select variables of interest
 w_cols <- c('t2m', 'mn2t','mx2t','tp','fg10')
@@ -86,11 +75,12 @@ matched_cols <- names(df_wide)[str_detect(names(df_wide), exposure_pattern) & st
 df_wide <- df_wide %>% mutate(across(all_of(h_cols), ~ cumsum(replace_na(., 1)), .names = '{.col}_c'))
 
 # Select the desired columns
-res <- df_wide %>%
+df_wide <- df_wide %>%
   dplyr::select(location, date, year, season, month, week, weekday, closed, holiday,
          any_of(c(h_cols, grep('_c', names(df_wide), value = TRUE),
                   w_cols, matched_cols)))
 
-# Export model df
-# write.csv(res, file='203_comb/ind_30km_HISP-HP_2015-2023_hosp-era5_chamba_wide_model.csv', row.names = FALSE)
-write.csv(res, file='203_comb/ind_10km_HISP-HP_2015-2017_hosp-bigthaw_chamba_wide_model.csv', row.names = FALSE)
+# Export
+write.csv(df_wide, file=paste0('203_comb/', file_export, '_wide.csv'), row.names = FALSE)
+write.csv(df_long, file=paste0('203_comb/', file_export, '_long.csv'), row.names = FALSE)
+write.csv(df_all, file=paste0('203_comb/', file_export, '_all.csv'), row.names = FALSE)

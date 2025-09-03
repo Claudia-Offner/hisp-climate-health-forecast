@@ -5,8 +5,10 @@
 # Turn off scientific notation
 options(scipen=999)
 
-# Set data path
-user <- 'offne'
+# Set data paths
+user <- 'claer14'
+weat_import <- 'ind_5km_JASMIN-BigThaw_2015-2023.csv'
+weat_export <- 'ind_5km_JASMIN-BigThaw_2015-2023_anom.csv'
 path <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 setwd(path)
 
@@ -17,7 +19,7 @@ library(dplyr)
 ####  MAIN CODE ####
 
 # 1. Clean data ####
-df_w <- read.csv('202_weat/ind_10km_JASMIN-BigThaw_2015-2016.csv')
+df_w <- read.csv(paste0('202_weat/', weat_import))
 
 # Set hourly time parameters
 df_w <- df_w %>%
@@ -99,7 +101,7 @@ df_w <- df_w %>%
     )) %>%
   select(location, date, year, season, month, week, weekday, day, everything())
 
-###############
+# *** Quick extreme temperature checks ####
 # summary(df_w$t2m)
 # summary(df_w$mx2t)
 # summary(df_w$mn2t)
@@ -261,7 +263,7 @@ for (i in 1:30) {
 }
 
 
-# Export
-write.csv(result, file='202_weat/ind_10km_BigThaw_2015-2016_anom.csv', row.names = FALSE)
+# Export ####
+write.csv(result, file=paste0('202_weat/', weat_export), row.names = FALSE)
 
 

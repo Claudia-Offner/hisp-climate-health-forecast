@@ -9,7 +9,8 @@ options(scipen=999)
 
 # Path
 user <- 'claer14'
-path1 <- paste0('C:/Users/', user, '/Documents/GitHub/HISP_TSGC/')
+file_import <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp_wide'
+path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
 path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 2 - Causal Inference/')
 setwd(path1)
@@ -17,7 +18,7 @@ setwd(path1)
 # Packages
 # install.packages('')
 library(dlnm); library(splines); library(dplyr); library(lubridate); 
-library(MASS); library(patchwork)
+library(MASS); library(patchwork); library(ggplot2)
 
 # Function to extract model diagnostics
 get_model_fit <- function(model,name) {
@@ -40,14 +41,14 @@ get_parameter_test <- function(variables, v_dist=NULL, v_lag=NULL, time_df=9, ba
   
   if(baseline==TRUE){
     # Only fit the baseline model
-    model <- glm(formula=as.formula(baseformula), family=quasipoisson, data=df, na.action='na.exclude') 
+    model <- glm.nb(formula=as.formula(baseformula), data=df, na.action='na.exclude') 
     test_result <- get_model_fit(model,paste0('baseline(',time_df,')'))
   } else{
     
     if(length(variables)==1){
       # Fit univariate model
       cb <- crossbasis(df[[variables]], lag=c(0,v_lag),argvar=v_dist, arglag=list(fun='ns', df=4), group=df$year)
-      model <- glm(formula=as.formula(paste(baseformula,'+ cb')),family=quasipoisson,data=df, na.action='na.exclude') 
+      model <- glm.nb(formula=as.formula(paste(baseformula,'+ cb')),data=df, na.action='na.exclude') 
       test_result <- get_model_fit(model,paste0(variables,'(',v_dist$fun,'[',v_dist$df , '], ', v_lag,')'))
       
     } else{
@@ -55,7 +56,7 @@ get_parameter_test <- function(variables, v_dist=NULL, v_lag=NULL, time_df=9, ba
       cb.t2m <- crossbasis(df$t2m, lag=c(0,14),argvar=list(fun='ns', df=3), arglag=list(fun='ns', df=4), group=df$year)
       cb.tp <- crossbasis(df$tp, lag=c(0,14),argvar=list(fun='lin'), arglag=list(fun='ns', df=4), group=df$year)
       cb.fg10 <- crossbasis(df$fg10, lag=c(0,14),argvar=list(fun='lin'), arglag=list(fun='ns', df=4), group=df$year)
-      model <- glm(formula=as.formula(paste(baseformula,'+ cb.t2m + cb.tp + cb.fg10')),family=quasipoisson,data=df, na.action='na.exclude') 
+      model <- glm.nb(formula=as.formula(paste(baseformula,'+ cb.t2m + cb.tp + cb.fg10')),data=df, na.action='na.exclude') 
       test_result <- get_model_fit(model,paste0('autocorr(', 1 ,')'))
     }
     
@@ -94,13 +95,16 @@ get_autocorr_test <- function(lag, df){
 
 # Function to retrieve results from each predictor, with visuals and tables
 get_results <- function(df, outcome){
-
+  
   # Function: Get cumulative exposure-response and lag-response effects
-  get_visuals <- function(cp, model, xlab, title, col, lag_rep=FALSE){
+  get_visuals <- function(cp, model, xlab, title, col, lag_rep=FALSE, lag=NULL){
     
     if(lag_rep==FALSE){
-      
-      cum <- data.frame(x = cp$predvar, RR = cp$allRRfit, lower = cp$allRRlow, upper = cp$allRRhigh, row.names = NULL)
+      if(!is.null(lag)){
+        cum <- data.frame(x = cp$predvar, RR = cp$matRRfit[, lag + 1], lower = cp$matRRlow[, lag + 1], upper = cp$matRRhigh[, lag + 1], row.names = NULL)
+      } else {
+        cum <- data.frame(x = cp$predvar, RR = cp$allRRfit, lower = cp$allRRlow, upper = cp$allRRhigh, row.names = NULL)
+      }
       p <- ggplot(cum, aes(x = x, y = RR)) +
         geom_line(color = col) +
         geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.1, fill = col) +
@@ -142,7 +146,7 @@ get_results <- function(df, outcome){
   
   # Fit cross-basis
   cb.t2m <- crossbasis(df$t2m, lag=c(0,14),argvar=list(fun='ns', df=3), arglag=list(fun='ns', df=4), group=df$year)
-  cb.tp <- crossbasis(df$tp, lag=c(0,14),argvar=list(fun='ns', df=7), arglag=list(fun='ns', df=4), group=df$year)
+  cb.tp <- crossbasis(df$tp, lag=c(0,14),argvar=list(fun='ns', df=1), arglag=list(fun='ns', df=4), group=df$year)
   cb.fg10 <- crossbasis(df$fg10, lag=c(0,14),argvar=list(fun='lin'), arglag=list(fun='ns', df=4), group=df$year)
   vars <- list(t2m = cb.t2m, tp = cb.tp, fg10 = cb.fg10)
   
@@ -161,27 +165,27 @@ get_results <- function(df, outcome){
   cp <- data.frame(rbind(cp.t2m, cp.tp, cp.fg10))
   df_cp <- data.frame(variables = rownames(cp), cp, row.names = NULL)
   
-  # GRAPH CUMULATIVE T2M-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR TP & FG10) 
-  cp <- crosspred(cb.t2m, model)
-  p_er_t2m <- get_visuals(cp, model, col="#DF536B", xlab="Temperature (C)", title="Cumulative RR of t2m exposure-response")
   # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK T2M value
   cp <- crosspred(cb.t2m, model, at=q_t2m)
   p_lr_t2m <- get_visuals(cp, model, lag_rep=TRUE, col="#DF536B", title='Lag-response of t2m (at 95th percentile)')
-  
-  # GRAPH CUMULATIVE TP-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR T2M & FG10) 
-  cp <- crosspred(cb.tp, model)
-  p_er_tp <- get_visuals(cp, model, col="#1D98EB", xlab="Rainfall (mm)", title="Cumulative RR of tp exposure-response")
+  # GRAPH CUMULATIVE T2M-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR TP & FG10) 
+  cp <- crosspred(cb.t2m, model, at=seq(-10, 35, by=1))
+  p_er_t2m <- get_visuals(cp, model, lag_rep=FALSE, lag=5, col="#DF536B", xlab="Temperature (C)", title="RR of t2m exposure-response (lag=5)")
+
   # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK TP value
   cp <- crosspred(cb.tp, model, at=q_tp)
   p_lr_tp <- get_visuals(cp, model, lag_rep=TRUE, col="#1D98EB", title='Lag-response of tp (at 95th percentile)')
-  
-  # GRAPH CUMULATIVE FG10-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR TP & T2M) 
-  cp <- crosspred(cb.fg10, model)
-  p_er_fg10 <- get_visuals(cp, model, col="#A6B727", xlab="Wind speed (km/hr)", title="Cumulative RR of fg10 exposure-response")
+  # GRAPH CUMULATIVE TP-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR T2M & FG10) 
+  cp <- crosspred(cb.tp, model)
+  p_er_tp <- get_visuals(cp, model, lag_rep=FALSE, lag=6, col="#1D98EB", xlab="Rainfall (mm)", title="RR of tp exposure-response (lag=6)")
+
   # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK FG10 value
   cp <- crosspred(cb.fg10, model, at=q_fg10)
   p_lr_fg10 <- get_visuals(cp, model, lag_rep=TRUE, col="#A6B727", title='Lag-response of fg10 (at 95th percentile)')
-  
+  # GRAPH CUMULATIVE FG10-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR TP & T2M) 
+  cp <- crosspred(cb.fg10, model)
+  p_er_fg10 <- get_visuals(cp, model, lag_rep=FALSE, lag=NULL, col="#A6B727", xlab="Wind speed (km/hr)", title="Overall RR of fg10 exposure-response")
+
   result <- list(model=model, overall=df_cp, 
                  exp_rep = list(t2m=p_er_t2m, tp=p_er_tp, fg10=p_er_fg10),
                  lag_rep = list(t2m=p_lr_t2m, tp=p_lr_tp, fg10=p_lr_fg10))
@@ -227,11 +231,11 @@ get_all_plots <- function(plot_list, single_outcome=NULL, rows=3){
     
   } else {
     
-    exp_rep_t2m <- multi_plot_format(plot_list$exp_rep_t2m) + plot_annotation(title = 'Cumulative RR of t2m exposure-response', theme = theme(plot.title = element_text(size = 20, hjust = 0.5, face = "bold")))
+    exp_rep_t2m <- multi_plot_format(plot_list$exp_rep_t2m) + plot_annotation(title = 'RR of t2m exposure-response (lag=5)', theme = theme(plot.title = element_text(size = 20, hjust = 0.5, face = "bold")))
     lag_rep_t2m <- multi_plot_format(plot_list$lag_rep_t2m) + plot_annotation(title = 'Lag-response of t2m (at 95th percentile)', theme = theme(plot.title = element_text(size = 20, hjust = 0.5, face = "bold")))
-    exp_rep_tp <- multi_plot_format(plot_list$exp_rep_tp) + plot_annotation(title = 'Cumulative RR of tp exposure-response', theme = theme(plot.title = element_text(size = 20, hjust = 0.5, face = "bold")))
+    exp_rep_tp <- multi_plot_format(plot_list$exp_rep_tp) + plot_annotation(title = 'RR of tp exposure-response (lag=6)', theme = theme(plot.title = element_text(size = 20, hjust = 0.5, face = "bold")))
     lag_rep_tp <- multi_plot_format(plot_list$lag_rep_tp) + plot_annotation(title = 'Lag-response of tp (at 95th percentile)', theme = theme(plot.title = element_text(size = 20, hjust = 0.5, face = "bold")))
-    exp_rep_fg10 <- multi_plot_format(plot_list$exp_rep_fg10) + plot_annotation(title = 'Cumulative RR of fg10 exposure-response', theme = theme(plot.title = element_text(size = 20, hjust = 0.5, face = "bold")))
+    exp_rep_fg10 <- multi_plot_format(plot_list$exp_rep_fg10) + plot_annotation(title = 'Overall RR of fg10 exposure-response', theme = theme(plot.title = element_text(size = 20, hjust = 0.5, face = "bold")))
     lag_rep_fg10 <- multi_plot_format(plot_list$lag_rep_fg10) + plot_annotation(title = 'Lag-response of fg10 (at 95th percentile)', theme = theme(plot.title = element_text(size = 20, hjust = 0.5, face = "bold")))
     
     grid_plots <- list(exp_rep_t2m=exp_rep_t2m, lag_rep_t2m=lag_rep_t2m, exp_rep_tp=exp_rep_tp, 
@@ -247,7 +251,7 @@ get_all_plots <- function(plot_list, single_outcome=NULL, rows=3){
 #### MAIN CODE ####
 
 # Load data
-load('DLNM/ind_30km_HISP-HP_2015-2023_hosp-era5_chamba_wide_model.Rdata' )
+load(paste0('2_DLNM/', file_import, '.RData'))
 
 #### Test time df for capturing long-term/seasonal (time_df=9) ####
 setNames(modelfitstats <- data.frame(matrix(NA,0,6)),c('model','obs','dfmodel','dispersion','deviance','AIC' ))
@@ -258,9 +262,9 @@ for(i in 1:10){
 (best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model)
 
 
-#### Test single weather variables for distribution & lag structures (lag=0:14; argvar=lin (or ns w/ df=3)) ####
+#### Test single weather variables for distribution & lag structures ####
 
-# Temperature (lag=1:14, argvar=ns) NB: updated data reflect this and so does lit
+# Temperature (lag=1:14, argvar=ns[df=3]) NB: updated data reflect this and so does lit
 setNames(modelfitstats <- data.frame(matrix(NA,0,6)),c('model','obs','dfmodel','dispersion','deviance','AIC' ))
 for(i in 1:14){ # test linear
   test_result <- get_parameter_test(variables=c('t2m'), v_dist=list(fun='lin'), v_lag=i, baseline=F)
@@ -272,10 +276,8 @@ for(i in 1:14){ # test non-linear
     modelfitstats <- rbind(modelfitstats, test_result$test)
   }
 }
-modelfitstats
+(modelfitstats)
 (best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model)
-modelfitstats_f <- modelfitstats %>% filter(grepl("ns", model))
-(best_fit <- modelfitstats_f[which.min(modelfitstats_f$AIC), ]$model)
 
 # Rainfall (lag=1:14, argvar=lin) - very similar to ns but opt for simpler model
 setNames(modelfitstats <- data.frame(matrix(NA,0,6)),c('model','obs','dfmodel','dispersion','deviance','AIC' ))
@@ -289,10 +291,8 @@ for(i in 1:14){ # test non-linear
     modelfitstats <- rbind(modelfitstats, test_result$test)
   }
 }
-modelfitstats
+(modelfitstats)
 (best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model)
-modelfitstats_f <- modelfitstats %>% filter(grepl("ns", model))
-(best_fit <- modelfitstats_f[which.min(modelfitstats_f$AIC), ]$model)
 
 # Wind speed (lag=1:14, argvar=lin) - very similar to ns but opt for simpler model
 setNames(modelfitstats <- data.frame(matrix(NA,0,6)),c('model','obs','dfmodel','dispersion','deviance','AIC' ))
@@ -306,10 +306,8 @@ for(i in 1:14){ # test non-linear
     modelfitstats <- rbind(modelfitstats, test_result$test)
   }
 }
-modelfitstats
+(modelfitstats)
 (best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model)
-modelfitstats_f <- modelfitstats %>% filter(grepl("ns", model))
-(best_fit <- modelfitstats_f[which.min(modelfitstats_f$AIC), ]$model)
 
 #### Test autocorrelation of hospital admissions (AR=1) #####
 
@@ -334,8 +332,8 @@ df <- df %>% arrange(date) %>% mutate(patients_lag = lag(total_patients, 1))
 
 # Fit multivariate model (quasipoisson)
 cb.t2m <- crossbasis(df$mx2t, lag=c(0,14),argvar=list(fun='ns', df=3), arglag=list(fun='ns', df=4), group=df$year)
-cb.tp <- crossbasis(df$tp, lag=c(0,14),argvar=list(fun='ns', df=7), arglag=list(fun='ns', df=4), group=df$year)
-cb.fg10 <- crossbasis(df$fg10, lag=c(0,14),argvar=list(fun='lin'), arglag=list(fun='ns', df=4), group=df$year)
+cb.tp <- crossbasis(df$tp, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=4), group=df$year)
+cb.fg10 <- crossbasis(df$fg10, lag=c(0,14),argvar=list(fun='ns', df=7), arglag=list(fun='ns', df=4), group=df$year)
 model <- glm(formula=as.formula('total_patients ~  season + weekday + ns(time, df=9*9) + cb.t2m + cb.tp + cb.fg10 + patients_lag'),family=quasipoisson,data=df, na.action='na.exclude') 
 test_result <- get_model_fit(model,'final(quasipoisson)')
 modelfitstats <- rbind(modelfitstats, test_result)
@@ -363,6 +361,7 @@ lag_rep_fg10 <- list()
 # Extract data for all outcomes
 outcomes <- c('total_patients', 'F', 'M', 'under_5', 'age5_14', 'age15_24', 'age25_64', 'over_65', 
               'general', 'ophthalmology', 'pediatrics', 'ent')
+
 for (i in outcomes) {
 
   results <- get_results(df, i)
@@ -384,10 +383,10 @@ plots <- list(exp_rep_t2m=exp_rep_t2m, lag_rep_t2m=lag_rep_t2m, exp_rep_tp=exp_r
               lag_rep_tp=lag_rep_tp, exp_rep_fg10=exp_rep_fg10, lag_rep_fg10=lag_rep_fg10)
 
 
-total_patients <- get_all_plots(total_patients, single_outcome = 'total_patients')
-all_results <- get_all_plots(plots)
+(total_patients <- get_all_plots(total_patients, single_outcome = 'total_patients'))
+(all_results <- get_all_plots(plots))
 
-# Export plots
+#### Export outcome plots #####
 for (nm in names(total_patients)) {
   ggsave(filename = paste0(path3, '/IV. Figures/total_patients_', nm, '.png'), plot = total_patients[[nm]],
          width = 12, height = 6, dpi = 300)
