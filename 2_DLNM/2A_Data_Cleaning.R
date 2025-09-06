@@ -8,7 +8,7 @@
 options(scipen=999)
 
 # Path
-user <- 'claer14'
+user <- 'offne'
 file_name <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp_wide'
 path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
 path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
@@ -43,10 +43,9 @@ df <- df %>%
     location, time, date, year, season, month, week, weekday, doy, closed, holiday, total_patients, 
     F, M, under_5, age5_14, age15_24, age25_64, over_65,
     general, emergency, ophthalmology, pediatrics, orthopedics, ent, gynecology, dermatology, surgery, dentistry, psychiatry, oncology, 
-    t2m, mn2t, mx2t, tp, fg10 #,
+    t2m, mn2t, mx2t, tp, fg10) #,
     # mx2t_IMD, mx2t_IMD_b, mn2t_IMD, mn2t_IMD_b, tp_IMD, tp_IMD_b, fg10_IMD, fg10_IMD_b, 
     # t2m_p10, t2m_p90, mn2t_p10, mn2t_p90, mx2t_p10, mx2t_p90, tp_p10, tp_p90, fg10_p10, fg10_p90
-  )
 
 df$tp <- exp(df$tp)
 summary(df)

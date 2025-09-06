@@ -9,7 +9,7 @@ editor: visual
 
 ```{r setup}
 # Path
-user <- 'claer14'
+user <- 'offne'
 path <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 2 - Causal Inference/')
 setwd(path)
 
@@ -106,27 +106,27 @@ model <- glm.nb(total_patients ~ season + weekday + ns(time, df=9*9) + cb.t2m + 
 
 ## **Exposure-response**
 
-![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/total_patients_exp_rep_overall.png){width="150%" height="150%"}
+![](C:/Users/offne/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/total_patients_exp_rep_overall.png){width="150%" height="150%"}
 
 ## **Lag-response**
 
-![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/total_patients_lag_rep.png){width="150%" height="150%"}
+![](C:/Users/offne/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/total_patients_lag_rep.png){width="150%" height="150%"}
 
 ## **Exposure-response, by lag**
 
-![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/total_patients_exp_rep.png){width="150%" height="150%"}
+![](C:/Users/offne/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/total_patients_exp_rep.png){width="150%" height="150%"}
 
 ## Temperature: Do exposure effects vary across vulnerable groups?
 
-![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/exp_rep_t2m.png){width="100%" height="100%"}
+![](C:/Users/offne/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/exp_rep_t2m.png){width="100%" height="100%"}
 
 ## Rainfall: Do exposure effects vary across vulnerable groups?
 
-![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/exp_rep_tp.png){width="100%" height="100%"}
+![](C:/Users/offne/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/exp_rep_tp.png){width="100%" height="100%"}
 
 ## Windspeed: Do exposure effects vary across vulnerable groups?
 
-![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/exp_rep_fg10.png){width="100%" height="100%"}
+![](C:/Users/offne/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/exp_rep_fg10.png){width="100%" height="100%"}
 
 ## Timeline
 
@@ -137,12 +137,12 @@ model <- glm.nb(total_patients ~ season + weekday + ns(time, df=9*9) + cb.t2m + 
 
 ## Temperature: Do lag effects vary across vulnerable groups?
 
-![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/lag_rep_t2m.png){width="100%" height="100%"}
+![](C:/Users/offne/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/lag_rep_t2m.png){width="100%" height="100%"}
 
 ## Rainfall: Do lag effects vary across vulnerable groups?
 
-![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/lag_rep_tp.png){width="100%" height="100%"}
+![](C:/Users/offne/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/lag_rep_tp.png){width="100%" height="100%"}
 
 ## Windspeed: Do lag effects vary across vulnerable groups?
 
-![](C:/Users/claer14/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/lag_rep_fg10.png){width="100%" height="100%"}
+![](C:/Users/offne/OneDrive%20-%20University%20of%20Cambridge/III.%20Research/Chapter%202%20-%20Causal%20Inference/IV.%20Figures/lag_rep_fg10.png){width="100%" height="100%"}
