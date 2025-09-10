@@ -56,20 +56,6 @@ run_models <- function(Y, y, exposures, controls, new.data,
 # df <- read.csv('203_comb/ind_30km_HISP-HP_2015-2023_hosp-era5_chamba_wide_model.csv', check.names=FALSE, fileEncoding='UTF-8')
 df <- read.csv('203_comb/ind_10km_HISP-HP_2015-2017_hosp-bigthaw_chamba_wide_model.csv', check.names=FALSE, fileEncoding='UTF-8')
 
-# Set date type, 
-df$date <- as.Date(df$date, format='%Y-%m-%d')  # Adjust format as needed
-
-# Set factor data
-df <- df %>%
-  mutate(weekday=factor(weekday, levels=weekday_levels),
-         month=factor(month, levels=month_levels), 
-         season=factor(season, levels=season_levels))
-
-# Select year of interest
-startdate <- as.Date('2015-02-14')
-enddate <- as.Date('2017-02-13')
-df <- df[df$date >= startdate & df$date <= enddate,]
-
 # Set identified parameters
 q <- 0.005
 estimation.window <- 3 # months

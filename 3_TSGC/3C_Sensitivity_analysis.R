@@ -2,26 +2,28 @@
 ###  TSGC Multivariate Model - Sensitivity analysis                          ###
 ### ------------------------------------------------------------------------ ### 
 
+####  DEPENDENCIES  #####
+
+# Packages
+library(openxlsx)
+
 # Turn off scientific notation
 options(scipen=999)
 
 # Set data path
-user <- 'offne'
-path1 <- paste0('C:/Users/', user, '/Documents/GitHub/HISP_TSGC/')
+user <- 'claer14'
+file_import <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp_wide'
+path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
 path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 3 - Real time forecasts/')
-setwd(path2)
+setwd(path1)
 
-####  PACKAGES & FUNCTIONS ####
-library(openxlsx)
-
-# Get functions (make sure wd is in repo folder)
-source(paste0(path1, 'TSGC_Model - Functions.R'))
+### Get model functions (make sure wd is in repo folder)
+source(paste0(path1, '3_TSGC/TSGC_Model - Functions.R'))
 
 # Function to iteratively run models and get results
-run_models <- function(Y, y, exposures, controls, new.data,
-                               estimation.date.end, estimation.window, 
-                               n.ahead, q, confidence.level){
+run_models <- function(Y, y, exposures, controls, new.data, estimation.date.end, 
+                       estimation.window, n.ahead, q, confidence.level){
   
   # Set parameters
   estimation.date.start <- estimation.date.end %m-% months(estimation.window)
@@ -46,25 +48,9 @@ run_models <- function(Y, y, exposures, controls, new.data,
 
 ####  MAIN CODE  #####
 
-
-# 1. Import data ####
-
 # Load data
-df <- read.csv('203_comb/ind_30km_HISP-HP_2015-2023_hosp-era5_chamba_wide_model.csv', check.names=FALSE, fileEncoding='UTF-8')
+load(paste0('3_TSGC/', file_import, '.RData'))
 
-# Set date type, 
-df$date <- as.Date(df$date, format='%Y-%m-%d')  # Adjust format as needed
-
-# Set factor data
-df <- df %>%
-  mutate(weekday=factor(weekday, levels=weekday_levels),
-         month=factor(month, levels=month_levels), 
-         season=factor(season, levels=season_levels))
-
-# Select year of interest
-startdate <- as.Date('2015-02-14')
-enddate <- as.Date('2017-02-13')
-df <- df[df$date >= startdate & df$date <= enddate,]
 
 # 2. Set base model parameters ####
 
@@ -257,14 +243,17 @@ for (c in w_sel_col) {
 # Check model comparison criteria
 lags <- data.frame()
 for (w in w_sel_col){
-
+  
   # cat(paste0(toupper(w), ':\n'))
   # Variables
-  exposures <- c(w, grep(paste0('^', w, '_lag(\\d{1,2})$'), names(df), value = TRUE))
+  exp <- c(w, grep(paste0('^', w, '_lag(\\d{1,2})$'), names(df), value = TRUE))
   res1 <- data.frame()
   res2 <- data.frame()
-  for (e in exposures){
-
+  for (e in exp){
+    
+    # !!! Ensure that predict_all_MULTI correctly reads exposure Q matrix length 
+    exposures <- e
+    
     plot_title <- e
     # Create xts object and subset relevant variables as numeric
     Y <- xts(subset(df, select=c(outcome, e, controls)),  order.by=df$date)
@@ -273,9 +262,8 @@ for (w in w_sel_col){
     new.period <- paste0(estimation.date.end+1, '/', estimation.date.end+n.ahead)
     new.data <- Y[new.period,c(e, controls)]
     # Get results
-    results <- run_models(Y, y, e, controls, new.data,
-                                  estimation.date.end, estimation.window, n.ahead,
-                                  q, confidence.level)
+    results <- run_models(Y, y, e, controls, new.data, estimation.date.end, 
+                          estimation.window, n.ahead, q, confidence.level)
     res1 <- rbind(res1, results$criteria)
     res2 <- rbind(res2, results$estimates[1,])
     # print(results$criteria)
@@ -294,26 +282,21 @@ for (w in w_sel_col){
 # # exposures <- c('mx2t_IMD_b_lag1', 'mn2t_IMD_b_lag6', 'tp_IMD_b_lag4', 'fg10_IMD_b_lag4') # tp_IMD_lag21
 # # exposures <- c('mx2t_p90_lag6', 'mn2t_p10_lag5', 'tp_p90_lag1', 'fg10_p90_lag3') # mx2t_p90_lag24; mx2t_p90_lag9; mn2t_p10_lag1; tp_p90_lag25; fg10_p90_lag21  
 
-#### EXPORT RESULTS ####
+#### FORMAT & EXPORT ####
 
 # Create tables for export
 # NB: Run for each outcome of interest, then cbind and export
-# total_patients_all <- rbind(signal,estimation,horizon,IMD,clim)
-# total_patients_lag <- lags
+total_patients_all <- rbind(signal,estimation,horizon,IMD,clim)
+total_patients_lag <- lags
 
 general_patients_all <- rbind(signal,estimation,horizon,IMD,clim)[-1]
 general_patients_lags <- lags[-1]
 
-result_all <- cbind(total_patients_all, general_patients_all)
-result_lags <- cbind(total_patients_lag, general_patients_lags)
-
-##### Format #####
-
-result_all <- round_numeric(result_all, 2)
-result_lags <- round_numeric(result_lags, 2)
+result_all <- round_numeric(cbind(total_patients_all, general_patients_all), 2)
+result_lags <- round_numeric(cbind(total_patients_lag, general_patients_lags), 2)
 
 # Fix columns to your data frame
-# All
+# All params
 split_cols <- do.call(rbind, strsplit(result_all$Model, ": "))
 result_all$Parameter <- split_cols[, 1]
 result_all$Test <- split_cols[, 2]
@@ -323,7 +306,7 @@ result_all <- result_all %>% dplyr::select(Parameter, Test, everything())
 names(result_all) <- gsub(".1", "", names(result_all))
 result_all$Test[54:55] <- NA  # or "" if you prefer blank strings
 
-# Lags
+# Lag params
 parts <- regexpr("_[^_]*$", result_lags$Model)
 result_lags$Exposure <- substr(result_lags$Model, 1, parts - 1)
 result_lags$Lag <- substr(result_lags$Model, parts + 1, nchar(result_lags$Model))
@@ -333,25 +316,15 @@ result_lags$Model <- NULL
 names(result_lags) <- make.unique(names(result_lags))
 result_lags <- result_lags %>% dplyr::select(Exposure, Lag, everything())
 result_lags$Exposure <- gsub("_b", "", result_lags$Exposure)
+
 # Rename missed cells for name rematch
 no_underscore_indices <- which(!grepl("_", result_lags$Exposure))
 result_lags$Exposure[no_underscore_indices] <- c("mx2t_p90","mn2t_p10","tp_p90","fg10_p90")
 result_lags <- replace_exact_matches(result_lags, nm)
 names(result_lags) <- gsub(".1", "", names(result_lags))
 
-
 # Save tables
 write.xlsx(result_all, file = paste0(path3, "/III. Tables/ST_sens_param.xlsx"))
 write.xlsx(result_lags, file = paste0(path3, "/III. Tables/ST_sens_lag.xlsx"))
-
-
-# # Format PACF plots
-#
-#
-#
-
-# Save figures
-# ggsave(paste0(path3, '/IV. Figures/F_time_series_MA.png'), ts_plot, width = 10, height = 6, dpi = 300)
-
 
 

@@ -4,6 +4,9 @@
 
 #### DEPENDENCIES ####
 
+# Packages
+library(dplyr); library(tidyr); library(lubridate); library(zoo)
+
 # Turn off scientific notation
 options(scipen=999)
 
@@ -14,9 +17,6 @@ path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecas
 path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 3 - Real time forecasts/')
 setwd(path2)
-
-# Packages
-library(dplyr); library(tidyr); library(lubridate); library(zoo)
 
 # Variables
 weekday_levels <- c('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')

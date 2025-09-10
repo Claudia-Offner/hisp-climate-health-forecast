@@ -2,25 +2,36 @@
 ###  TSGC Multivariate Model - Descriptive analysis                          ###
 ### ------------------------------------------------------------------------ ### 
 
+####  DEPENDENCIES  #####
+
+# Packages
+library(openxlsx); library(patchwork); library(moments)
+
 # Turn off scientific notation
 options(scipen=999)
 
 # Set data path
-user <- 'offne'
-path1 <- paste0('C:/Users/', user, '/Documents/GitHub/HISP_TSGC/')
+user <- 'claer14'
+file_import <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp_wide'
+path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
 path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 3 - Real time forecasts/')
-setwd(path2)
+setwd(path1)
 
-####  PACKAGES & FUNCTIONS ####
-library(openxlsx)
-library(patchwork)
-library(moments)
+# Variables
+vars <- c('closed', 'total_patients', 
+          'F','M','under_5','age5_14','age15_24','age25_64','over_65',
+          'general','ophthalmology','pediatrics','orthopedics','ent','gynecology',
+          'dermatology','dentistry','surgery','emergency', 'psychiatry','oncology',
+          'mx2t', 'mn2t', 'tp', 'fg10',
+          'mx2t_IMD_b', 'mn2t_IMD_b', 'tp_IMD_b', 'fg10_IMD_b',
+          'mx2t_p90', 'mn2t_p10', 'tp_p90', 'fg10_p90')
 
-# Get functions (make sure wd is in repo folder)
-source(paste0(path1, 'TSGC_Model - Functions.R'))
 
-# Function to summarize by a grouping variable
+### Get model functions (make sure wd is in repo folder)
+source(paste0(path1, '3_TSGC/TSGC_Model - Functions.R'))
+
+### Function to summarize by a grouping variable
 summarise_by_group <- function(group_var) {
   map_dfr(vars, function(var) {
     x <- df[[var]]
@@ -49,7 +60,7 @@ summarise_by_group <- function(group_var) {
   })
 }
 
-# Function to get corrplots
+### Function to get corrplots
 corrplotting <- function(variable, y_lab){
   
   
@@ -128,7 +139,7 @@ corrplotting <- function(variable, y_lab){
   
 }
 
-# Base statistics functions
+### Base statistics functions
 get_desc <- function(df, vars) {
   
   # Get descriptive stats 
@@ -243,169 +254,17 @@ get_desc <- function(df, vars) {
   return(base_desc)
 }
 
-
-####  DEPENDENCIES  #####
-vars <- c('closed', 'total_patients', 
-          'F','M','under_5','age5_14','age15_24','age25_64','over_65',
-          'general','ophthalmology','pediatrics','orthopedics','ent','gynecology',
-          'dermatology','dentistry','surgery','emergency', 'psychiatry','oncology',
-          'mx2t', 'mn2t', 'tp', 'fg10',
-          'mx2t_IMD_b', 'mn2t_IMD_b', 'tp_IMD_b', 'fg10_IMD_b') #,
-          # 'mx2t_p90', 'mn2t_p10', 'tp_p90', 'fg10_p90')
-
-
 ####  MAIN CODE  #####
 
-
-# 1. Import data ####
-
 # Load data
-# df <- read.csv('203_comb/ind_30km_HISP-HP_2015-2023_hosp-era5_chamba_wide_model.csv', check.names=FALSE, fileEncoding='UTF-8')
-df <- read.csv('203_comb/ind_10km_HISP-HP_2015-2017_hosp-bigthaw_chamba_wide_model.csv', check.names=FALSE, fileEncoding='UTF-8')
+load(paste0('3_TSGC/', file_import, '.RData'))
 
-# Set date type, 
-df$date <- as.Date(df$date, format='%Y-%m-%d')  # Adjust format as needed
-
-# Set factor data
-df <- df %>%
-  mutate(weekday=factor(weekday, levels=weekday_levels),
-         month=factor(month, levels=month_levels), 
-         season=factor(season, levels=season_levels),
-         year=factor(year))
-
-# Select year of interest
-startdate <- as.Date('2015-02-14')
-enddate <- as.Date('2017-01-01')
-# enddate <- as.Date('2020-02-13')
-df <- df[df$date >= startdate & df$date <= enddate,]
-
-# Back transform tp variables
-df$tp <- exp(df$tp)
-
-# 2. Create visual for weather-health relationships ####
-
-# Define the inverse exponential function
-exponential <- function(x, a = 1, b = 0.1, c = 0.1) {
-  return(a * exp(-b * x) + c)
-}
-
-
-# First Graph: Normal Distribution 
-x1 <- seq(-4, 4, length.out = 1000)
-y1 <- dnorm(x1, mean = 0, sd = 1.25)
-p5 <- qnorm(0.01, mean = 0, sd = 1)
-p95 <- qnorm(0.99, mean = 0, sd = 1)
-data1 <- data.frame(x1, y1)
-
-# Add a quadratic variable to the dataset
-# data1$quadratic <- (0.3 * data1$x1^2 + 0.4 * data1$x1) / 20
-data1$mortality <- (0.2 * data1$x1^2) / 20  # Adjust coefficient for desired curvature
-
-plot1 <- ggplot(data1, aes(x = x1, y = y1)) +
-  geom_ribbon(data = subset(data1, x1 <= p5), aes(ymin = 0, ymax = y1), fill = "skyblue2", alpha = 0.75) +
-  geom_ribbon(data = subset(data1, x1 >= p95), aes(ymin = 0, ymax = y1), fill = "indianred2", alpha = 0.75) +
-  geom_line(color = "black", size = 0.75) +
-  scale_x_continuous(breaks = round(c(p5, 0, p95), 2), labels = c("Cold", "Average", "Hot")) +
-  scale_y_continuous(expand = c(0, 0)) +
-  labs(title = "(a) Temperature", x = 'Temperature frequency', y = "RR of mortality") +
-  theme_minimal() +
-  theme(
-    panel.grid = element_blank(),
-    panel.background = element_blank(),
-    axis.text.x = element_text(colour = c("skyblue3", "dimgrey", "indianred3"), size = 11),
-    axis.line.x = element_line(color = "black", size = 0.5),
-    axis.ticks.y = element_blank(),
-    axis.text.y = element_blank(),
-    axis.ticks = element_line(color = "black", size = 0.5),
-    axis.ticks.length = unit(0.2, "cm"),
-    axis.title = element_text(size = 12, color = "black"),
-    axis.title.x = element_text(margin = margin(t = 10))
-  ) +
-  annotate("segment", x = p5, xend = p5, y = 0, yend = max(subset(data1, x1 <= p5)$y1), color = "black", linetype = "dashed", size = 0.5) + 
-  annotate("segment", x = p95, xend = p95, y = 0, yend = max(subset(data1, x1 >= p95)$y1), color = "black", linetype = "dashed", size = 0.5)+
-  # Add quadratic curve here
-  geom_line(aes(y = mortality), color = "brown3", size = 1, linetype = "solid")  # Add asymmetric quadratic line
-
-
-# Second Graph: Inverse Exponential Distribution
-a <- 4.2 # initial steepness
-b <- 1.2 # rate of decay
-c <- 0.1 # plateau point
-x2 <- seq(0, 4, length.out = 1000)
-y2 <- exponential(x2, a=a, b=b, c=c)
-p95_exp2 <- qexp(0.94, rate=b)
-data2 <- data.frame(x2, y2)
-
-data2$mortality <- exponential(x2, a=a, b=-1.2, c=c)/200
-
-plot2 <- ggplot(data2, aes(x = x2, y = y2)) +
-  geom_ribbon(data = subset(data2, x2 >= p95_exp2), aes(ymin = 0, ymax = y2), fill = "palegreen3", alpha = 1) +
-  geom_line(color = "black", size = 0.75) +
-  scale_x_continuous(breaks = round(c(p95_exp2-2, p95_exp2-1, p95_exp2), 2), labels = c("Light", "Average", "Heavy")) +
-  scale_y_continuous(expand = c(0, 0)) +
-  labs(title = "(b) Precipitation", x = 'Rainfall frequency', y = "RR of mortality") +
-  theme_minimal() +
-  theme(
-    panel.grid = element_blank(),
-    panel.background = element_blank(),
-    axis.text.x = element_text(colour = c("darkgoldenrod3", "dimgrey", "forestgreen"), size = 11),
-    axis.line.x = element_line(color = "black", size = 0.5),
-    axis.ticks.y = element_blank(),
-    axis.text.y = element_blank(),
-    axis.ticks = element_line(color = "black", size = 0.5),
-    axis.ticks.length = unit(0.2, "cm"),
-    axis.title = element_text(size = 12, color = "black"),
-    axis.title.x = element_text(margin = margin(t = 10))
-  ) +
-  annotate("segment", x = p95_exp2, xend = p95_exp2, y = 0, yend = max(subset(data2, x2 >= p95_exp2)$y2), color = "black", linetype = "dashed", size = 0.5)+
-  geom_line(aes(y = mortality), color = "forestgreen", size = 1, linetype = "solid") +
-  coord_cartesian(xlim = c(0, p95_exp2+0.5), ylim = c(0, 4))  # Set both x and y axis limits
-
-# Second Graph: Inverse Exponential Distribution
-a <- 4.2 # initial steepness
-b <- 1.2 # rate of decay
-c <- 0.1 # plateau point
-x3 <- seq(0, 4, length.out = 1000)
-y3 <- exponential(x3, a=a, b=b, c=c)
-p95_exp3 <- qexp(0.94, rate=b)
-data3 <- data.frame(x3, y3)
-
-data3$mortality <- exponential(x3, a=a, b=-1.2, c=c)/200
-
-plot3 <- ggplot(data3, aes(x = x3, y = y3)) +
-  geom_ribbon(data = subset(data3, x3 >= p95_exp3), aes(ymin = 0, ymax = y3), fill = "mediumpurple1", alpha = 1) +
-  geom_line(color = "black", size = 0.75) +
-  scale_x_continuous(breaks = round(c(p95_exp3-2, p95_exp3-1, p95_exp3), 2), labels = c("Slow", "Average", "Fast")) +
-  scale_y_continuous(expand = c(0, 0)) +
-  labs(title = "(c) Wind speed", x = 'Wind speed frequency', y = "RR of mortality") +
-  theme_minimal() +
-  theme(
-    panel.grid = element_blank(),
-    panel.background = element_blank(),
-    axis.text.x = element_text(colour = c("palevioletred3", "dimgrey", "darkorchid4"), size = 11),
-    axis.line.x = element_line(color = "black", size = 0.5),
-    axis.ticks.y = element_blank(),
-    axis.text.y = element_blank(),
-    axis.ticks = element_line(color = "black", size = 0.5),
-    axis.ticks.length = unit(0.2, "cm"),
-    axis.title = element_text(size = 12, color = "black"),
-    axis.title.x = element_text(margin = margin(t = 10))
-  ) +
-  annotate("segment", x = p95_exp3, xend = p95_exp3, y = 0, yend = max(subset(data3, x3 >= p95_exp3)$y3), color = "black", linetype = "dashed", size = 0.5)+
-  geom_line(aes(y = mortality), color = "darkorchid4", size = 1, linetype = "solid") +
-  coord_cartesian(xlim = c(0, p95_exp3+0.5), ylim = c(0, 4))
-
-
-# Display the plots
-# grid.arrange(plot1, plot2, nrow = 1)
-wh_dist <- grid.arrange(plot1, plot2, nrow = 1, widths = c(1, 1), heights = c(1))
-
-
-# 3. Get time series visual (Total patients over time period: 2015-2020) ####
+# 1. Get time series visual (Total patients over time period: 2015-2016) ####
 
 # Get moving average (no NAs)
 clean <- df[!is.na(df$total_patients), ]
 # Select year of interest
+startdate <- as.Date('2015-02-14')
 enddate <- as.Date('2017-02-13')
 clean <- clean[clean$date >= startdate & clean$date <= enddate,]
 variable <- xts(clean$total_patients,  order.by=clean$date)
@@ -463,35 +322,11 @@ ts_plot_stack <- (
   plot_layout(heights = c(1, 1, 1, 1, 1, 0.15))
 
 
-# 4. Get corplot visual (Total patients over time period: 2015-2020) ####
-# general; ophthalmology; pediatrics; ent
-
-corrplot_total <- corrplotting(total_patients, 'Total patients')
-corrplot_general <- corrplotting(general, 'General Medicine')
-corrplot_opth <- corrplotting(ophthalmology, 'Ophthalmology')
-corrplot_paed <- corrplotting(pediatrics, 'Paediatrics')
-corrplot_ent <- corrplotting(ent, 'ENT')
-
-# 5. Get baseline summary statistics (2015-2020) ####
+# 2. Get baseline summary statistics (2015-2020) ####
 
 base_desc <- get_desc(df, vars)
 
-
-# 6. Get temporal summary statistics ####
-
-# Get summaries for each time grouping
-summary_weekday <- summarise_by_group('weekday') %>% mutate(Time_Group = 'Weekday')
-summary_month <- summarise_by_group('month') %>% mutate(Time_Group = 'Month')
-summary_year <- summarise_by_group('year') %>% mutate(Time_Group = 'Year')
-
-# Combine all summaries and pivot
-time_desc <- bind_rows(summary_year, summary_month, summary_weekday) %>%
-  dplyr::select(Time_Group, Time, variable, Summary) %>%
-  pivot_wider(names_from = variable, values_from = Summary) %>%
-  mutate(Time_Group = factor(Time_Group, levels = c("Year", "Month", "Weekday"))) %>%
-  arrange(Time_Group, Time)
-
-# 7. Get sample specific summary statistics ####
+# 3. Get sample specific summary statistics ####
 
 enddate <- as.Date('2016-04-01')
 startdate <- enddate %m-% months(3)
@@ -503,7 +338,6 @@ aug <- df[df$date >= startdate & df$date <= enddate, ]
 
 apr_desc <- get_desc(apr, vars)
 aug_desc <- get_desc(aug, vars)
-
 
 # Run t-tests ####
 
@@ -537,22 +371,15 @@ aug_desc <- get_desc(aug, vars)
 base_desc <- replace_exact_matches(base_desc, nm)
 apr_desc <- replace_exact_matches(apr_desc, nm)
 aug_desc <- replace_exact_matches(aug_desc, nm)
-names(time_desc) <- gsub("_b", "", names(time_desc))
-names(time_desc) <- replace_exact_matches(names(time_desc), nm)
+# names(time_desc) <- gsub("_b", "", names(time_desc))
+# names(time_desc) <- replace_exact_matches(names(time_desc), nm)
 
 # Save tables
 # write.xlsx(ttest, file = paste0(path3, "/III. Tables/ST_ttest.xlsx"))
-write.xlsx(base_desc, file = paste0(path3, "/III. Tables/T2_base_desc.xlsx"))
-write.xlsx(time_desc, file = paste0(path3, "/III. Tables/ST_time_desc.xlsx"))
-write.xlsx(apr_desc, file = paste0(path3, "/III. Tables/ST_apr_desc.xlsx"))
-write.xlsx(aug_desc, file = paste0(path3, "/III. Tables/ST_aug_desc.xlsx"))
+write.xlsx(base_desc, file = paste0(path3, "/III. Tables/base_desc.xlsx"))
+write.xlsx(apr_desc, file = paste0(path3, "/III. Tables/MT_apr_desc.xlsx"))
+write.xlsx(aug_desc, file = paste0(path3, "/III. Tables/MT_aug_desc.xlsx"))
 
 # Save figures
-ggsave(paste0(path3, '/IV. Figures/F1_dist.png'), wh_dist, width = 7, height = 3, dpi = 300)
-ggsave(paste0(path3, '/IV. Figures/Archive/ts_nolab.png'), ts_plot, width = 10, height = 6, dpi = 300)
+ggsave(paste0(path3, '/IV. Figures/MF_ts_nolab.png'), ts_plot, width = 10, height = 6, dpi = 300)
 ggsave(paste0(path3, '/IV. Figures/SF_ts_stack.png'), ts_plot_stack, width = 8, height = 8, dpi = 300)
-ggsave(paste0(path3, '/IV. Figures/F2_corrplot_total.png'), corrplot_total, width = 10, height = 6, dpi = 300)
-ggsave(paste0(path3, '/IV. Figures/Archive/SF_corrplot_general.png'), corrplot_general, width = 10, height = 6, dpi = 300)
-ggsave(paste0(path3, '/IV. Figures/Archive/SF_corrplot_opth.png'), corrplot_opth, width = 10, height = 6, dpi = 300)
-ggsave(paste0(path3, '/IV. Figures/Archive/SF_corrplot_paed.png'), corrplot_paed, width = 10, height = 6, dpi = 300)
-ggsave(paste0(path3, '/IV. Figures/Archive/SF_corrplot_ent.png'), corrplot_ent, width = 10, height = 6, dpi = 300)

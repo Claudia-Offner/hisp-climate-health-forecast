@@ -3,6 +3,8 @@
 ### ------------------------------------------------------------------------ ### 
 # NB COLOURS: https://r-charts.com/colors/
 
+#### DEPENDENCIES ####
+
 # Turn off scientific notation
 options(scipen=999)
 
@@ -14,10 +16,8 @@ file_export <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp'
 path <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 setwd(path)
 
-####  PACKAGES & FUNCTIONS ####
-library(dplyr)
-library(tidyverse)
-library(lubridate)
+# Packages
+library(dplyr); library(tidyverse); library(lubridate)
 
 ####  MAIN CODE ####
 
@@ -66,7 +66,7 @@ h_cols <- c('total_patients','F','M','under_5','age5_14','age15_24','age25_64','
 
 # Identify column names that match appropriate exposure suffixes
 exposure_pattern <- paste(w_cols, collapse = '|')
-suffix_pattern   <- paste(c('_IMD', '_p10', '_p90'), collapse = '|')
+suffix_pattern   <- paste(c('_IMD', '_p'), collapse = '|')
 matched_cols <- names(df_wide)[str_detect(names(df_wide), exposure_pattern) & str_detect(names(df_wide), suffix_pattern)]
 
 # Create cumulative health outcomes
@@ -82,5 +82,5 @@ df_wide <- df_wide %>%
 
 # Export
 write.csv(df_wide, file=paste0('203_comb/', file_export, '_wide.csv'), row.names = FALSE)
-write.csv(df_long, file=paste0('203_comb/', file_export, '_long.csv'), row.names = FALSE)
-write.csv(df_all, file=paste0('203_comb/', file_export, '_all.csv'), row.names = FALSE)
+# write.csv(df_long, file=paste0('203_comb/', file_export, '_long.csv'), row.names = FALSE)
+# write.csv(df_all, file=paste0('203_comb/', file_export, '_all.csv'), row.names = FALSE)

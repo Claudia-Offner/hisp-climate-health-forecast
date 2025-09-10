@@ -3,26 +3,15 @@
 ### ------------------------------------- ### 
 ### Multivariate model of hospital attendance 
 
-# PACKAGES ####
-
-library(quantmod)
-library(KFAS)
-library(dplyr)
-library(xts)
-library(abind)
-library(ggplot2)
-library(ggthemes)
-library(zoo)
-library(utils)
-library(lubridate)
-library(tsgc)
-library(gridExtra)
-library(patchwork)
-library(purrr)
-library(tidyr)
-
 # DEPENDENCIES ####
 
+# Packages
+library(quantmod); library(KFAS); library(dplyr); library(xts); library(abind);
+library(ggplot2); library(ggthemes); library(zoo); library(utils); 
+library(lubridate); library(tsgc); library(gridExtra); library(patchwork);
+library(purrr); library(tidyr)
+
+# Variables
 mypalette <- c('#1D98EB','#D74B3C','#A6B727','#FEC306','#EC800A','#E569BF','#8968CD',
                '#A1C8F2','#F1A6A6','#C2D77D','#F6D974','#F9B34D','#F1C2D1','#B8A8D9')
 
@@ -44,7 +33,6 @@ h_cols <- c('total_patients', 'F', 'M', 'y1_l', 'y1_17', 'y18_60', 'y60_g',
             'general_medicine', 'ophthalmology', 'pediatrics', 'orthopedics', 
             'ent', 'gynecology', 'dermatology', 'surgery', 'dentistry', 
             'emergency', 'psychiatry', 'oncology')
-
 
 
 # FUNCTIONS: MODEL ####

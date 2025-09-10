@@ -4,6 +4,11 @@
 
 #### DEPENDENCIES ####
 
+# Packages
+library(dlnm); library(splines); library(dplyr); library(lubridate); library(xts);
+library(ggplot2); library(ggthemes); library(patchwork); library(moments); 
+library(purrr); library(tidyr); library(openxlsx)
+
 # Turn off scientific notation
 options(scipen=999)
 
@@ -14,11 +19,6 @@ path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecas
 path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 2 - Causal Inference/')
 setwd(path1)
-
-# Packages
-library(dlnm); library(splines); library(dplyr); library(lubridate); library(xts);
-library(ggplot2); library(ggthemes); library(patchwork); library(moments); 
-library(purrr); library(tidyr); library(openxlsx)
 
 # Variables
 weekday_levels <- c('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')

@@ -2,6 +2,8 @@
 ### Weather cleaning - BigThaw Data                                          ###
 ### ------------------------------------------------------------------------ ### 
 
+####  DEPENDENCIES  #####
+
 # Turn off scientific notation
 options(scipen=999)
 
@@ -12,9 +14,78 @@ weat_export <- 'ind_5km_JASMIN-BigThaw_2015-2023_anom.csv'
 path <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 setwd(path)
 
-####  PACKAGES & FUNCTIONS ####
-library(lubridate)
-library(dplyr)
+# Packages
+library(lubridate); library(dplyr)
+
+### Calculate SD anomalies dynamically with col names
+calculate_anomalies <- function(df, variables, window_size = 15, days = 366) {
+  # Dependencies: uses dplyr and rlang (no need to attach them if you prefer the :: style)
+  if (!"day" %in% names(df)) stop('Data must contain a "day" column.')
+  if (!all(variables %in% names(df))) stop("Some variables are not columns in df.")
+  if (!is.numeric(window_size) || window_size < 0) stop("window_size must be a non-negative integer.")
+  
+  # Work from a clean copy of the original data (so smoothing is stable)
+  base_df   <- df
+  # Normalize day to 1..days just in case
+  base_df$day <- ((as.integer(base_df$day) - 1) %% days) + 1
+  
+  # Start result with original rows
+  df_result <- base_df
+  
+  for (variable in variables) {
+    # Compute smooth DOY mean for this variable using the centered window
+    day_vec <- seq_len(days)
+    day_stats <- vapply(day_vec, function(d) {
+      window_days <- ((d - window_size):(d + window_size) - 1) %% days + 1
+      vals <- base_df[[variable]][ base_df$day %in% window_days ]
+      mean(vals, na.rm = TRUE)
+    }, numeric(1))
+    
+    # Names for new columns
+    smooth_col   <- paste0(variable, "_sm")
+    anom_col     <- paste0(variable, "_anom")
+    p01_col      <- paste0(variable, "_p01")
+    p05_col      <- paste0(variable, "_p05")
+    p10_col      <- paste0(variable, "_p10")
+    p90_col      <- paste0(variable, "_p90")
+    p95_col      <- paste0(variable, "_p95")
+    p99_col      <- paste0(variable, "_p99")
+    
+    # Build smooth dataframe and join
+    smooth_df <- data.frame(day = day_vec, day_stats, stringsAsFactors = FALSE)
+    names(smooth_df)[2] <- smooth_col
+    df_result <- dplyr::left_join(df_result, smooth_df, by = "day")
+    
+    # Calculate anomaly
+    df_result <- dplyr::mutate(
+      df_result,
+      !!rlang::sym(anom_col) := .data[[variable]] - .data[[smooth_col]]
+    )
+    
+    # Compute thresholds on the anomaly vector (global across all rows for this variable)
+    anom_vals <- df_result[[anom_col]]
+    thr01 <- stats::quantile(anom_vals, probs = 0.01, na.rm = TRUE)
+    thr05 <- stats::quantile(anom_vals, probs = 0.05, na.rm = TRUE)
+    thr10 <- stats::quantile(anom_vals, probs = 0.10, na.rm = TRUE)
+    thr90 <- stats::quantile(anom_vals, probs = 0.90, na.rm = TRUE)
+    thr95 <- stats::quantile(anom_vals, probs = 0.95, na.rm = TRUE)
+    thr99 <- stats::quantile(anom_vals, probs = 0.99, na.rm = TRUE)
+    
+    # Create integer flags (1 if anomaly > threshold, else 0). NA stays NA.
+    df_result <- dplyr::mutate(
+      df_result,
+      !!rlang::sym(p01_col) := ifelse(is.na(.data[[anom_col]]), NA_integer_, as.integer(.data[[anom_col]] < thr01)),
+      !!rlang::sym(p05_col) := ifelse(is.na(.data[[anom_col]]), NA_integer_, as.integer(.data[[anom_col]] < thr05)),
+      !!rlang::sym(p10_col) := ifelse(is.na(.data[[anom_col]]), NA_integer_, as.integer(.data[[anom_col]] < thr10)),      !!rlang::sym(p90_col) := ifelse(is.na(.data[[anom_col]]), NA_integer_, as.integer(.data[[anom_col]] > thr90)),
+      !!rlang::sym(p90_col) := ifelse(is.na(.data[[anom_col]]), NA_integer_, as.integer(.data[[anom_col]] > thr90)),
+      !!rlang::sym(p95_col) := ifelse(is.na(.data[[anom_col]]), NA_integer_, as.integer(.data[[anom_col]] > thr95)),
+      !!rlang::sym(p99_col) := ifelse(is.na(.data[[anom_col]]), NA_integer_, as.integer(.data[[anom_col]] > thr99))
+    )
+  }
+  
+  return(df_result)
+}
+
 
 ####  MAIN CODE ####
 
@@ -178,81 +249,34 @@ df_w <- df_w %>%
 df_w$tp <- log(df_w$tp+ 1e-6)
 
 # 3. Calculate climatology anomalies ####
-# Not calculated for now because not enough data from BigThaw (2015-2016)
+# Interpret with caution for BigThaw because only finite number of years
 
-# 
-# 
-# # Calculate SD anomalies dynamically with col names
-# calculate_anomalies <- function(df_w, variables, window_size = 15) {
-#   
-#   # Ensure 'day' column exists
-#   if (!'day' %in% names(df_w)) {
-#     stop('Data must contain a "day" column.')
-#   }
-#   
-#   df_result <- df_w
-#   
-#   for (variable in variables) {
-#     # variable <- 'mx2t'
-#     # Calculate mean and SD for each DOY window in one go
-#     day_stats <- sapply(1:366, function(d) {
-#       # Define 31-day window (15 before and 15 after)
-#       window_days <- ((d - window_size):(d + window_size) - 1) %% 366 + 1
-#       
-#       # Filter data matching these days
-#       window_data <- df_w %>% filter(day %in% window_days)
-#       
-#       # Return both mean and SD for the specified variable
-#       c(mean = mean(window_data[[variable]], na.rm = TRUE)        )
-#     })
-#     
-#     # Build smooth curve data frame
-#     smooth_curve <- data.frame(
-#       day = 1:366,
-#       smooth_value = day_stats
-#     )
-#     
-#     # Merge smooth values and calculate anomalies
-#     x  <- df_result  %>%
-#       dplyr::left_join(smooth_curve, by = 'day') %>%
-#       dplyr::mutate( # Calculate the anomaly first
-#         !!paste0(variable, '_sm') := smooth_value,
-#         !!paste0(variable, '_anom') := .data[[variable]] - smooth_value) %>%
-#       dplyr::mutate(# Now calculate the other columns using the anomaly
-#         !!paste0(variable, '_u1SD') := as.integer(.data[[paste0(variable, '_anom')]] > (1 * sd(.data[[paste0(variable, '_anom')]], na.rm = TRUE))),
-#         !!paste0(variable, '_l1SD') := as.integer(.data[[paste0(variable, '_anom')]] < (-1 * sd(.data[[paste0(variable, '_anom')]], na.rm = TRUE))),
-#         !!paste0(variable, '_u2SD') := as.integer(.data[[paste0(variable, '_anom')]] > (2 * sd(.data[[paste0(variable, '_anom')]], na.rm = TRUE))),
-#         !!paste0(variable, '_l2SD') := as.integer(.data[[paste0(variable, '_anom')]] < (-2 * sd(.data[[paste0(variable, '_anom')]], na.rm = TRUE))),
-#         !!paste0(variable, '_p01') := as.integer(.data[[paste0(variable, '_anom')]] < quantile(.data[[paste0(variable, '_anom')]], 0.01, na.rm = TRUE)),
-#         !!paste0(variable, '_p05') := as.integer(.data[[paste0(variable, '_anom')]] < quantile(.data[[paste0(variable, '_anom')]], 0.05, na.rm = TRUE)),
-#         !!paste0(variable, '_p10') := as.integer(.data[[paste0(variable, '_anom')]] < quantile(.data[[paste0(variable, '_anom')]], 0.10, na.rm = TRUE)),
-#         !!paste0(variable, '_p90') := as.integer(.data[[paste0(variable, '_anom')]] > quantile(.data[[paste0(variable, '_anom')]], 0.90, na.rm = TRUE)),
-#         !!paste0(variable, '_p95') := as.integer(.data[[paste0(variable, '_anom')]] > quantile(.data[[paste0(variable, '_anom')]], 0.95, na.rm = TRUE)),
-#         !!paste0(variable, '_p99') := as.integer(.data[[paste0(variable, '_anom')]] > quantile(.data[[paste0(variable, '_anom')]], 0.99, na.rm = TRUE))
-#       ) %>%
-#       dplyr::select(-c(smooth_value))
-#     
-#   }
-#   return(df_result)
-# }
-# 
-# 
-# w_cols <- c('mn2t','mx2t','tp','fg10')
-# 
-# locations <- unique(df_w$location)
-# result <- data.frame()
-# for (l in locations){
-#   t <- df_w %>% filter(location==l)
-#   t <- calculate_anomalies(t, w_cols)
-#   result <- rbind(result, t)
-# }
+w_cols <- c('t2m', 'mn2t','mx2t','tp','fg10')
+
+locations <- unique(df_w$location)
+result <- data.frame()
+for (l in locations){
+  t <- df_w %>% filter(location==l)
+  t <- calculate_anomalies(t, w_cols)
+  result <- rbind(result, t)
+}
+
+# Check extremes across locations and years (+ NA check)
+(na_counts <- sapply(result, function(x) sum(is.na(x))))
+
+df_w <- result
+
+# # Check distribution across time and location
+# table(lubridate::year(result$date)[result$t2m_p90 == 1], result$location[result$t2m_p90 == 1])
+# filtered_result <- result %>% filter(location == 'Chamba')
+# table(filtered_result$year, filtered_result$t2m_p90)
 
 # 4. Create lag variables ####
 
-# Add lags 1-30 for all w_anom_cols (remove the date with NA for certain variables, across locations)
-w_anom_cols <- grep('IMD', names(df_w), value = TRUE)
+# Add lags 1-14 for all w_anom_cols (remove the date with NA for certain variables, across locations)
+w_anom_cols <- grep('IMD|_p', names(df_w), value = TRUE)
 result <- df_w %>% group_by(location) %>% arrange(date) %>% ungroup()
-for (i in 1:30) {
+for (i in 1:14) {
   result <- result %>%
     group_by(location) %>%
     arrange(date) %>%
@@ -265,5 +289,4 @@ for (i in 1:30) {
 
 # Export ####
 write.csv(result, file=paste0('202_weat/', weat_export), row.names = FALSE)
-
 
