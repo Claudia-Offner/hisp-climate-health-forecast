@@ -8,7 +8,7 @@
 options(scipen=999)
 
 # Path
-user <- 'offne'
+user <- 'claer14'
 file_import <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp_wide'
 path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
 path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
@@ -149,10 +149,10 @@ get_results <- function(df, outcome){
   
   # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK T2M value
   cp <- crosspred(cb.t2m, model, at=q_t2m)
-  p_lr_t2m <- get_visuals(cp, model, lag_rep=TRUE, col="#DF536B", title='Lag-response of t2m (at 95th percentile)')
+  p_lr_t2m <- get_visuals(cp, model, lag_rep=TRUE, col="#D74B3C", title='Lag-response of t2m (at 95th percentile)')
   # GRAPH CUMULATIVE T2M-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR TP & FG10) 
   cp <- crosspred(cb.t2m, model, at=seq(-10, 35, by=1))
-  p_er_t2m <- get_visuals(cp, model, lag_rep=FALSE, lag=5, col="#DF536B", xlab="Temperature (C)", title="RR of t2m exposure-response (lag=5)")
+  p_er_t2m <- get_visuals(cp, model, lag_rep=FALSE, lag=5, col="#D74B3C", xlab="Temperature (C)", title="RR of t2m exposure-response (lag=5)")
   
   # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK TP value
   cp <- crosspred(cb.tp, model, at=q_tp)
@@ -188,7 +188,7 @@ get_visuals <- function(cp, model, xlab, title, col, lag_rep=FALSE, lag=NULL){
     }
     p <- ggplot(cum, aes(x = x, y = RR)) +
       geom_line(color = col) +
-      geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.1, fill = col) +
+      geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = col) +
       geom_hline(yintercept = 1, color = "gray20") +
       scale_x_continuous(breaks = pretty(cum$x, n = 6)) +
       # scale_y_continuous(limits = c(-0.5, 2.5)) +
@@ -433,7 +433,7 @@ modelfitstats <- rbind(modelfitstats, test_result)
 q_t2m <- quantile(df$t2m, probs = 0.95, na.rm = TRUE)
 cp.t2m <- crosspred(cb.t2m, model, at=q_t2m)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
 cp <- crosspred(cb.t2m, model, at=seq(-10, 35, by=1))
-qp_plot <- get_visuals(cp, model, lag_rep=FALSE, col="#DF536B", xlab="Temperature (C)", title="Quassi-poisson: Cummulative RR")
+qp_plot <- get_visuals(cp, model, lag_rep=FALSE, col="#D74B3C", xlab="Temperature (C)", title="Quassi-poisson: Cummulative RR")
 
 # Fit multivariate model (negative binomial)
 model <- glm.nb(formula=as.formula('total_patients ~  season + weekday + ns(time, df=9*9) + cb.t2m + cb.tp + cb.fg10 + patients_lag'),
@@ -444,7 +444,7 @@ modelfitstats <- rbind(modelfitstats, test_result)
 q_t2m <- quantile(df$t2m, probs = 0.95, na.rm = TRUE)
 cp.t2m <- crosspred(cb.t2m, model, at=q_t2m)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
 cp <- crosspred(cb.t2m, model, at=seq(-10, 35, by=1))
-nb_plot <- get_visuals(cp, model, lag_rep=FALSE, col="#DF536B", xlab="Temperature (C)", title="Negative Binomial: Cummulative RR")
+nb_plot <- get_visuals(cp, model, lag_rep=FALSE, col="#D74B3C", xlab="Temperature (C)", title="Negative Binomial: Cummulative RR")
 
 aic_model <- grid.arrange(qp_plot, nb_plot, ncol = 2)
 

@@ -1,5 +1,5 @@
 ### ------------------------------------------------------------------------ ### 
-###  TSGC Results - LaTex table formating                                    ###
+###  TSGC Results - LaTex table for-mating                                    ###
 ### ------------------------------------------------------------------------ ### 
 
 # Turn off scientific notation
@@ -57,8 +57,6 @@ for (file in files) {
   assign(var_name, data)
 }
 
-
-# RENAME VARIBLE COLS
 
 # ST: ST_comp_model_Apr16  ####
 
