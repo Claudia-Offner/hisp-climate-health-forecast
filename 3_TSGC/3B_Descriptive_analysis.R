@@ -322,11 +322,24 @@ ts_plot_stack <- (
   plot_layout(heights = c(1, 1, 1, 1, 1, 0.15))
 
 
-# 2. Get baseline summary statistics (2015-2020) ####
+# 2. MT: Get baseline summary statistics (2015-2020) ####
 
 base_desc <- get_desc(df, vars)
 
-# 3. Get sample specific summary statistics ####
+# 3. ST: Get temporal summary statistics (2015-2020) ####
+
+# Get summaries for each time grouping
+summary_weekday <- summarise_by_group('weekday') %>% mutate(Time = as.character(Time), Time_Group = 'Weekday')
+summary_month <- summarise_by_group('month') %>% mutate(Time = as.character(Time), Time_Group = 'Month')
+summary_year <- summarise_by_group('year') %>% mutate(Time = as.character(Time), Time_Group = 'Year')
+
+# Combine all summaries and pivot
+time_desc <- bind_rows(summary_year, summary_month, summary_weekday) %>%
+  dplyr::select(Time_Group, Time, variable, Summary) %>%
+  pivot_wider(names_from = variable, values_from = Summary) %>%
+  mutate(Time_Group = factor(Time_Group, levels = c("Year", "Month", "Weekday")))
+
+# 4. ST: Get sample specific summary statistics ####
 
 enddate <- as.Date('2016-04-01')
 startdate <- enddate %m-% months(3)
@@ -371,14 +384,15 @@ aug_desc <- get_desc(aug, vars)
 base_desc <- replace_exact_matches(base_desc, nm)
 apr_desc <- replace_exact_matches(apr_desc, nm)
 aug_desc <- replace_exact_matches(aug_desc, nm)
-# names(time_desc) <- gsub("_b", "", names(time_desc))
-# names(time_desc) <- replace_exact_matches(names(time_desc), nm)
+names(time_desc) <- gsub("_b", "", names(time_desc))
+names(time_desc) <- replace_exact_matches(names(time_desc), nm)
 
 # Save tables
 # write.xlsx(ttest, file = paste0(path3, "/III. Tables/ST_ttest.xlsx"))
-write.xlsx(base_desc, file = paste0(path3, "/III. Tables/base_desc.xlsx"))
-write.xlsx(apr_desc, file = paste0(path3, "/III. Tables/MT_apr_desc.xlsx"))
-write.xlsx(aug_desc, file = paste0(path3, "/III. Tables/MT_aug_desc.xlsx"))
+write.xlsx(base_desc, file = paste0(path3, "/III. Tables/MT_base_desc.xlsx"))
+write.xlsx(apr_desc, file = paste0(path3, "/III. Tables/ST_apr_desc.xlsx"))
+write.xlsx(aug_desc, file = paste0(path3, "/III. Tables/ST_aug_desc.xlsx"))
+write.xlsx(time_desc, file = paste0(path3, "/III. Tables/ST_time_desc.xlsx"))
 
 # Save figures
 ggsave(paste0(path3, '/IV. Figures/MF_ts_nolab.png'), ts_plot, width = 10, height = 6, dpi = 300)

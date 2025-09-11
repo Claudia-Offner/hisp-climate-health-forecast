@@ -1,27 +1,28 @@
 ### ------------------------------------------------------------------------ ### 
 ###  TSGC Multivariate Model - Results                                       ###
 ### ------------------------------------------------------------------------ ### 
+####  DEPENDENCIES  #####
+
+# Packages
+library(openxlsx); library(stringr)
 
 # Turn off scientific notation
 options(scipen=999)
 
 # Set data path
-user <- 'offne'
-path1 <- paste0('C:/Users/', user, '/Documents/GitHub/HISP_TSGC/')
+user <- 'claer14'
+file_import <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp_wide'
+path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
 path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 3 - Real time forecasts/')
-setwd(path2)
+setwd(path1)
 
-####  PACKAGES & FUNCTIONS ####
-library(openxlsx)
-library(stringr)
-
-# Get functions (make sure wd is in repo folder)
-source(paste0(path1, 'TSGC_Model - Functions.R'))
+### Get model functions (make sure wd is in repo folder)
+source(paste0(path1, '3_TSGC/TSGC_Model - Functions.R'))
 
 run_models <- function(Y, y, exposures, controls, new.data,
-                               estimation.date.end, estimation.window, 
-                               n.ahead, q, confidence.level){
+                       estimation.date.end, estimation.window, 
+                       n.ahead, q, confidence.level){
   
   # Set parameters
   estimation.date.start <- estimation.date.end %m-% months(estimation.window)
@@ -44,17 +45,10 @@ run_models <- function(Y, y, exposures, controls, new.data,
   return(results)
 }
 
-
-
-
 ####  MAIN CODE  #####
 
-
-# 1. Import data ####
-
 # Load data
-# df <- read.csv('203_comb/ind_30km_HISP-HP_2015-2023_hosp-era5_chamba_wide_model.csv', check.names=FALSE, fileEncoding='UTF-8')
-df <- read.csv('203_comb/ind_10km_HISP-HP_2015-2017_hosp-bigthaw_chamba_wide_model.csv', check.names=FALSE, fileEncoding='UTF-8')
+load(paste0('3_TSGC/', file_import, '.RData'))
 
 # Set identified parameters
 q <- 0.005
@@ -65,17 +59,14 @@ confidence.level <- 0.68
 sea.type <- 'trigonometric'
 sea.period <- 7
 
-
-# 2. Model Results (exposures): Coefficients ####
+# 1. Model Results (exposures): Coefficients ####
 
 outcomes <- c('total_patients_c', 
               'F_c','M_c','under_5_c','age5_14_c','age15_24_c','age25_64_c','over_65_c',
-              'general_c','ophthalmology_c','pediatrics_c','ent_c') # 'orthopedics_c','gynecology_c'
+              'general_c','ophthalmology_c','pediatrics_c','ent_c')
 controls <- c('closed')
-exposures <- c('mx2t_IMD_b_lag1', 'mx2t_IMD_b_lag21', 'mn2t_IMD_b_lag1', 'mn2t_IMD_b_lag21',
-               'tp_IMD_b_lag1', 'tp_IMD_b_lag21', 'fg10_IMD_b_lag1', 'fg10_IMD_b_lag21')
-# exposures <- c('mx2t_p90_lag1', 'mx2t_p90_lag21', 'mn2t_p10_lag1', 'mn2t_p10_lag21',
-#                'tp_p90_lag1', 'tp_p90_lag21', 'fg10_p90_lag1', 'fg10_p90_lag21')
+exposures <- c('mn2t_IMD_b_lag1', 'fg10_IMD_b_lag1')
+# exposures <- c('mx2t_p90_lag1', 'mn2t_p10_lag1', 'tp_p90_lag1', 'fg10_p90_lag1') # mn2t is significantly skewing results!!!
 
 # Outputs
 esti_df <- data.frame()
@@ -143,7 +134,6 @@ for (i in outcomes) {
   esti_df <- rbind(esti_df, df_formatted)
 }
 
-
 # Reset names
 nm_m <- nm[!(names(nm) == "M")]
 names(esti_df) <- sub('_b', '', names(esti_df))
@@ -165,7 +155,7 @@ colnames(esti_df) <- new_colnames
 esti_df <- rbind(as.list(lag_row), esti_df)
 
 
-# 3. Model Results (exposures): Plots ####
+# 2. Model Results (exposures): Plots ####
 
 ncol <- 4
 nplots <- length(plot_list)
@@ -213,25 +203,20 @@ forecast_plots <- wrap_plots(plot_list, ncol = ncol) +
 comp_df <- round_numeric(comp_df, 2)
 # Remove irrelevant cols
 names(esti_df) <- make.unique(names(esti_df))
-# esti_df <- esti_df %>% select(-matches("Mx2t|Tp"))
-names(esti_df) <- gsub(".1", "", names(esti_df))
+esti_df <- esti_df %>% select(matches("Outcome|Mn2t|Fg10|MAPE"))
 # Drop header
-names(esti_df) <- esti_df[1,]
-names(esti_df)[1] <- "Outcome"
-names(esti_df)[ncol(esti_df)] <- "MAPE"
-esti_df <- esti_df[-1,]
+esti_df <- esti_df[-1, ]
 
 # Save tables
-write.xlsx(esti_df, file = paste0(path3, "/III. Tables/T2_weat_coefs_Apr16_ALL.xlsx"))
+write.xlsx(esti_df, file = paste0(path3, "/III. Tables/MT_weat_coefs_Apr16_ALL.xlsx"))
 write.xlsx(comp_df, file = paste0(path3, "/III. Tables/ST_comp_model_Apr16_ALL.xlsx"))
 
 # Save figures
-ggsave(paste0(path3, '/IV. Figures/F2_forecast_Apr16_ALL.png'), forecast_plots, width = 10, height = 6, dpi = 300)
-# ggsave(paste0(path3, '/IV. Figures/F2_log_Apr16_ALL.png'), log_growth_plot, width = 7, height = 5, dpi = 300)
+ggsave(paste0(path3, '/IV. Figures/MF_forecast_Apr16_ALL.png'), forecast_plots, width = 10, height = 6, dpi = 300)
+# ggsave(paste0(path3, '/IV. Figures/MF_log_Apr16_ALL.png'), log_growth_plot, width = 7, height = 5, dpi = 300)
 
 
-
-# 4. Model Results (no exposures): Coefficients ####
+# 3. Model Results (no exposures): Coefficients ####
 
 outcomes <- c('total_patients_c', 
               'F_c','M_c','under_5_c','age5_14_c','age15_24_c','age25_64_c','over_65_c',
@@ -327,7 +312,7 @@ colnames(esti_df) <- new_colnames
 esti_df <- rbind(as.list(lag_row), esti_df)
 
 
-# 5. Model Results (no exposures): Plots ####
+# 4. Model Results (no exposures): Plots ####
 
 ncol <- 4
 nplots <- length(plot_list)

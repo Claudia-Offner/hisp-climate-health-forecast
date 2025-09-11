@@ -273,10 +273,10 @@ df_w <- result
 
 # 4. Create lag variables ####
 
-# Add lags 1-14 for all w_anom_cols (remove the date with NA for certain variables, across locations)
+# Add lags 1-30 for all w_anom_cols (remove the date with NA for certain variables, across locations)
 w_anom_cols <- grep('IMD|_p', names(df_w), value = TRUE)
 result <- df_w %>% group_by(location) %>% arrange(date) %>% ungroup()
-for (i in 1:14) {
+for (i in 1:30) {
   result <- result %>%
     group_by(location) %>%
     arrange(date) %>%

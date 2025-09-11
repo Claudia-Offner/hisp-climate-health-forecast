@@ -52,7 +52,7 @@ run_models <- function(Y, y, exposures, controls, new.data, estimation.date.end,
 load(paste0('3_TSGC/', file_import, '.RData'))
 
 
-# 2. Set base model parameters ####
+# 1. Set base model parameters ####
 
 # Variables
 outcome <- 'general_c' #'total_patients_c' 
@@ -75,7 +75,7 @@ confidence.level <- 0.68
 sea.type <- 'trigonometric'
 sea.period <- 7
 
-# 3.A Sensitivity test: signal-to-noise ratio ####
+# 2. Sensitivity test: signal-to-noise ratio ####
 
 # Test q 0.000-0.1 (increments of 0.005)
 name <- 'q: '
@@ -104,7 +104,7 @@ for (t in test){
 # SET Q
 q <- 0.005
 
-# 3.B Sensitivity test: estimation window ####
+# 3. Sensitivity test: estimation window ####
 
 # Test estimation window
 name <- 'Estimation window: '
@@ -134,7 +134,7 @@ for (t in test){
 estimation.window <- 3
 
 
-# 3.C Sensitivity test: forecast horizon ####
+# 4. Sensitivity test: forecast horizon ####
 
 # Test n.ahead 1-20 (increments of 1) 
 name <- 'Forecast horizon: '
@@ -163,7 +163,7 @@ for (t in test){
 # SET N.AHEAD
 n.ahead <- 5
 
-# 3.D Sensitivity test: exposure threshold ####
+# 5. Sensitivity test: exposure threshold ####
 
 # IMD THRESHOLD Variables
 exposures <- c('mx2t_IMD_b', 'mn2t_IMD_b', 'tp_IMD_b', 'fg10_IMD_b')
@@ -204,7 +204,7 @@ clim <- results$criteria
 # print(signal[order(signal$LogLik), ])
 # print(horizon[order(horizon$BIC), ])
 
-# 3.E Sensitivity test: exposure lags ####
+# 6. Sensitivity test: exposure lags ####
 
 # NB: Lower AIC/BIC is better; Higher MLE is better
 # Select exposures a priori based on Indian weather forecast system
