@@ -13,6 +13,7 @@ file_import <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp_wide'
 path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
 path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 2 - Causal Inference/')
+path4 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/2_DLNM/- Reporting/- figures/')
 setwd(path1)
 
 # Packages
@@ -456,6 +457,8 @@ sens_analysis <- list(aic_season=aic_season, aic_ACF=aic_ACF,
 
 for (nm in names(sens_analysis)) {
   ggsave(filename = paste0(path3, '/IV. Figures/SM_', nm, '.png'), plot = sens_analysis[[nm]],
+         width = 8, height = 5, dpi = 300)
+  ggsave(filename = paste0(path4, '/SM_', nm, '.png'), plot = sens_analysis[[nm]],
          width = 8, height = 5, dpi = 300)
 }
 

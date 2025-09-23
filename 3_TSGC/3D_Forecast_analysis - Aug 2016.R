@@ -16,6 +16,7 @@ file_import <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp_wide'
 path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
 path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 3 - Real time forecasts/')
+path4 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/3_TSGC/- Reporting/- figures/')
 setwd(path1)
 
 ### Get model functions (make sure wd is in repo folder)
@@ -215,6 +216,7 @@ write.xlsx(comp_df, file = paste0(path3, "/III. Tables/ST_comp_model_Aug16_ALL.x
 
 # Save figures
 ggsave(paste0(path3, '/IV. Figures/MF_forecast_Aug16_ALL.png'), forecast_plots, width = 10, height = 6, dpi = 300)
+ggsave(paste0(path4, '/MF_forecast_Aug16_ALL.png'), forecast_plots, width = 10, height = 6, dpi = 300)
 # ggsave(paste0(path3, '/IV. Figures/MF_log_Aug16_ALL.png'), log_growth_plot, width = 7, height = 5, dpi = 300)
 
 
@@ -375,5 +377,6 @@ esti_df <- esti_df[-1,]
 write.xlsx(comp_df, file = paste0(path3, "/III. Tables/ST_comp_model_Aug16_noExp.xlsx"))
 # Save figures
 ggsave(paste0(path3, '/IV. Figures/SF_forecast_Aug16_noExp.png'), forecast_plots, width = 10, height = 6, dpi = 300)
+ggsave(paste0(path4, 'SF_forecast_Aug16_noExp.png'), forecast_plots, width = 10, height = 6, dpi = 300)
 
 

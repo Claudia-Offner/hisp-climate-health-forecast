@@ -13,6 +13,7 @@ file_import <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp_wide'
 path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
 path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 2 - Causal Inference/')
+path4 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/2_DLNM/- Reporting/- figures/')
 setwd(path1)
 
 # Packages
@@ -401,22 +402,22 @@ width <- 9
 height <- 6
 
 # Save cumulative exposure-response (total_patient)
-ggsave(filename = paste0(path3, '/IV. Figures/MF_total_exp_rep_all.png'), plot = p_exp_rep_all,
-       width=7, height=4, dpi = 300)
+ggsave(filename = paste0(path3, '/IV. Figures/MF_total_exp_rep_all.png'), plot = p_exp_rep_all, width=7, height=4, dpi = 300)
+ggsave(filename = paste0(path4, '/MF_total_exp_rep_all.png'), plot = p_exp_rep_all, width=7, height=4, dpi = 300)
 
 # Save lag-response by percentile (total_patient)
-ggsave(filename = paste0(path3, '/IV. Figures/MF_total_lag_rep_perc.png'), plot = p_lag_rep,
-       width=width, height=height, dpi = 300)
+ggsave(filename = paste0(path3, '/IV. Figures/MF_total_lag_rep_perc.png'), plot = p_lag_rep, width=width, height=height, dpi = 300)
+ggsave(filename = paste0(path4, '/MF_total_lag_rep_perc.png'), plot = p_lag_rep, width=width, height=height, dpi = 300)
 
 # Save exposure-response by lag (total_patient)
-ggsave(filename = paste0(path3, '/IV. Figures/MF_total_exp_rep_lags.png'), plot = p_exp_rep,
-       width=width, height=height, dpi = 300)
+ggsave(filename = paste0(path3, '/IV. Figures/MF_total_exp_rep_lags.png'), plot = p_exp_rep, width=width, height=height, dpi = 300)
+ggsave(filename = paste0(path4, '/MF_total_exp_rep_lags.png'), plot = p_exp_rep, width=width, height=height, dpi = 300)
 
 # Population plots
 names(all_results) <- paste0("disag_", names(all_results))
 for (nm in names(all_results)) {
-  ggsave(filename = paste0(path3, '/IV. Figures/MF_', nm, '.png'), plot = all_results[[nm]],
-         width=10, height=8, dpi = 300)
+  ggsave(filename = paste0(path3, '/IV. Figures/MF_', nm, '.png'), plot = all_results[[nm]], width=10, height=8, dpi = 300)
+  ggsave(filename = paste0(path4, '/MF_', nm, '.png'), plot = all_results[[nm]], width=12, height=8, dpi = 300)
 }
 
 

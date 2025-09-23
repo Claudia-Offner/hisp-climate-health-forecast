@@ -16,6 +16,7 @@ file_import <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp_wide'
 path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
 path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 3 - Real time forecasts/')
+path4 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/3_TSGC/- Reporting/- figures/')
 setwd(path1)
 
 # Variables
@@ -396,4 +397,6 @@ write.xlsx(time_desc, file = paste0(path3, "/III. Tables/ST_time_desc.xlsx"))
 
 # Save figures
 ggsave(paste0(path3, '/IV. Figures/MF_ts_nolab.png'), ts_plot, width = 10, height = 6, dpi = 300)
+ggsave(paste0(path4, 'MF_ts_nolab.png'), ts_plot, width = 10, height = 6, dpi = 300)
 ggsave(paste0(path3, '/IV. Figures/SF_ts_stack.png'), ts_plot_stack, width = 8, height = 8, dpi = 300)
+ggsave(paste0(path4, 'SF_ts_stack.png'), ts_plot_stack, width = 8, height = 8, dpi = 300)

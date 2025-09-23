@@ -1,0 +1,73 @@
+---
+title: "Descriptive Analysis"
+author: "Claudia Offner"
+format:
+  pptx:
+    reference-doc: template.pptx
+editor: visual
+---
+
+## Hospital registration distribution
+
+
+::::: columns
+::: column
+![](-%20figures/desc_hist_tota.png)
+:::
+
+::: column
+![](-%20figures/desc_cat_ward.png)
+:::
+:::::
+
+
+## Population groups
+
+::::: columns
+::: column
+![](-%20figures/desc_cat_sex.png)
+:::
+
+::: column
+![](-%20figures/desc_cat_age.png)
+:::
+:::::
+
+
+## Weather distribution
+
+![](-%20figures/desc_hist_weat.png)
+
+## Extreme weather definitions
+
+```{r desc_age, echo=FALSE, message=FALSE, warning=FALSE}
+
+library(readxl)
+library(flextable)
+library(officer)
+library(magrittr) 
+
+# Set directory
+user <- 'claer14'
+path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 3 - Real time forecasts/')
+
+# Load table
+df <- read_excel(paste0(path3, "III. Tables/MT_base_desc.xlsx"))
+
+# Section
+df <- cbind(df[31:34, 1:2], df[35:38, 1:2])
+names(df) <- make.unique(names(df))
+
+# Create flextable
+ft <- flextable(df) %>%
+  fontsize(size = 12) %>%        # font size
+  autofit()                      # automatically adjust column widths
+
+# Use officer to center and scale
+ft <- width(ft, j = 1:ncol(df), width = 10 / ncol(df))  # scale width to 80% of slide
+ft
+```
+
+## Weather vs. hospital registration over time
+
+![](-%20figures/MF_ts_stack.png)
