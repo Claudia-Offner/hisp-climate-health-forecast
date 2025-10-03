@@ -224,7 +224,7 @@ df_w$tp <- exp(df_w$tp)
 # Use wide format to avoid issues with date duplicates
 
 
-sub <- df_w %>% select(total_patients,mn2t,mx2t,tp,fg10)
+sub <- df_w %>% select(total_patients,t2m, mn2t,mx2t,tp,fg10)
 skm <- skim(sub) %>% rename(min = numeric.p0, Q1 = numeric.p25, 
                             median = numeric.p50, Q3 = numeric.p75, 
                             max = numeric.p100) %>%
@@ -234,10 +234,15 @@ colnames(skm) <- gsub('numeric.', '', colnames(skm))
 skm <- as.data.frame(skm)
 
 
-# Histograms
+# HISTOGRAMS
+
+# Weather only
 cols_to_plot <- colnames(sub[-1])
 plots <- lapply(cols_to_plot, function(col) create_histogram(sub, col, skm))
-hist_weat <- grid.arrange(grobs=plots, nrow=2)
+hist_weat <- grid.arrange(grobs = c(plots[c(1:3)],list(ggplot() + theme_void()), plots[c(4:5)]), ncol=3, nrow=2)
+# hist_weat <- grid.arrange(grobs=plots, nrow=2)
+
+# Total patients only
 hist_tota <- create_histogram(sub, 'total_patients', skm)
 hist_tota <- hist_tota +
   ggtitle("Chamba total patient distribution") +
@@ -349,7 +354,7 @@ df %>% filter(gender == 'O') %>% count(age_group)
 w <- 6
 h <- 6
 
-ggsave(paste0(path2, 'desc_hist_weat.png'), hist_weat, width = 8, height = h, dpi = 300)
+ggsave(paste0(path2, 'desc_hist_weat.png'), hist_weat, width = 12, height = h, dpi = 300)
 ggsave(paste0(path2, 'desc_hist_tota.png'), hist_tota, width = w, height = h, dpi = 300)
 ggsave(paste0(path2, 'desc_cat_ward.png'), cat_ward, width = 8, height = h, dpi = 300)
 ggsave(paste0(path2, 'desc_cat_sex.png'), cat_sex, width = w, height = h, dpi = 300)

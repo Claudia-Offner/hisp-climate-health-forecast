@@ -148,12 +148,20 @@ wind <- df_w %>%
     fg10 = max(wind_max, na.rm = TRUE) * 3.6
   )
 
+# Select all humidity variables
+humid <- df_w %>%
+  select(date, location, contains("humid", ignore.case = TRUE)) %>%
+  rename_with(~ str_replace_all(., regex("rel_humid", ignore_case = TRUE), "rh")) %>%
+  rename_with(~ str_replace_all(., regex("spec_humid", ignore_case = TRUE), "sh"))
+
+
 # Merge processed temp data
 df_w <- temp_all %>%
   full_join(temp_day, by = c("date", "location")) %>%
   full_join(temp_night, by = c("date", "location")) %>%
   full_join(precip, by = c("date", "location")) %>%
-  full_join(wind, by = c("date", "location"))
+  full_join(wind, by = c("date", "location")) %>%
+  full_join(humid, by = c("date", "location"))
 
 # Set daily time parameters
 # NB: Seasons were set based on HP crop calendar, pg. 10 (https://himachal.nic.in/WriteReadData/l892s/13_l892s/1722326458.pdf)
@@ -232,7 +240,6 @@ fg10_IMD <- list(light=40,
                  moderate=c(41,61),
                  severe=c(62,87),
                  very_severe=87)
-
 df_w <- df_w %>%
   mutate(
     fg10_IMD = case_when(
@@ -245,13 +252,29 @@ df_w <- df_w %>%
     fg10_IMD_b = if_else(fg10_IMD >=2, 1, 0))
 
 
+# NOT IMD: Humidity
+df_w <- df_w %>%
+  mutate(rh_IMD = case_when(
+    rh_mean < 30 ~ "Low (<30%)",
+    rh_mean >= 30 & rh_mean <= 60 ~ "Optimal (30-60%)",
+    rh_mean > 60 ~ "High (>60%)",
+    TRUE ~ NA_character_  # just in case there are missing/NA values
+  )) %>%
+  mutate(sh_IMD = case_when(
+    sh_mean < 5 ~ "Low (<5g/kg)",
+    sh_mean >= 5 & sh_mean <= 15 ~ "Optimal (5-15%)",
+    sh_mean > 15 ~ "High (>15%)",
+    TRUE ~ NA_character_  # just in case there are missing/NA values
+  ))
+
+
 # take log of tp
 df_w$tp <- log(df_w$tp+ 1e-6)
 
 # 3. Calculate climatology anomalies ####
 # Interpret with caution for BigThaw because only finite number of years
 
-w_cols <- c('t2m', 'mn2t','mx2t','tp','fg10')
+w_cols <- c('t2m', 'mn2t','mx2t','tp','fg10', 'rh_mean', 'sh_mean')
 
 locations <- unique(df_w$location)
 result <- data.frame()
