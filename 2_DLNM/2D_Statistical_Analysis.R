@@ -355,8 +355,10 @@ lag_rep_fg10 <- list()
 exp_rep_table <- data.frame()
 
 # Extract data for all outcomes
-outcomes <- c('total_patients', 'F', 'M', 'under_5', 'age5_14', 'age15_24', 'age25_64', 'over_65', 
+outcomes <- c('total_patients', 'F', 'M', 'under_5', 'age5_14', 'age15_24', 'age25_64', 'over_65',
               'general', 'ophthalmology', 'pediatrics', 'orthopedics', 'ent', 'gynecology', 'dermatology')
+# outcomes <- c('F', 'M', 'under_5', 'age5_14', 'age15_24', 'age25_64', 'over_65', 
+#               'pediatrics', 'orthopedics', 'ent', 'gynecology', 'dermatology') # FOR BAS POSTER
 
 for (i in outcomes) {
   
@@ -417,7 +419,7 @@ ggsave(filename = paste0(path4, '/MF_total_exp_rep_lags.png'), plot = p_exp_rep,
 names(all_results) <- paste0("disag_", names(all_results))
 for (nm in names(all_results)) {
   ggsave(filename = paste0(path3, '/IV. Figures/MF_', nm, '.png'), plot = all_results[[nm]], width=10, height=8, dpi = 300)
-  ggsave(filename = paste0(path4, '/MF_', nm, '.png'), plot = all_results[[nm]], width=12, height=8, dpi = 300)
+  ggsave(filename = paste0(path4, '/MF_', nm, '.png'), plot = all_results[[nm]], width=12, height=7, dpi = 300)
 }
 
 
