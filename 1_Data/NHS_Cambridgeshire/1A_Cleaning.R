@@ -58,52 +58,81 @@ tm_shape(region_sf) +
 # Check rows with any missing values
 (df_missing_any <- df[rowSums(is.na(df)) > 0, ])
 
+age_levels <- c('under_5', 'age5_14', 'age15_24', 'age25_64',  'over_65','Unknown')
+
+# Classify age groups
+df <- df %>%
+  mutate(age_group = case_when(
+    patient_age < 0 ~ 'Unknown',
+    patient_age >= 0 & patient_age < 5 ~ 'under_5',
+    patient_age >=5 & patient_age < 16 ~ 'age5_14',
+    patient_age >= 15 & patient_age < 25 ~ 'age15_24',
+    patient_age >= 25 & patient_age < 65 ~ 'age25_64',
+    patient_age >= 65 & patient_age <= 110 ~ 'over_65',
+    patient_age > 110 ~ 'Unknown',
+    TRUE ~ 'Unknown'
+  )) %>%
+  mutate(age_group = factor(age_group, levels = age_levels))
+sort(unique(df$age))
+table(df$age_group)
+df %>% filter(age_group == 'Unknown') %>% count(hrg_desc) # No clear pattern
+
+
 # Identify and set data types ####
+
+names(df)
+unique(df$hrg_desc)
+
+df1 <- df %>% select(date=start_date, 
+              location=provider_name, 
+              condition=hrg_desc,
+              age_group)
+
+condition_levels <- unique(df$provider_name)
 
 # Get wide format daily counts ####
 
 # Total daily count of patients
-total <- df %>%
-  group_by(location, start_date) %>%
+total <- df1 %>%
+  group_by(location, date) %>%
   summarise(total_patients = n())
 
 # Daily count by ward
-ward_wide <- df %>%
-  group_by(location, date, ward_name) %>%
+ward_wide <- df1 %>%
+  group_by(location, date, condition) %>%
   summarise(patients = n(), .groups = 'drop') %>%
-  pivot_wider(names_from = ward_name, values_from = patients, values_fill = 0) %>%
-  select(location, date, !!!syms(ward_levels))
+  pivot_wider(names_from = condition, values_from = patients, values_fill = 0) %>%
+  select(location, date, everything())
 
 # Aggregate by age
-age_wide <- df %>%
+age_wide <- df1 %>%
   group_by(location, date, age_group) %>%
   summarise(patients = n()) %>%
   pivot_wider(names_from = age_group, values_from = patients,
               values_fill = list(patients = 0))
 
-# Aggregate by gender
-gender_wide <- df %>%
-  group_by(location, date, gender) %>%
-  summarise(patients = n()) %>%
-  pivot_wider(names_from = gender, values_from = patients,
-              values_fill = list(patients = 0))
-
 # Aggregate by ward & age
-age_ward_wide <- df %>%
-  group_by(location, date, ward_name, age_group) %>%
+age_ward_wide <- df1 %>%
+  group_by(location, date, condition, age_group) %>%
   summarise(patients = n()) %>%
-  pivot_wider(names_from = c(ward_name, age_group),
-              values_from = patients,
-              values_fill = list(patients = 0))
-
-# Aggregate by ward & gender
-gender_ward_wide <- df %>%
-  group_by(location, date, ward_name, gender) %>%
-  summarise(patients = n()) %>%
-  pivot_wider(names_from = c(ward_name, gender),
+  pivot_wider(names_from = c(condition, age_group),
               values_from = patients,
               values_fill = list(patients = 0))
 
 
-unique(df$provider_lat)
-unique(df$provider_lon)
+# Aggregate total patients per date
+daily_totals <- aggregate(total_patients ~ date, data = total, FUN = sum)
+daily_totals$date <- as.Date(daily_totals$date)
+library(dplyr)
+library(zoo)
+
+daily_totals <- daily_totals %>%
+  arrange(date) %>%  # make sure it's ordered
+  mutate(ma7 = rollmean(total_patients, k = 7, fill = NA, align = "right"))
+
+
+plot(daily_totals$date, daily_totals$total_patients, type = "l", col = "grey",
+     xlab = "Date", ylab = "Total Patients")
+lines(daily_totals$date, daily_totals$ma7, lwd = 2)  # default col is fine
+
+

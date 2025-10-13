@@ -2,7 +2,6 @@
 ### Air pollution cleaning - HISP Data                                       ###
 ### ------------------------------------------------------------------------ ### 
 
-
 #### DEPENDENCIES ####
 
 # Turn off scientific notation
@@ -10,11 +9,12 @@ options(scipen=999)
 
 # Set data path
 user <- 'claer14'
+shp_path <- "C:/Users/claer14/OneDrive - University of Cambridge/III. Research/Data/1_Original_Data/100_GADM/gadm41_IND_shp/"
 path <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
 setwd(path)
 
 # Packages
-library(terra); library(sf); library(ggplot2) 
+library(terra); library(sf); library(ggplot2); library(dplyr)
 
 # Dependencies
 location_order <- c("Chamba", "Dharamshala", "Solan", "Hamirpur", "Kullu",
@@ -24,8 +24,7 @@ location_order <- c("Chamba", "Dharamshala", "Solan", "Hamirpur", "Kullu",
 #### Load data ####
 
 # Get shape file
-shapefile_path <- "C:/Users/claer14/OneDrive - University of Cambridge/III. Research/Data/1_Original_Data/100_GADM/gadm41_IND_shp/"
-shp <- st_read(paste0(shapefile_path,'gadm41_IND_3.shp'))
+shp <- st_read(paste0(shp_path,'gadm41_IND_3.shp'))
 hp <- shp[shp$NAME_1 == "Himachal Pradesh", ]
 
 # Get locations
@@ -69,7 +68,7 @@ plot(r_mask)
 plot(hp$geometry, add = TRUE, border = "blue")
 plot(locations$geometry, add = TRUE, col = "red", pch = 20)
 
-# Extract data #####
+#### Extract data #####
 
 out <- data.frame()
 for (f in nc_files){
@@ -102,6 +101,5 @@ results <- out %>%
 
 #### EXPORT ####
 
-write.csv(results, file='2_Active_Data/201_weat/ind_adm4_LongPMInd_PM25_2000-2022.csv', row.names = FALSE)
-
-getwd()
+# write.csv(results, file='2_Active_Data/202_weat/ind_adm4_LongPMInd_PM25_2000-2022.csv', row.names = FALSE)
+save(results, file = '2_Active_Data/202_weat/ind_adm4_LongPMInd_PM25_2000-2022.RData')

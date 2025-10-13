@@ -9,13 +9,14 @@ options(scipen=999)
 
 # Set data paths
 user <- 'claer14'
-weat_import <- 'ind_5km_JASMIN-BigThaw_2015-2023.csv'
-weat_export <- 'ind_5km_JASMIN-BigThaw_2015-2023_anom.csv'
-path <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
+pm25_import <- 'ind_adm4_LongPMInd_PM25_2000-2022'
+weat_import <- 'ind_5km_JASMIN-BigThaw_2015-2023'
+weat_export <- 'ind_5km_JASMIN-BigThaw_2015-2023_anom'
+path <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
 setwd(path)
 
 # Packages
-library(lubridate); library(dplyr)
+library(lubridate); library(dplyr); library(stringr)
 
 ### Calculate SD anomalies dynamically with col names
 calculate_anomalies <- function(df, variables, window_size = 15, days = 366) {
@@ -89,10 +90,12 @@ calculate_anomalies <- function(df, variables, window_size = 15, days = 366) {
 
 ####  MAIN CODE ####
 
-# 1. Clean data ####
-df_w <- read.csv(paste0('202_weat/', weat_import))
+# Load data
+df_w <- read.csv(paste0('1_Original_Data/118_BigThaw/', weat_import, '.csv'))
+df_p <- get(load(paste0('2_Active_Data/202_weat/', pm25_import, '.RData')))
 
 # Set hourly time parameters
+df_p$date <- as.Date(df_p$date)
 df_w <- df_w %>%
   mutate(
     timestamp = ymd_hms(time),
@@ -103,6 +106,8 @@ df_w <- df_w %>%
     hour = hour(timestamp)
   ) %>%
   select(date, year, month, day, hour, location, everything(), -time)
+
+# 1. Clean data ####
 
 # Calculate the overall day and night mean, min and max (convert from K to C)
 temp_all <- df_w %>%
@@ -152,17 +157,26 @@ wind <- df_w %>%
 humid <- df_w %>%
   select(date, location, contains("humid", ignore.case = TRUE)) %>%
   rename_with(~ str_replace_all(., regex("rel_humid", ignore_case = TRUE), "rh")) %>%
-  rename_with(~ str_replace_all(., regex("spec_humid", ignore_case = TRUE), "sh"))
-
-
+  rename_with(~ str_replace_all(., regex("spec_humid", ignore_case = TRUE), "sh")) %>%
+  group_by(date,location) %>%
+  summarise(
+    rh_mean = mean(rh_mean, na.rm = TRUE),
+    rh_min = min(rh_min, na.rm = TRUE),
+    rh_max = max(rh_max, na.rm = TRUE),
+    sh_mean = mean(sh_mean, na.rm = TRUE),
+    sh_min = min(sh_min, na.rm = TRUE),
+    sh_max = max(sh_max, na.rm = TRUE),
+  )
+  
 # Merge processed temp data
 df_w <- temp_all %>%
   full_join(temp_day, by = c("date", "location")) %>%
   full_join(temp_night, by = c("date", "location")) %>%
   full_join(precip, by = c("date", "location")) %>%
   full_join(wind, by = c("date", "location")) %>%
-  full_join(humid, by = c("date", "location"))
-
+  full_join(humid, by = c("date", "location")) %>%
+  full_join(df_p, by = c("date", "location"))
+  
 # Set daily time parameters
 # NB: Seasons were set based on HP crop calendar, pg. 10 (https://himachal.nic.in/WriteReadData/l892s/13_l892s/1722326458.pdf)
 df_w <- df_w %>%
@@ -233,7 +247,8 @@ df_w <- df_w %>%
     tp > tp_IMD$ex_heavy ~ 6
   ),
   tp_IMD_b = if_else(tp_IMD >=3, 1, 0))
-
+# Take log of tp
+df_w$tp <- log(df_w$tp+ 1e-6)
 
 # STORM
 fg10_IMD <- list(light=40,
@@ -249,32 +264,50 @@ df_w <- df_w %>%
       fg10 > fg10_IMD$very_severe ~ 4,                        # very_severe: >87
       TRUE ~ 0                                               
     ),
-    fg10_IMD_b = if_else(fg10_IMD >=2, 1, 0))
+    fg10_IMD_b = if_else(fg10_IMD >=2, 1, 0)
+    )
 
 
 # NOT IMD: Humidity
 df_w <- df_w %>%
   mutate(rh_IMD = case_when(
-    rh_mean < 30 ~ "Low (<30%)",
-    rh_mean >= 30 & rh_mean <= 60 ~ "Optimal (30-60%)",
-    rh_mean > 60 ~ "High (>60%)",
-    TRUE ~ NA_character_  # just in case there are missing/NA values
-  )) %>%
+    rh_mean < 30 ~ -1, # Low (30%)
+    rh_mean >= 30 & rh_mean <= 60 ~ 0, # Optimal (30-60%)
+    rh_mean > 60 ~ 1, # High (>60%)
+    TRUE ~ NA_real_),
+    rh_low_IMD_b = if_else(rh_IMD < 0, 1, 0),
+    rh_hig_IMD_b = if_else(rh_IMD > 0, 1, 0)
+    ) %>%
   mutate(sh_IMD = case_when(
-    sh_mean < 5 ~ "Low (<5g/kg)",
-    sh_mean >= 5 & sh_mean <= 15 ~ "Optimal (5-15%)",
-    sh_mean > 15 ~ "High (>15%)",
-    TRUE ~ NA_character_  # just in case there are missing/NA values
-  ))
+    sh_mean < 5 ~ -1, #"Low (<5g/kg)",
+    sh_mean >= 5 & sh_mean <= 15 ~ 0, #"Optimal (5-15g/kg)",
+    sh_mean > 15 ~ 1, #"High (>15g/kg)",
+    TRUE ~ NA_real_),
+    sh_low_IMD_b = if_else(sh_IMD < 0, 1, 0),
+    sh_hig_IMD_b = if_else(sh_IMD > 0, 1, 0)
+    )
+
+# NOT IMD: POLLUTION
+# https://safar.tropmet.res.in/AQI-47-12-Details
+df_w <- df_w %>%
+  mutate(pm25_IMD = case_when(
+    pm25 < 30 ~ 0, # "Good",
+    pm25 >= 30 & pm25 <= 60 ~ 1, #"Moderate",
+    pm25 >= 60 & pm25 <= 90 ~ 2, #"Poor",
+    pm25 >= 90 & pm25 <= 120 ~ 3, #"Unhealthy",
+    pm25 >= 120 & pm25 <= 250 ~ 4, #"Severe",
+    pm25 > 250 ~ 5, #"Hazardous",
+    TRUE ~ NA_real_),
+    pm25_IMD_b = if_else(pm25_IMD >= 2, 1, 0),
+    )
 
 
-# take log of tp
-df_w$tp <- log(df_w$tp+ 1e-6)
+
 
 # 3. Calculate climatology anomalies ####
 # Interpret with caution for BigThaw because only finite number of years
 
-w_cols <- c('t2m', 'mn2t','mx2t','tp','fg10', 'rh_mean', 'sh_mean')
+w_cols <- c('t2m', 'mn2t','mx2t','tp','fg10', 'rh_mean', 'sh_mean', 'pm25')
 
 locations <- unique(df_w$location)
 result <- data.frame()
@@ -286,6 +319,7 @@ for (l in locations){
 
 # Check extremes across locations and years (+ NA check)
 (na_counts <- sapply(result, function(x) sum(is.na(x))))
+# df_na <- result %>% filter(is.na(pm25)) # check cols
 
 df_w <- result
 
@@ -296,11 +330,11 @@ df_w <- result
 
 # 4. Create lag variables ####
 
-# Add lags 1-30 for all w_anom_cols (remove the date with NA for certain variables, across locations)
+# Add lags 1-21 for all w_anom_cols (remove the date with NA for certain variables, across locations)
 w_anom_cols <- grep('IMD|_p', names(df_w), value = TRUE)
-result <- df_w %>% group_by(location) %>% arrange(date) %>% ungroup()
-for (i in 1:30) {
-  result <- result %>%
+df_weat <- df_w %>% group_by(location) %>% arrange(date) %>% ungroup()
+for (i in 1:21) {
+  df_weat <- df_weat %>%
     group_by(location) %>%
     arrange(date) %>%
     mutate(across(all_of(w_anom_cols), 
@@ -310,6 +344,7 @@ for (i in 1:30) {
 }
 
 
-# Export ####
-write.csv(result, file=paste0('202_weat/', weat_export), row.names = FALSE)
+# EXPORT ####
+# write.csv(result, file=paste0('2_Active_Data/202_weat/', weat_export, '.csv'), row.names = FALSE)
+save(df_weat, file=paste0('2_Active_Data/202_weat/', weat_export, '.RData'))
 
