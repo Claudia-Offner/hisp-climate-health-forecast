@@ -7,67 +7,116 @@ format:
 editor: visual
 ---
 
+## Weather distribution
+![](-%20figures/desc_hist_weat.png)
+
 ## Hospital registration distribution
-
-
-::::: columns
-::: column
-![](-%20figures/desc_hist_tota.png)
-:::
-
-::: column
-![](-%20figures/desc_cat_ward.png)
-:::
-:::::
+![](-%20figures/desc_hist_tota_loc.png)
 
 
 ## Population groups
+![](-%20figures/desc_cat_ward_loc.png)
 
-::::: columns
-::: column
-![](-%20figures/desc_cat_sex.png)
-:::
+## Extreme weather definitions: Continuous 
 
-::: column
-![](-%20figures/desc_cat_age.png)
-:::
-:::::
+```{r desc_weat, echo=FALSE, message=FALSE, warning=FALSE}
 
-
-## Weather distribution
-
-![](-%20figures/desc_hist_weat.png)
-
-## Extreme weather definitions
-
-```{r desc_age, echo=FALSE, message=FALSE, warning=FALSE}
-
-library(readxl)
 library(flextable)
 library(officer)
 library(magrittr) 
 
-# Set directory
-user <- 'claer14'
-path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 3 - Real time forecasts/')
-
 # Load table
-df <- read_excel(paste0(path3, "III. Tables/MT_base_desc.xlsx"))
+df <- read.csv('- figures/desc_base.csv')
 
-# Section
-df <- cbind(df[31:34, 1:2], df[35:38, 1:2])
-names(df) <- make.unique(names(df))
+# Select data
+count <- df[37:43, c(1, 3:4)]
+cat <- cbind(df[44:50, 1:2], df[51:57, 1:2])
+names(cat) <- c('IMD Variable', 'IMD Freq.', 'Clim. Variable', 'Clim. Freq.')
 
 # Create flextable
-ft <- flextable(df) %>%
+ft_count <- flextable(count) %>%
   fontsize(size = 12) %>%        # font size
   autofit()                      # automatically adjust column widths
 
 # Use officer to center and scale
-ft <- width(ft, j = 1:ncol(df), width = 10 / ncol(df))  # scale width to 80% of slide
-ft
+ft_count
+```
+## Extreme weather definitions: Categorical 
+
+
+```{r desc_weat2, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Create flextable
+ft_cat <- flextable(cat) %>%
+  fontsize(size = 12) %>%        # font size
+  autofit()                      # automatically adjust column widths
+
+# Use officer to center and scale
+ft_cat
 ```
 
-## Weather vs. hospital registration over time
+## Statistical tests: Correlation matrix
 
-![](-%20figures/MF_ts_stack.png)
+![](-%20figures/desc_cor_matrix.png)
+
+## Statistical tests: IMD ANOVA tests
+
+```{r desc_weat4, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+# Load table
+IMD_anova <- read.csv('- figures/desc_IMD_anova.csv')
+CLIM_anova <- read.csv('- figures/desc_CLIM_anova.csv')
+
+
+# Create flextable
+ft_IMD_anova <- flextable(IMD_anova) %>%
+  fontsize(size = 12) %>%        # font size
+  autofit()                      # automatically adjust column widths
+
+ft_CLIM_anova <- flextable(CLIM_anova) %>%
+  fontsize(size = 12) %>%        # font size
+  autofit()                      # automatically adjust column widths
+
+
+# Use officer to center and scale
+ft_IMD_anova
+```
+
+## Statistical tests: IMD ANOVA tests (interactions)
+
+```{r desc_weat5, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+# Load table
+IMD_int <- read.csv('- figures/desc_IMD_interaction_tests.csv')
+CLIM_int <- read.csv('- figures/desc_CLIM_interaction_tests.csv')
+
+IMD_int <- IMD_int[IMD_int$p < 0.1, ]
+CLIM_int <- CLIM_int[CLIM_int$p < 0.1, ]
+
+# Create flextable
+ft_IMD_int <- flextable(IMD_int) %>%
+  fontsize(size = 12) %>%        # font size
+  autofit()                      # automatically adjust column widths
+
+ft_CLIM_int <- flextable(CLIM_int) %>%
+  fontsize(size = 12) %>%        # font size
+  autofit()                      # automatically adjust column widths
+
+
+# Use officer to center and scale
+ft_IMD_int
+```
+
+## Statistical tests: Clim. ANOVA tests
+```{r desc_weat6, echo=FALSE, message=FALSE, warning=FALSE}
+ft_CLIM_anova
+
+```
+
+## Statistical tests: Clim. ANOVA tests (interactions)
+```{r desc_weat7, echo=FALSE, message=FALSE, warning=FALSE}
+
+ft_CLIM_int
+```

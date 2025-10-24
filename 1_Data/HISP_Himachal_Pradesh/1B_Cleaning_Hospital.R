@@ -1,22 +1,15 @@
 ### ------------------------------------------------------------------------ ### 
-### Hospital cleaning - HISP Data                                            ###
+### HP Hospital cleaning - HISP Data                                         ###
 ### ------------------------------------------------------------------------ ### 
 
-# Turn off scientific notation
-options(scipen=999)
+setwd(here())
+source('1_Data/HISP_Himachal_Pradesh/HISP_Cleaning - Dependencies.R')
 
-# Set data path
-user <- 'claer14'
+# Set data paths
+setwd(path_data)
 heal_export <- 'ind_adm4_HISP-HP_2015-2023_patient_visits_ALL_clean'
-path <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
-setwd(path)
 
-####  PACKAGES & FUNCTIONS ####
-library(dplyr)
-library(purrr)
-library(tidyverse)
-library(lubridate)
-library(tidyselect)
+####  FUNCTIONS  ####
 
 # Unpack the tt separated HISP data
 unpack_HISP <- function(file_path, hospital, download_path){
@@ -51,27 +44,20 @@ unpack_HISP <- function(file_path, hospital, download_path){
 
 }
 
-####  DEPENDENCIES  ####
-weekday_levels <- c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
-age_levels <- c('under_5', 'age5_14', 'age15_24', 'age25_64',  'over_65','Unknown')
-gender_levels <- c('F', 'M', 'O')
-ward_levels <- c('general', 'emergency', 'ophthalmology', 'ent', 'paediatrics',
-                 'gynaecology', 'orthopedics', 'dermatology', 'surgery',
-                 'psychiatry', 'pulmonary', 'disability', 'dentistry', 'oncology',
-                 'ncd', 'antiretroviral', 'substance_counselling', 'physiotherapy')
-
 ####  MAIN CODE ####
 
-# 1. Load data ####
-
 # # Unpack HISP datasets
-# sites <- c('Chamba', 'Solan', 'Hamirpur')
 # datasets <- list.files('1_Original_Data/108_HISP/')
-# for (s in sites){
+# for (s in location_levels){
 #   file <- datasets[grepl(s, datasets)]
-#   unpack_HISP(hospital = s,
+#   if (length(file) == 0) {
+#     message(paste0('No files found for ', s, ' — skipping.'))
+#   } else {
+#     message(paste0('Extracting files for ', s))
+#     unpack_HISP(hospital = s,
 #               file_path=paste0('1_Original_Data/108_HISP/', file),
 #               download_path='2_Active_Data/201_heal/ind_adm4_HISP-HP_2015-2023_patient_visits_ALL_raw.csv')
+#   }
 # }
 
 # Load data
@@ -84,24 +70,24 @@ hols_hp <- read.csv('2_Active_Data/204_demo/ind_Adm2_OfficeHolidays_2015-2023_HP
 # Set data types
 (column_types <- sapply(df_heal, class))
 df_heal$date <- as.Date(df_heal$date)
-df_heal$age <- as.numeric(gsub("[^0-9.]", "", df_heal$age))
+df_heal$age <- as.numeric(gsub('[^0-9.]', '', df_heal$age))
 hols$Date <- as.Date(hols$Date)
 hols$weekday <- weekdays(hols$Date)
 
-# 2. Address missing values and set time series range ####
+# 1. Address missing values and set time series range ####
 
 # Count missing values per column
 (missing_counts <- colSums(is.na(df_heal)))
 # Check rows with any missing values
 (df_heal_missing_any <- df_heal[rowSums(is.na(df_heal)) > 0, ])
 # Remove rows with NA dates
-df_heal <- df_heal %>% filter(!is.na(date))
+df_heal <- df_heal %>% dplyr::filter(!is.na(date))
 
 # Check for missing days for EACH site: 810+141+880 days missing between '2012-04-04' and '2024-06-26'
 (missing_days <- df_heal %>% group_by(location) %>%
   summarise(min_date = min(date, na.rm = TRUE),
             max_date = max(date, na.rm = TRUE),
-            missing_days = list(setdiff(seq(min_date, max_date, by = "day"), date))))
+            missing_days = list(setdiff(seq(min_date, max_date, by = 'day'), date))))
 # Check for pattern
 for (l in unique(missing_days$location)){
   print(l)
@@ -116,9 +102,9 @@ date_range <- seq(from = min(df_heal$date), to = max(df_heal$date), by = 'day')
 (missing_days <- df_heal %>% group_by(location) %>%
     summarise(min_date = min(date, na.rm = TRUE),
               max_date = max(date, na.rm = TRUE),
-              missing_days = list(setdiff(seq(min_date, max_date, by = "day"), date))))
+              missing_days = list(setdiff(seq(min_date, max_date, by = 'day'), date))))
 
-# 3. Assess data types and values ####
+# 2. Assess data types and values ####
 
 # WARD
 sort(table(df_heal$ward_name))
@@ -142,11 +128,12 @@ ward_patterns <- c(
   'cancer' = 'oncology',
   'radio|oncolo' = 'oncology',
   'eye|opth' = 'ophthalmology',
-  'child' = 'paediatrics',
+  'child|10 to 19 years' = 'paediatrics',
   'physio' = 'physiotherapy', 
   'pulmon' = 'pulmonary',
   'psychiatry|phych' = 'psychiatry',
-  'dental' = 'dentistry'
+  'dental' = 'dentistry',
+  'FEMALE|MALE' = 'general'
   )
 
 df_heal$ward_group <- df_heal$ward_name
@@ -181,20 +168,19 @@ df_heal <- df_heal %>%
   mutate(age_group = factor(age_group, levels = age_levels))
 sort(unique(df_heal$age))
 table(df_heal$age_group)
-df_heal %>% filter(age_group == 'Unknown') %>% count(ward_name) # No clear pattern
+df_heal %>% dplyr::filter(age_group == 'Unknown') %>% count(ward_name) # No clear pattern
 
 # GENDER
 sort(unique(df_heal$gender))
 table(df_heal$gender)
-df_heal %>% filter(gender == 'O') %>% count(ward_name) # More than half are in Child OPD
+df_heal %>% dplyr::filter(gender == 'O') %>% count(ward_name) # More than half are in Child OPD
 
-# 4. Get daily counts ####
+# 3. Get daily counts ####
 
 # NB: need to double check if there are multiple daily visits by individual
 # patients and figure out how to visit_type fits in !!!
 
 # GET wide FORMAT DAILY
-
 # Total daily count of patients
 total <- df_heal %>%
   group_by(location, date) %>%
@@ -213,8 +199,7 @@ age_wide <- df_heal %>%
   summarise(patients = n()) %>%
   pivot_wider(names_from = age_group, values_from = patients,
               values_fill = list(patients = 0)) %>%
-  select(-matches("Unknown"))
-
+  select(-matches('Unknown'))
 
 # Aggregate by gender
 gender_wide <- df_heal %>%
@@ -222,7 +207,7 @@ gender_wide <- df_heal %>%
   summarise(patients = n()) %>%
   pivot_wider(names_from = gender, values_from = patients,
               values_fill = list(patients = 0)) %>%
-  select(-matches("O"))
+  select(-matches('O'))
 
 # Aggregate by ward & age
 age_gender_wide <- df_heal %>%
@@ -231,7 +216,7 @@ age_gender_wide <- df_heal %>%
   pivot_wider(names_from = c(gender, age_group),
               values_from = patients,
               values_fill = list(patients = 0)) %>%
-  select(-matches("Unknown|O_"))
+  select(-matches('Unknown|O_'))
 
 # # Aggregate by ward & age
 # age_ward_wide <- df_heal %>%
@@ -262,7 +247,6 @@ df_heal_w <- total %>%
   left_join(age_gender_wide, by = c('location', 'date'))
 
 # GET long FORMAT DAILY
-
 total_long <- total %>%
   mutate(ward_name = 'TOTAL', age_group = 'TOTAL', gender = 'TOTAL', patients = total_patients) %>%
   select(date, ward_name, age_group, gender, patients)
@@ -294,81 +278,86 @@ age_gender_long <- df_heal %>%
 df_heal_l <- bind_rows(age_gender_long, ward_long, age_long, gender_long, total_long)%>%
   arrange(location, date)
 
-# 5. Near zero values and missing dates ####
-# 5. A: Run checks on total_patients ####
+# 4. Near zero values and missing dates ####
+# 4. A: Checks on total_patients ####
 
-# 268+41+557 days missing between '2015-02-14' and '2023-01-19'
+# 2065 days missing between '2015-02-14' and '2023-01-19'
 (missing <- df_heal_w %>%
   group_by(location) %>%
   summarise(
     missing_days = list({
-      date_range <- seq(min(date), max(date), by = "day")
+      date_range <- seq(min(date), max(date), by = 'day')
       as.Date(setdiff(date_range, date))
     }),
-    .groups = "drop"
+    .groups = 'drop'
   ) %>%
   mutate(
-    missing_weekday = lapply(missing_days, function(md) {
-      factor(weekdays(md), levels = weekday_levels)
+    missing_weekday = lapply(missing_days, function(d) {
+      factor(format(d, "%a"), levels = weekday_levels)
     }),
     n_missing = sapply(missing_days, length)
   ))
-
+sum(missing$n_missing)
 missing_days <- missing$missing_days
 missing_weekday <- missing$missing_weekday
 
-# 319 days with total_patient values < 100
+# 407 days with total_patient values < 100
 (zero <- df_heal_w %>%
   group_by(location) %>%
   summarise(
     zero_days = list(date[total_patients < 100]),
-    .groups = "drop"
+    .groups = 'drop'
   ) %>%
   mutate(
-    zero_weekday = lapply(zero_days, function(z) {
-      factor(weekdays(z), levels = weekday_levels)
+    zero_weekday = lapply(zero_days, function(d) {
+      factor(format(d, "%a"), levels = weekday_levels)
     }),
     n_zero_days = sapply(zero_days, length)
   ))
+sum(zero$n_zero_days)
 zero_days <- zero$zero_days
 zero_weekday <- zero$zero_weekday
 
-# 587 days were low or missing in total
+# 2472 days were low or missing in total
 (all <- missing %>%
-  inner_join(zero, by = "location") %>%
+  inner_join(zero, by = 'location') %>%
   mutate(
     all_days = Map(c, missing_days, zero_days),   # append lists
     all_weekday = lapply(all_days, function(d) {
-      factor(weekdays(d), levels = weekday_levels)
+      factor(format(d, "%a"), levels = weekday_levels)
     }),
     n_all_days = sapply(all_days, length)
   ))
+sum(all$n_all_days)
 all_days <- all$all_days
 all_weekday <- all$all_weekday
 
 ### Maybe the practice was closed on Sundays & bank holidays? Yes
 ### Why are there suddenly so many 0 patient values as of 2018, before up until mid 2020? Change in management style
 missing_tables <- lapply(seq_along(missing_days), function(i) {
-  table(missing_weekday[[i]], format(missing_days[[i]], "%Y"))
+  table(missing_weekday[[i]], format(missing_days[[i]], '%Y'))
 })
 names(missing_tables) <- missing$location  # label by location
+missing_tables
 
 zero_tables <- lapply(seq_along(zero_days), function(i) {
-  table(zero_weekday[[i]], format(zero_days[[i]], "%Y"))
+  table(zero_weekday[[i]], format(zero_days[[i]], '%Y'))
 })
 names(zero_tables) <- zero$location
+zero_tables
 
 all_tables <- lapply(seq_along(all_days), function(i) {
-  table(all_weekday[[i]],format(all_days[[i]], "%Y"))
+  table(all_weekday[[i]],format(all_days[[i]], '%Y'))
 })
 names(all_tables) <- all_days$location
+all_tables
 
 # Compare against 'Sundays' and bank holidays (get list of all holidays - Sundays, public holiday)
-hols_f <- hols %>% filter(ADM_name == 'India' & (holiday == 1 | weekday == 'Sunday')) 
-hols_s <- data.frame(date = date_range) %>% filter(weekdays(date) == 'Sunday') 
+hols_f <- hols %>% dplyr::filter(ADM_name == 'India' & (holiday == 1 | weekday == 'Sunday')) 
+hols_s <- data.frame(date = date_range) %>% dplyr::filter(weekdays(date) == 'Sunday') 
 all_hols <- unique(c(hols_f$Date, hols_hp$Date, hols_s$date))
 
-# 1153 accounted for by holidays (85%) and 200 not (15%)
+# 2156 accounted for by holidays (87%) and 316 not (13%)
 account_hols_list <- lapply(all_days, function(d) {intersect(d, all_hols)})
 account_not_list <- lapply(all_days, function(d) {setdiff(d, all_hols)})
 
@@ -384,19 +373,19 @@ account_not_list <- lapply(all_days, function(d) {setdiff(d, all_hols)})
 sum(account_summary$n_account_hols)/(sum(account_summary$n_account_hols)+sum(account_summary$n_account_not))*100
 sum(account_summary$n_account_not)/(sum(account_summary$n_account_hols)+sum(account_summary$n_account_not))*100
 
-# Check unaccounted dates (mostly in 2020, which can be due to COVID)
+# Check unaccounted dates (mostly in 2020, which can be due to COVID, but some random weird years)
 account_not_tables <- lapply(account_not_list, function(d) {
-  table(factor(weekdays(d), levels = weekday_levels),format(d, "%Y"))
+  table(factor(format(d, "%a"), levels = weekday_levels),format(d, '%Y'))
 })
 names(account_not_tables) <- all$location
+account_not_tables
 
-
-# 5. B: Checks near zero days across wards ####
+# 4. B: Checks across wards ####
 
 # Combine location names and corresponding zero_days
 filtered_list <- mapply(function(loc, days) {
   df_heal_w %>%
-    filter(location == loc & date %in% days) %>%
+    dplyr::filter(location == loc & date %in% days) %>%
     select(location, date, total_patients, ward_levels)
 }, loc = zero$location, days = zero$zero_days, SIMPLIFY = FALSE)
 
@@ -407,23 +396,23 @@ filtered_df_heal$location <- as.character(filtered_df_heal$location)
 # Compare zeros vs non-zeros across wards
 count_zeros <- filtered_df_heal %>%
   group_by(location) %>%
-  summarise(across(-c(date), ~sum(. == 0)), .groups = "drop")%>%
-  mutate(count = "Zeros")
+  summarise(across(-c(date), ~sum(. == 0)), .groups = 'drop')%>%
+  mutate(count = 'Zeros')
 count_non_zeros <- filtered_df_heal %>%
   group_by(location) %>%
-  summarise(across(-c(date), ~sum(. != 0)), .groups = "drop")%>%
-  mutate(count = "Non-zeros")
+  summarise(across(-c(date), ~sum(. != 0)), .groups = 'drop')%>%
+  mutate(count = 'Non-zeros')
 (x <- bind_rows(count_zeros, count_non_zeros) %>%
   select(count, location, everything()))
 
 
-# 5. C: Address wide format ####
+# 4. C: Address wide format ####
 
 # Add in missing dates 
 full_dates_df_heal <- expand.grid(location = unique(df_heal_w$location),
                              date = date_range)
 df_heal_w <- full_dates_df_heal %>%
-  left_join(df_heal_w, by = c("location", "date")) %>%
+  left_join(df_heal_w, by = c('location', 'date')) %>%
   arrange(location, date)
 
 # Add columns for weekdays, hospital closures (NA or total patients <50)
@@ -432,7 +421,7 @@ df_heal_w$weekday <- weekdays(df_heal_w$date)
 df_heal_w$closed <- ifelse(is.na(df_heal_w$total_patients) | df_heal_w$total_patients < 50, 1, 0)
 df_heal_w$holiday <- ifelse(df_heal_w$date %in% all_hols, 1, 0)
 df_heal_w <- df_heal_w[, c('location', 'date', 'weekday', 'closed', 'holiday', 
-                                     setdiff(names(df_heal_w), c('location', 'date', 'weekday', 'closed', 'holiday')))]
+                           setdiff(names(df_heal_w), c('location', 'date', 'weekday', 'closed', 'holiday')))]
 
 # Set NAs for holidays & values < 50 (partial closure days skews model)
 # 2025-05-12: We will change this to remove all days < 50 because this is messing with model interpretability
@@ -445,10 +434,10 @@ df_heal_w <- df_heal_w %>%
                 .fns = ~ ifelse(is.na(total_patients), NA, .),
                 .names = '{.col}'))
 (missing_counts <- colSums(is.na(df_heal_w)))
-(na_counts <- df_heal_w %>% filter(is.na(total_patients)) %>% group_by(holiday) %>% summarise(count = n()))
+(na_counts <- df_heal_w %>% dplyr::filter(is.na(total_patients)) %>% group_by(holiday) %>% summarise(count = n()))
 
 
-# 5. D: Address long format ####
+# 4. D: Address long format ####
 
 # Add in missing dates and full grid of category combinations
 full_grid <- expand.grid(
@@ -481,28 +470,18 @@ df_heal_long <- full_grid %>%
 
 # Set all previously identified dates to NA & add holidays
 na_dates <- df_heal_w %>% 
-  filter(is.na(total_patients)) %>% 
+  dplyr::filter(is.na(total_patients)) %>% 
   select(location, date)
 
 df_heal_l <- df_heal_long %>%
-  left_join(na_dates %>% mutate(na_flag = TRUE), by = c("location", "date")) %>%
+  left_join(na_dates %>% mutate(na_flag = TRUE), by = c('location', 'date')) %>%
   mutate(patients = ifelse(!is.na(na_flag), NA, patients)) %>%
   select(-na_flag)
 
 
-# 6. EXPORT ####
+#### EXPORT ####
 
-# write.csv(df_heal, file='2_Active_Data/201_heal/ind_adm4_HISP-HP_2015-2023_patient_visits_ALL_clean.csv', row.names = FALSE)
-# write.csv(df_heal_w, file='2_Active_Data/201_heal/ind_adm4_HISP-HP_2015-2023_patient_visits_ALL_clean_wide.csv', row.names = FALSE)
-# write.csv(df_heal_l, file='2_Active_Data/201_heal/ind_adm4_HISP-HP_2015-2023_patient_visits_ALL_clean_long.csv', row.names = FALSE)
 save(df_heal_w, file=paste0('2_Active_Data/201_heal/', heal_export, '_wide.RData'))
 save(df_heal_l, file=paste0('2_Active_Data/201_heal/', heal_export, '_long.RData'))
 save(df_heal,  file=paste0('2_Active_Data/201_heal/', heal_export, '_all.RData'))
-
-#######################################################################
-
-# Questions: 
-### What do the category values mean (e.g. General, RSBY, Child Less Than 1yr, Antenatal, Staff, BPL, Other Free)?
-### Why are there weird numbers in age (e.g. -1121, 1951, REG-INITIAL, REG-REVISIT)
-### There are 268 missing days between '2015-02-14' and '2023-01-19',  155 of which are on Sundays - is this because the practice is closed on sundays & bank holidays?
-### Why are there suddenly so many 0 patient values as of 2018, before up until mid 2020? (see time series plot attached)
+save(df_heal_w, df_heal_l, df_heal, file=paste0('2_Active_Data/201_heal/', heal_export, '.RData'))

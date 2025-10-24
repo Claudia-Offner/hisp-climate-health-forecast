@@ -9,7 +9,7 @@ options(scipen=999)
 
 # Path
 user <- 'claer14'
-file_name <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp_wide'
+file_name <- 'ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide'
 path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
 path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 3 - Real time forecasts/')
@@ -26,7 +26,9 @@ season_levels <- c('Winter (Jan-Feb)', 'Pre-Monsoon (Mar-May)', 'Monsoon (Jun-Se
 #### MAIN CODE ####
 
 # Load data
-df <- read.csv(paste0('203_comb/', file_name, '.csv'), check.names=FALSE, fileEncoding='UTF-8')
+# df <- read.csv(paste0('203_comb/', file_name, '.csv'), check.names=FALSE, fileEncoding='UTF-8')
+load('203_comb/ind_5km_BigThaw-HISP-ALL_2015-2023_daily_hosp_wide.Rdata')
+df <- df_wide
 
 # Set date type, 
 df$date <- as.Date(df$date, format='%Y-%m-%d')  # Adjust format as needed

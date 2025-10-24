@@ -12,7 +12,7 @@ options(scipen=999)
 
 # Set data path
 user <- 'claer14'
-file_import <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp_wide'
+file_import <- 'ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide'
 path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
 path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
 path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 3 - Real time forecasts/')
@@ -20,14 +20,18 @@ path4 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecas
 setwd(path1)
 
 # Variables
-vars <- c('closed', 'total_patients', 
-          'F','M','under_5','age5_14','age15_24','age25_64','over_65',
-          'general','ophthalmology','pediatrics','orthopedics','ent','gynecology',
-          'dermatology','dentistry','surgery','emergency', 'psychiatry','oncology',
-          'mx2t', 'mn2t', 'tp', 'fg10',
-          'mx2t_IMD_b', 'mn2t_IMD_b', 'tp_IMD_b', 'fg10_IMD_b',
-          'mx2t_p90', 'mn2t_p10', 'tp_p90', 'fg10_p90')
-
+h_cols <- c('closed', 'total_patients', 'location',
+            'F','M','under_5','age5_14','age15_24','age25_64','over_65',
+            'general', 'emergency', 'ophthalmology', 'ent', 'paediatrics',
+            'gynaecology', 'orthopedics', 'dermatology', 'surgery',
+            'psychiatry', 'pulmonary', 'disability', 'dentistry', 'oncology',
+            'ncd', 'antiretroviral', 'substance_counselling', 'physiotherapy')
+w_cols <- c('mx2t', 'mn2t', 'tp', 'fg10', 'pm25', 'rh_mean', #'sh_mean',
+            'mx2t_IMD_b', 'mn2t_IMD_b', 'tp_IMD_b', 'fg10_IMD_b', 'pm25_IMD_b',
+            'rh_low_IMD_b', 'rh_hig_IMD_b', #'sh_low_IMD_b', 'sh_hig_IMD_b',
+            'mx2t_p90', 'mn2t_p10', 'tp_p90', 'fg10_p90', 'pm25_p90',
+            'rh_mean_p10', 'rh_mean_p90') #, 'sh_mean_p10', 'sh_mean_p90')
+vars <- c(h_cols, w_cols)
 
 ### Get model functions (make sure wd is in repo folder)
 source(paste0(path1, '3_TSGC/TSGC_Model - Functions.R'))
@@ -67,12 +71,12 @@ corrplotting <- function(variable, y_lab){
   
   p1 <- ggplot(df, aes(x = mx2t, y = {{ variable }}, color=season)) +
     geom_point(alpha = 0.1) +
-    geom_smooth(method = "lm", se = FALSE) +
+    geom_smooth(method = 'lm', se = FALSE) +
     labs(
-      title = "(A) Mx2t",
-      x = "°C",
+      title = '(A) Mx2t',
+      x = '°C',
       y = y_lab,
-      color = "Season"
+      color = 'Season'
     ) +
     scale_color_manual(values = c('Winter (Jan-Feb)'=mypalette[3],
                                   'Pre-Monsoon (Mar-May)'=mypalette[4], 
@@ -80,17 +84,17 @@ corrplotting <- function(variable, y_lab){
                                   'Post-Monsoon (Oct-Dec)'=mypalette[1])) +
     theme_minimal() + 
     theme(plot.title = element_text(hjust = 0.5),
-          legend.position = "none")
+          legend.position = 'none')
   
   
   p2 <- ggplot(df, aes(x = mn2t, y = {{ variable }}, color=season)) +
     geom_point(alpha = 0.1) +
-    geom_smooth(method = "lm", se = FALSE) +
+    geom_smooth(method = 'lm', se = FALSE) +
     labs(
-      title = "(B) Mn2t",
-      x = "°C",
+      title = '(B) Mn2t',
+      x = '°C',
       y = y_lab,
-      color = "Season"
+      color = 'Season'
     ) +
     scale_color_manual(values = c('Winter (Jan-Feb)'=mypalette[3],
                                   'Pre-Monsoon (Mar-May)'=mypalette[4], 
@@ -98,16 +102,16 @@ corrplotting <- function(variable, y_lab){
                                   'Post-Monsoon (Oct-Dec)'=mypalette[1])) +
     theme_minimal() + 
     theme(plot.title = element_text(hjust = 0.5),
-          legend.position = "none")
+          legend.position = 'none')
   
   p3 <- ggplot(df, aes(x = tp, y = {{ variable }}, color=season)) +
     geom_point(alpha = 0.1) +
-    geom_smooth(method = "lm", se = FALSE) +
+    geom_smooth(method = 'lm', se = FALSE) +
     labs(
-      title = "(C) Tp",
-      x = "mm",
+      title = '(C) Tp',
+      x = 'mm',
       y = y_lab,
-      color = "Season"
+      color = 'Season'
     ) +
     scale_color_manual(values = c('Winter (Jan-Feb)'=mypalette[3],
                                   'Pre-Monsoon (Mar-May)'=mypalette[4], 
@@ -115,16 +119,16 @@ corrplotting <- function(variable, y_lab){
                                   'Post-Monsoon (Oct-Dec)'=mypalette[1])) +
     theme_minimal() + 
     theme(plot.title = element_text(hjust = 0.5),
-          legend.position = "bottom")
+          legend.position = 'bottom')
   
   p4 <- ggplot(df, aes(x = fg10, y = {{ variable }}, color=season)) +
     geom_point(alpha = 0.1) +
-    geom_smooth(method = "lm", se = FALSE) +
+    geom_smooth(method = 'lm', se = FALSE) +
     labs(
-      title = "(D) Fg10",
-      x = "km per hour",
+      title = '(D) Fg10',
+      x = 'km per hour',
       y = y_lab,
-      color = "Season"
+      color = 'Season'
     ) +
     scale_color_manual(values = c('Winter (Jan-Feb)'=mypalette[3],
                                   'Pre-Monsoon (Mar-May)'=mypalette[4], 
@@ -132,74 +136,99 @@ corrplotting <- function(variable, y_lab){
                                   'Post-Monsoon (Oct-Dec)'=mypalette[1])) +
     theme_minimal() + 
     theme(plot.title = element_text(hjust = 0.5),
-          legend.position = "none")
+          legend.position = 'none')
   
-  corrplot <- (p1 | p2) / (p3 | p4) + plot_layout(guides = "collect") & theme(legend.position = "bottom")
+  corrplot <- (p1 | p2) / (p3 | p4) + plot_layout(guides = 'collect') & theme(legend.position = 'bottom')
   
   return(corrplot)
   
 }
 
 ### Base statistics functions
-get_desc <- function(df, vars) {
+get_desc <- function(df, h_cols, w_cols) {
+  
+  vars <- c(h_cols, w_cols)
   
   # Get descriptive stats 
   (desc <- vars %>%
      lapply(function(col) {
        x <- df[[col]]
        
-       # Check if binary
-       is_binary <- all(x %in% c(0, 1, NA), na.rm = TRUE)
        
-       perc_val <- if (is_binary) {
-         # For binary: percent of times '1' appears relative to number of rows
-         round((sum(x, na.rm = TRUE) / nrow(df)) * 100)
+       if(is.numeric(x)){
+         
+         # Check if binary
+         is_binary <- all(x %in% c(0, 1, NA), na.rm = TRUE)
+         
+         perc_val <- if (is_binary) {
+           # For binary: percent of times '1' appears relative to number of rows
+           round((sum(x, na.rm = TRUE) / nrow(df)) * 100)
+         } else {
+           # For non-binary: sum of x relative to total patients, rounded to 1 decimal
+           round((sum(x, na.rm = TRUE) / sum(df$total_patients, na.rm = TRUE)) * 100, 1)
+         }
+         
+         mean_val <- if (is_binary) {
+           NA
+         } else {
+           round(mean(x, na.rm = TRUE))        # round mean to whole number
+         }
+         
+         sd_val <- if (is_binary) {
+           NA
+         } else {
+           round(sd(x, na.rm = TRUE))          # round SD to whole number
+         }
+         
+         min_val <- if (is_binary) {
+           NA  
+         } else {
+           round(min(x,na.rm = TRUE))
+         }
+         
+         max_val <- if (is_binary) {
+           NA  
+         } else {
+           round(max(x,na.rm = TRUE))
+         }
+         
+         skew_val <- if (is_binary) {
+           NA  
+         } else {
+           round(skewness(x,na.rm = TRUE), 1)
+         }
+         
+         data.frame(
+           Variable = sub('_b$', '', col),
+           total_visits = sum(x, na.rm = TRUE),
+           perc_visits = perc_val,
+           mean_daily_visits = mean_val,
+           sd_daily_visits = sd_val,
+           min_daily_visit = min_val,
+           max_daily_visit = max_val,
+           skew_daily_visit = skew_val
+         )
+         
+         
        } else {
-         # For non-binary: sum of x relative to total patients, rounded to 1 decimal
-         round((sum(x, na.rm = TRUE) / sum(df$total_patients, na.rm = TRUE)) * 100, 1)
+         
+         df %>%
+           group_by(location) %>%
+           summarise(
+             total_visits = sum(total_patients, na.rm = TRUE),
+             mean_daily_visits = round(mean(total_patients, na.rm = TRUE)),
+             sd_daily_visits = round(sd(total_patients, na.rm = TRUE)),
+             min_daily_visit = round(min(total_patients, na.rm = TRUE)),
+             max_daily_visit = round(max(total_patients, na.rm = TRUE)),
+             skew_daily_visit = round(skewness(total_patients, na.rm = TRUE))
+           ) %>%
+           mutate(
+             perc_visits = round((total_visits / sum(total_visits)) * 100, 1)
+           ) %>%
+           select(Variable=location, total_visits, perc_visits, everything())
+         
        }
        
-       
-       mean_val <- if (is_binary) {
-         NA
-       } else {
-         round(mean(x, na.rm = TRUE))        # round mean to whole number
-       }
-       
-       sd_val <- if (is_binary) {
-         NA
-       } else {
-         round(sd(x, na.rm = TRUE))          # round SD to whole number
-       }
-       
-       min_val <- if (is_binary) {
-         NA  
-       } else {
-         round(min(x,na.rm = TRUE))
-       }
-       
-       max_val <- if (is_binary) {
-         NA  
-       } else {
-         round(max(x,na.rm = TRUE))
-       }
-       
-       skew_val <- if (is_binary) {
-         NA  
-       } else {
-         round(skewness(x,na.rm = TRUE), 1)
-       }
-       
-       data.frame(
-         Variable = sub('_b$', '', col),
-         total_visits = sum(x, na.rm = TRUE),
-         perc_visits = perc_val,
-         mean_daily_visits = mean_val,
-         sd_daily_visits = sd_val,
-         min_daily_visit = min_val,
-         max_daily_visit = max_val,
-         skew_daily_visit = skew_val
-       )
      }) %>%
      bind_rows())
   
@@ -212,7 +241,7 @@ get_desc <- function(df, vars) {
           NA,
           paste0(
             round(mean_daily_visits),
-            ifelse(Variable == "tp", " + ", " ± "),
+            ifelse(Variable == 'tp', ' + ', ' ± '),
             round(sd_daily_visits)
           )
         ),
@@ -226,29 +255,38 @@ get_desc <- function(df, vars) {
   
   
   # Remove frequency values for raw weather data
-  base_desc$Frequency[22:25] <- NA  # or "" if you prefer blank strings
+  base_desc$Frequency[base_desc$Variable %in%  gsub('(_IMD_b|_p90|_p10)$', '', w_cols)] <- NA
+  
   
   # Get percentage of hospital registrations
-  # perc <- as.numeric(gsub(",", "", base_desc$Frequency))/as.numeric(gsub(",", "", base_desc[1, "Frequency"])) *100
+  # perc <- as.numeric(gsub(',', '', base_desc$Frequency))/as.numeric(gsub(',', '', base_desc[1, 'Frequency'])) *100
   # perc <- cbind(base_desc$Variable, perc)
   
   # FORMATING
   
   # Insert headings at fixed positions
   base_desc <- rbind(
-    tibble(Variable = "Hospital Characteristics", Frequency = NA, Average = NA, Range = NA),
+    tibble(Variable = 'Hospital Characteristics', Frequency = NA, Average = NA, Range = NA),
     base_desc
   )
-  positions <- c(3, 6, 12, 25)
-  labels <- c("Gender", "Age", "Ward", "Weather Characteristics")
-  for (i in seq_along(positions)) {
+  check <- c('Chamba', 'F', 'under_5', 'general', 'mx2t')
+  labels <- c('Location', 'Gender', 'Age', 'Ward', 'Weather Characteristics')
+  # Find positions to insert before
+  positions <- which(base_desc$Variable %in% check)
+  # Create a tibble of new rows
+  new_rows <- tibble(
+    Variable = labels,
+    Frequency = NA,
+    Average = NA,
+    Range = NA
+  )
+  # Insert rows in reverse order so positions don't shift
+  for (i in rev(seq_along(positions))) {
     pos <- positions[i]
-    label <- labels[i]
-    new_row <- tibble(Variable = label, Frequency = NA, Average = NA, Range = NA)
-    base_desc <- rbind(
-      base_desc[1:pos, ],
-      new_row,
-      base_desc[(pos + 1):nrow(base_desc), ]
+    base_desc <- bind_rows(
+      base_desc[1:(pos-1), ],
+      new_rows[i, ],
+      base_desc[pos:nrow(base_desc), ]
     )
   }
   
@@ -301,18 +339,18 @@ ts_plot_fg10 <- plot_moving_avg(variable, MA=7, y.lab='km/hour', colour='#FEC306
 # GET LEGEND ONLY
 legend_data <- data.frame(
   x = 1:5, y = 1:5,
-  group = c("Total Patients", "Mx2t", "Mn2t", "Tp", "Fg10"))
-legend_data$group <- factor(legend_data$group, levels = c("Total Patients", "Mx2t", "Mn2t", "Tp", "Fg10"))
-color_vals <- c("Total Patients" = "#8968CD",
-                "Mx2t" = "#D74B3C",
-                "Mn2t" = "#1D98EB",
-                "Tp" = "#A6B727",
-                "Fg10" = "#FEC306")
+  group = c('Total Patients', 'Mx2t', 'Mn2t', 'Tp', 'Fg10'))
+legend_data$group <- factor(legend_data$group, levels = c('Total Patients', 'Mx2t', 'Mn2t', 'Tp', 'Fg10'))
+color_vals <- c('Total Patients' = '#8968CD',
+                'Mx2t' = '#D74B3C',
+                'Mn2t' = '#1D98EB',
+                'Tp' = '#A6B727',
+                'Fg10' = '#FEC306')
 manual_legend <- ggplot(legend_data, aes(x = x, y = y, color = group)) +
   geom_line(linewidth = 1) +
   scale_color_manual(values = color_vals, name = NULL) +
   theme_void() +
-  theme(legend.position = "bottom")
+  theme(legend.position = 'bottom')
 # Display only the legend
 legend_only <- manual_legend + guides(color = guide_legend(nrow = 1)) + theme(legend.box.margin = margin(t = -20))
 
@@ -325,7 +363,8 @@ ts_plot_stack <- (
 
 # 2. MT: Get baseline summary statistics (2015-2020) ####
 
-base_desc <- get_desc(df, vars)
+base_desc <- get_desc(df, h_cols, w_cols)
+
 
 # 3. ST: Get temporal summary statistics (2015-2020) ####
 
@@ -338,7 +377,13 @@ summary_year <- summarise_by_group('year') %>% mutate(Time = as.character(Time),
 time_desc <- bind_rows(summary_year, summary_month, summary_weekday) %>%
   dplyr::select(Time_Group, Time, variable, Summary) %>%
   pivot_wider(names_from = variable, values_from = Summary) %>%
-  mutate(Time_Group = factor(Time_Group, levels = c("Year", "Month", "Weekday")))
+  mutate(Time_Group = factor(Time_Group, levels = c('Year', 'Month', 'Weekday'))) %>%
+  select(-location)
+
+# Get site specific time summaries
+summary_weekday <- summarise_by_group(c('weekday', 'location')) %>% mutate(Time = as.character(Time), Time_Group = 'Weekday')
+summary_month <- summarise_by_group('month') %>% mutate(Time = as.character(Time), Time_Group = 'Month')
+summary_year <- summarise_by_group('year') %>% mutate(Time = as.character(Time), Time_Group = 'Year')
 
 # 4. ST: Get sample specific summary statistics ####
 
@@ -385,15 +430,15 @@ aug_desc <- get_desc(aug, vars)
 base_desc <- replace_exact_matches(base_desc, nm)
 apr_desc <- replace_exact_matches(apr_desc, nm)
 aug_desc <- replace_exact_matches(aug_desc, nm)
-names(time_desc) <- gsub("_b", "", names(time_desc))
+names(time_desc) <- gsub('_b', '', names(time_desc))
 names(time_desc) <- replace_exact_matches(names(time_desc), nm)
 
 # Save tables
-# write.xlsx(ttest, file = paste0(path3, "/III. Tables/ST_ttest.xlsx"))
-write.xlsx(base_desc, file = paste0(path3, "/III. Tables/MT_base_desc.xlsx"))
-write.xlsx(apr_desc, file = paste0(path3, "/III. Tables/ST_apr_desc.xlsx"))
-write.xlsx(aug_desc, file = paste0(path3, "/III. Tables/ST_aug_desc.xlsx"))
-write.xlsx(time_desc, file = paste0(path3, "/III. Tables/ST_time_desc.xlsx"))
+# write.xlsx(ttest, file = paste0(path3, '/III. Tables/ST_ttest.xlsx'))
+write.xlsx(base_desc, file = paste0(path3, '/III. Tables/MT_base_desc.xlsx'))
+write.xlsx(apr_desc, file = paste0(path3, '/III. Tables/ST_apr_desc.xlsx'))
+write.xlsx(aug_desc, file = paste0(path3, '/III. Tables/ST_aug_desc.xlsx'))
+write.xlsx(time_desc, file = paste0(path3, '/III. Tables/ST_time_desc.xlsx'))
 
 # Save figures
 ggsave(paste0(path3, '/IV. Figures/MF_ts_nolab.png'), ts_plot, width = 10, height = 6, dpi = 300)

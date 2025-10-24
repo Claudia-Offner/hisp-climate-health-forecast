@@ -35,6 +35,8 @@ ind <- st_read(paste0(shapefile_path,'gadm41_IND_1.shp'))
 shp <- st_read(paste0(shapefile_path,'gadm41_IND_3.shp'))
 hp <- shp[shp$NAME_1 == "Himachal Pradesh", ]
 
+
+
 # Create a data frame with locations and coordinates
 # locations <- data.frame(
 #   location = c("Chamba", "Dharamshala", "Solan", "Hamirpur", "Kullu"),

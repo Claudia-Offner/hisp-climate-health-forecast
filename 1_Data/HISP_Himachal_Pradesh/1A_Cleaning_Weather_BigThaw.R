@@ -1,29 +1,24 @@
 ### ------------------------------------------------------------------------ ### 
-### Weather cleaning - BigThaw Data                                          ###
+### HP Weather cleaning - BigThaw Data                                       ###
 ### ------------------------------------------------------------------------ ### 
 
-####  DEPENDENCIES  #####
-
-# Turn off scientific notation
-options(scipen=999)
+setwd(here())
+source('1_Data/HISP_Himachal_Pradesh/HISP_Cleaning - Dependencies.R')
 
 # Set data paths
-user <- 'claer14'
+setwd(path_data)
 pm25_import <- 'ind_adm4_LongPMInd_PM25_2000-2022'
 weat_import <- 'ind_5km_JASMIN-BigThaw_2015-2023'
 weat_export <- 'ind_5km_JASMIN-BigThaw_2015-2023_anom'
-path <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
-setwd(path)
 
-# Packages
-library(lubridate); library(dplyr); library(stringr)
+####  FUNCTIONS  #####
 
-### Calculate SD anomalies dynamically with col names
+### Function to calculate SD anomalies dynamically with col names
 calculate_anomalies <- function(df, variables, window_size = 15, days = 366) {
   # Dependencies: uses dplyr and rlang (no need to attach them if you prefer the :: style)
-  if (!"day" %in% names(df)) stop('Data must contain a "day" column.')
-  if (!all(variables %in% names(df))) stop("Some variables are not columns in df.")
-  if (!is.numeric(window_size) || window_size < 0) stop("window_size must be a non-negative integer.")
+  if (!'day' %in% names(df)) stop('Data must contain a "day" column.')
+  if (!all(variables %in% names(df))) stop('Some variables are not columns in df.')
+  if (!is.numeric(window_size) || window_size < 0) stop('window_size must be a non-negative integer.')
   
   # Work from a clean copy of the original data (so smoothing is stable)
   base_df   <- df
@@ -43,19 +38,19 @@ calculate_anomalies <- function(df, variables, window_size = 15, days = 366) {
     }, numeric(1))
     
     # Names for new columns
-    smooth_col   <- paste0(variable, "_sm")
-    anom_col     <- paste0(variable, "_anom")
-    p01_col      <- paste0(variable, "_p01")
-    p05_col      <- paste0(variable, "_p05")
-    p10_col      <- paste0(variable, "_p10")
-    p90_col      <- paste0(variable, "_p90")
-    p95_col      <- paste0(variable, "_p95")
-    p99_col      <- paste0(variable, "_p99")
+    smooth_col   <- paste0(variable, '_sm')
+    anom_col     <- paste0(variable, '_anom')
+    p01_col      <- paste0(variable, '_p01')
+    p05_col      <- paste0(variable, '_p05')
+    p10_col      <- paste0(variable, '_p10')
+    p90_col      <- paste0(variable, '_p90')
+    p95_col      <- paste0(variable, '_p95')
+    p99_col      <- paste0(variable, '_p99')
     
     # Build smooth dataframe and join
     smooth_df <- data.frame(day = day_vec, day_stats, stringsAsFactors = FALSE)
     names(smooth_df)[2] <- smooth_col
-    df_result <- dplyr::left_join(df_result, smooth_df, by = "day")
+    df_result <- dplyr::left_join(df_result, smooth_df, by = 'day')
     
     # Calculate anomaly
     df_result <- dplyr::mutate(
@@ -101,7 +96,7 @@ df_w <- df_w %>%
     timestamp = ymd_hms(time),
     date = as.Date(timestamp),
     year = year(timestamp),
-    month = month(timestamp, label = TRUE, abbr = TRUE),
+    month = lubridate::month(timestamp, label = TRUE, abbr = TRUE),
     day = day(timestamp),
     hour = hour(timestamp)
   ) %>%
@@ -120,7 +115,7 @@ temp_all <- df_w %>%
 
 # Calculate the day (06:00 to 18:00) mean, min and max (convert from K to C)
 temp_day <- df_w %>%
-  filter(hour >= 6 & hour < 18) %>%
+  dplyr::filter(hour >= 6 & hour < 18) %>%
   group_by(date,location) %>%
   summarise(
     t2m_day = mean(temp_mean, na.rm = TRUE) - 273.15,
@@ -130,7 +125,7 @@ temp_day <- df_w %>%
 
 # Calculate the night (18:00 to 06:00) mean, min and max (convert from K to C)
 temp_night <- df_w %>%
-  filter(hour < 6 | hour >= 18) %>%
+  dplyr::filter(hour < 6 | hour >= 18) %>%
   group_by(date,location) %>%
   summarise(
     t2m_night = mean(temp_mean, na.rm = TRUE) - 273.15,
@@ -138,8 +133,7 @@ temp_night <- df_w %>%
     mx2t_night = max(temp_max, na.rm = TRUE) - 273.15
   )
 
-# Calculate the overall daily precipitation, including rain and snowfall 
-# (convert from m to mm)
+# Calculate the overall daily precipitation, including rain and snowfall (convert from m to mm)
 precip <- df_w %>%
   group_by(date,location) %>%
   summarise(
@@ -155,9 +149,9 @@ wind <- df_w %>%
 
 # Select all humidity variables
 humid <- df_w %>%
-  select(date, location, contains("humid", ignore.case = TRUE)) %>%
-  rename_with(~ str_replace_all(., regex("rel_humid", ignore_case = TRUE), "rh")) %>%
-  rename_with(~ str_replace_all(., regex("spec_humid", ignore_case = TRUE), "sh")) %>%
+  select(date, location, contains('humid', ignore.case = TRUE)) %>%
+  rename_with(~ str_replace_all(., regex('rel_humid', ignore_case = TRUE), 'rh')) %>%
+  rename_with(~ str_replace_all(., regex('spec_humid', ignore_case = TRUE), 'sh')) %>%
   group_by(date,location) %>%
   summarise(
     rh_mean = mean(rh_mean, na.rm = TRUE),
@@ -170,15 +164,16 @@ humid <- df_w %>%
   
 # Merge processed temp data
 df_w <- temp_all %>%
-  full_join(temp_day, by = c("date", "location")) %>%
-  full_join(temp_night, by = c("date", "location")) %>%
-  full_join(precip, by = c("date", "location")) %>%
-  full_join(wind, by = c("date", "location")) %>%
-  full_join(humid, by = c("date", "location")) %>%
-  full_join(df_p, by = c("date", "location"))
+  full_join(temp_day, by = c('date', 'location')) %>%
+  full_join(temp_night, by = c('date', 'location')) %>%
+  full_join(precip, by = c('date', 'location')) %>%
+  full_join(wind, by = c('date', 'location')) %>%
+  full_join(humid, by = c('date', 'location')) %>%
+  full_join(df_p, by = c('date', 'location'))
   
 # Set daily time parameters
-# NB: Seasons were set based on HP crop calendar, pg. 10 (https://himachal.nic.in/WriteReadData/l892s/13_l892s/1722326458.pdf)
+# NB: Seasons were set based on HP crop calendar, pg. 10 
+# (https://himachal.nic.in/WriteReadData/l892s/13_l892s/1722326458.pdf)
 df_w <- df_w %>%
   mutate(
     year = year(date),
@@ -194,14 +189,14 @@ df_w <- df_w %>%
     )) %>%
   select(location, date, year, season, month, week, weekday, day, everything())
 
-# *** Quick extreme temperature checks ####
+# *** Quick extreme temperature checks *** ####
 # summary(df_w$t2m)
 # summary(df_w$mx2t)
 # summary(df_w$mn2t)
-# filtered_df <- df_w[df_w$location == "Chamba", ]
-# summary(filtered_df$t2m)
-# summary(filtered_df$mx2t)
-# summary(filtered_df$mn2t)
+# dplyr::filtered_df <- df_w[df_w$location == 'Chamba', ]
+# summary(dplyr::filtered_df$t2m)
+# summary(dplyr::filtered_df$mx2t)
+# summary(dplyr::filtered_df$mn2t)
 
 # 2. Set thresholds provided by IMD ####
 # Source: https://mausam.imd.gov.in/imd_latest/contents/pdf/forecasting_sop.pdf
@@ -279,9 +274,9 @@ df_w <- df_w %>%
     rh_hig_IMD_b = if_else(rh_IMD > 0, 1, 0)
     ) %>%
   mutate(sh_IMD = case_when(
-    sh_mean < 5 ~ -1, #"Low (<5g/kg)",
-    sh_mean >= 5 & sh_mean <= 15 ~ 0, #"Optimal (5-15g/kg)",
-    sh_mean > 15 ~ 1, #"High (>15g/kg)",
+    sh_mean < 5 ~ -1, #'Low (<5g/kg)',
+    sh_mean >= 5 & sh_mean <= 15 ~ 0, #'Optimal (5-15g/kg)',
+    sh_mean > 15 ~ 1, #'High (>15g/kg)',
     TRUE ~ NA_real_),
     sh_low_IMD_b = if_else(sh_IMD < 0, 1, 0),
     sh_hig_IMD_b = if_else(sh_IMD > 0, 1, 0)
@@ -291,42 +286,35 @@ df_w <- df_w %>%
 # https://safar.tropmet.res.in/AQI-47-12-Details
 df_w <- df_w %>%
   mutate(pm25_IMD = case_when(
-    pm25 < 30 ~ 0, # "Good",
-    pm25 >= 30 & pm25 <= 60 ~ 1, #"Moderate",
-    pm25 >= 60 & pm25 <= 90 ~ 2, #"Poor",
-    pm25 >= 90 & pm25 <= 120 ~ 3, #"Unhealthy",
-    pm25 >= 120 & pm25 <= 250 ~ 4, #"Severe",
-    pm25 > 250 ~ 5, #"Hazardous",
+    pm25 < 30 ~ 0, # 'Good',
+    pm25 >= 30 & pm25 <= 60 ~ 1, #'Moderate',
+    pm25 >= 60 & pm25 <= 90 ~ 2, #'Poor',
+    pm25 >= 90 & pm25 <= 120 ~ 3, #'Unhealthy',
+    pm25 >= 120 & pm25 <= 250 ~ 4, #'Severe',
+    pm25 > 250 ~ 5, #'Hazardous',
     TRUE ~ NA_real_),
     pm25_IMD_b = if_else(pm25_IMD >= 2, 1, 0),
     )
 
 
-
-
 # 3. Calculate climatology anomalies ####
-# Interpret with caution for BigThaw because only finite number of years
 
-w_cols <- c('t2m', 'mn2t','mx2t','tp','fg10', 'rh_mean', 'sh_mean', 'pm25')
-
-locations <- unique(df_w$location)
 result <- data.frame()
-for (l in locations){
-  t <- df_w %>% filter(location==l)
+for (l in location_levels){
+  t <- df_w %>% dplyr::filter(location==l)
   t <- calculate_anomalies(t, w_cols)
   result <- rbind(result, t)
 }
 
 # Check extremes across locations and years (+ NA check)
 (na_counts <- sapply(result, function(x) sum(is.na(x))))
-# df_na <- result %>% filter(is.na(pm25)) # check cols
-
+df_na <- result %>% dplyr::filter(is.na(pm25)) # check cols
 df_w <- result
 
 # # Check distribution across time and location
 # table(lubridate::year(result$date)[result$t2m_p90 == 1], result$location[result$t2m_p90 == 1])
-# filtered_result <- result %>% filter(location == 'Chamba')
-# table(filtered_result$year, filtered_result$t2m_p90)
+# dplyr::filtered_result <- result %>% dplyr::filter(location == 'Chamba')
+# table(dplyr::filtered_result$year, dplyr::filtered_result$t2m_p90)
 
 # 4. Create lag variables ####
 
@@ -339,12 +327,12 @@ for (i in 1:21) {
     arrange(date) %>%
     mutate(across(all_of(w_anom_cols), 
                   ~lag(.x, i), 
-                  .names = "{.col}_lag{i}")) %>%
+                  .names = '{.col}_lag{i}')) %>%
     ungroup()
 }
 
 
-# EXPORT ####
+#### EXPORT ####
 # write.csv(result, file=paste0('2_Active_Data/202_weat/', weat_export, '.csv'), row.names = FALSE)
 save(df_weat, file=paste0('2_Active_Data/202_weat/', weat_export, '.RData'))
 
