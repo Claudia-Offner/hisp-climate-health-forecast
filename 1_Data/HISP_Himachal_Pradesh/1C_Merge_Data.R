@@ -96,7 +96,7 @@ df_wide <- df_wide %>%
 
 # Select the desired columns
 df_wide <- df_wide %>%
-  dplyr::select(location, date, year, season, month, week, weekday, closed, holiday,
+  dplyr::select(location, lat, lon, date, year, season, month, week, weekday, closed, holiday,
          any_of(c(h_cols, grep('_c$', names(df_wide), value = TRUE),
                   w_cols, matched_cols)))%>%
   arrange(location, date)

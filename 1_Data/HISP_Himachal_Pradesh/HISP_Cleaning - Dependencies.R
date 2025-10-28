@@ -6,7 +6,7 @@
 # Turn off scientific notation
 options(scipen=999)
 
-# PATHS ####
+#### PATHS ####
 user <- 'claer14'
 path_data <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
 path_git <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
@@ -14,7 +14,7 @@ path_project <- paste0(path_git, '/1_Data/HISP_Himachal_Pradesh/')
 path_report <- paste0(path_git, path_project, '- Reporting/')
 
 
-# PACKAGES ####
+#### PACKAGES ####
 
 # List packages
 packages <- c('tidyverse', 'terra', 'duckdb', 'tidyselect', 'sf',
@@ -34,7 +34,7 @@ if(any(!installed)) {
 # Load packages
 lapply(packages, library, character.only = TRUE)
 
-# FUNCTIONS ####
+#### FUNCTIONS ####
 
 # Function to replace exact matches from a list
 replace_exact_matches <- function(df, dict) {
@@ -49,7 +49,7 @@ replace_exact_matches <- function(df, dict) {
 }
 
 
-# DEPENDENCIES ####
+#### DEPENDENCIES ####
 
 mypalette <- c('#1D98EB','#D74B3C','#A6B727','#FEC306','#EC800A','#E569BF','#8968CD','#52C5B0FF', '#910030FF', '#127804FF',
                '#A1C8F2','#F1A6A6','#C2D77D','#F6D974','#F9B34D','#F1C2D1','#B8A8D9','#52C5B080', '#91003080', '#12780480') 
