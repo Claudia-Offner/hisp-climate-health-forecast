@@ -1,5 +1,5 @@
 ### ------------------------------------------------------------------------ ### 
-### HISP DLNM - Dependencies                                        ###
+### HISP DLNM - Dependencies                                                 ###
 ### ------------------------------------------------------------------------ ### 
 # NB COLOURS: https://r-charts.com/colors/
 
@@ -60,7 +60,7 @@ get_model_fit <- function(model,name) {
 }
 
 # Function to retrieve results from each predictor, with visuals and tables
-get_results <- function(df, outcome){
+get_results <- function(df, outcome, quant_v=0.95, lag_v=NULL){
   
   # Fit cross-basis
   cb.t2m <- crossbasis(df$t2m, lag=c(0,14),argvar=list(fun='ns', df=3), arglag=list(fun='ns', df=4), group=df$year)
@@ -74,9 +74,9 @@ get_results <- function(df, outcome){
   model <- glm(formula=as.formula(paste0(outcome, ' ~  season + weekday + holiday + ns(time, df=9*9) + cb.t2m + cb.tp + cb.fg10 + patients_lag')), data = df, family = quasipoisson(link="log"))
   
   # Select quantile
-  q_t2m <- quantile(df$t2m, probs = 0.95, na.rm = TRUE)
-  q_tp <- quantile(df$tp, probs = 0.95, na.rm = TRUE)
-  q_fg10 <- quantile(df$fg10, probs = 0.95, na.rm = TRUE)
+  q_t2m <- quantile(df$t2m, probs = quant_v, na.rm = TRUE)
+  q_tp <- quantile(df$tp, probs = quant_v, na.rm = TRUE)
+  q_fg10 <- quantile(df$fg10, probs = quant_v, na.rm = TRUE)
   
   # DISPLAY ESTIMATE OF RR FOR BENCHMARK TP INCREMENT OF 23.4 (99th perc) 
   cp.t2m <- crosspred(cb.t2m, model, at=q_t2m)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
@@ -90,21 +90,21 @@ get_results <- function(df, outcome){
   p_lr_t2m <- get_visuals(cp, model, lag_rep=TRUE, col="#D74B3C", title='Lag-response of t2m (at 95th percentile)')
   # GRAPH CUMULATIVE T2M-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR TP & FG10) 
   cp <- crosspred(cb.t2m, model, at=seq(-10, 35, by=1))
-  p_er_t2m <- get_visuals(cp, model, lag_rep=FALSE, lag=5, col="#D74B3C", xlab="Temperature (C)", title="RR of t2m exposure-response (lag=5)")
+  p_er_t2m <- get_visuals(cp, model, lag_rep=FALSE, lag=lag_v, col="#D74B3C", xlab="Temperature (C)", title="RR of t2m exposure-response (lag=5)")
   
   # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK TP value
   cp <- crosspred(cb.tp, model, at=q_tp)
   p_lr_tp <- get_visuals(cp, model, lag_rep=TRUE, col="#1D98EB", title='Lag-response of tp (at 95th percentile)')
   # GRAPH CUMULATIVE TP-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR T2M & FG10) 
   cp <- crosspred(cb.tp, model)
-  p_er_tp <- get_visuals(cp, model, lag_rep=FALSE, lag=NULL, col="#1D98EB", xlab="Rainfall (mm)", title="RR of tp exposure-response (lag=6)")
+  p_er_tp <- get_visuals(cp, model, lag_rep=FALSE, lag=lag_v, col="#1D98EB", xlab="Rainfall (mm)", title="RR of tp exposure-response (lag=6)")
   
   # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK FG10 value
   cp <- crosspred(cb.fg10, model, at=q_fg10)
   p_lr_fg10 <- get_visuals(cp, model, lag_rep=TRUE, col="#A6B727", title='Lag-response of fg10 (at 95th percentile)')
   # GRAPH CUMULATIVE FG10-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR TP & T2M) 
   cp <- crosspred(cb.fg10, model)
-  p_er_fg10 <- get_visuals(cp, model, lag_rep=FALSE, lag=NULL, col="#A6B727", xlab="Wind speed (km/hr)", title="Overall RR of fg10 exposure-response")
+  p_er_fg10 <- get_visuals(cp, model, lag_rep=FALSE, lag=lag_v, col="#A6B727", xlab="Wind speed (km/hr)", title="Overall RR of fg10 exposure-response")
   
   result <- list(model=model, overall=df_cp, 
                  exp_rep = list(t2m=p_er_t2m, tp=p_er_tp, fg10=p_er_fg10),

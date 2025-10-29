@@ -152,7 +152,7 @@ exp_rep_table <- data.frame()
 
 # Extract data for all outcomes
 outcomes <- c('total_patients', 'F', 'M', 'under_5', 'age5_14', 'age15_24', 'age25_64', 'over_65',
-              'general', 'ophthalmology', 'pediatrics', 'orthopedics', 'ent', 'gynecology', 'dermatology')
+              'general', 'ophthalmology', 'paediatrics', 'orthopedics', 'ent', 'gynaecology', 'dermatology')
 # outcomes <- c('F', 'M', 'under_5', 'age5_14', 'age15_24', 'age25_64', 'over_65', 
 #               'pediatrics', 'orthopedics', 'ent', 'gynecology', 'dermatology') # FOR BAS POSTER
 
