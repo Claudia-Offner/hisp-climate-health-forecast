@@ -11,7 +11,7 @@ user <- 'claer14'
 path_data <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
 path_git <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
 path_project <- paste0(path_git, '/1_Data/HISP_Himachal_Pradesh/')
-path_report <- paste0(path_git, path_project, '- Reporting/')
+path_report <- paste0(path_project, '- Reporting/')
 
 
 #### PACKAGES ####
@@ -21,7 +21,7 @@ packages <- c('tidyverse', 'terra', 'duckdb', 'tidyselect', 'sf',
               'ggplot2', 'data.table', 'tools', 'moments', 'grid',
               'patchwork', 'RColorBrewer', 'reshape2', 'zoo', 'ggnewscale',
               'skimr', 'DT', 'forecast', 'purrr', 'scales', 'xts', 'ggthemes',
-              'elevatr', 'rnaturalearth', 'rnaturalearthdata')
+              'elevatr', 'rnaturalearth', 'rnaturalearthdata', 'raster')
 
 
 

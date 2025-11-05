@@ -470,7 +470,7 @@ location_levels <- unique(df_wide$location)
 
 # GENERAL CHARACTERISTICS ####
 
-# TAB: Base statistics (base_desc, base_desc_loc) ####
+# TAB: Base statistics (base_desc, base_desc_loc, base_weat_loc) ####
 
 # OVERALL
 base_desc <- get_desc(df_wide, h_cols, w_cols)
@@ -492,6 +492,37 @@ for (l in locations) {
   }
 }
 base_desc_loc <- replace_exact_matches(base_desc_loc, nm)
+
+# Weather only (by location)
+summarize_weather <- function(df, w_col) {
+  
+  df %>%
+    select(location, all_of(w_col)) %>%     # keep only location + weather vars
+    pivot_longer(
+      cols = all_of(w_col),
+      names_to = "variable",
+      values_to = "value"
+    ) %>%
+    group_by(location, variable) %>%
+    summarise(
+      mean_val = mean(value, na.rm = TRUE),
+      min_val  = min(value, na.rm = TRUE),
+      max_val  = max(value, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      formatted = sprintf("%.0f (%.0f, %.0f)", mean_val, min_val, max_val)
+    ) %>%
+    select(location, variable, formatted) %>%
+    pivot_wider(
+      names_from = location,
+      values_from = formatted,
+      names_sort = FALSE
+    )
+}
+
+base_weat_loc <- summarize_weather(df_wide, w_cols[w_cols != 'sh_mean'])
+base_weat_loc <- replace_exact_matches(base_weat_loc, nm)
 
 
 # FIG: Histograms total_patients, weather (hist_tota, hist_tota_loc, hist_weat) ####
@@ -1053,10 +1084,14 @@ ggsave(paste0(path_report, '- figures/desc_cat_sex.png'), cat_sex, width = w, he
 ggsave(paste0(path_report, '- figures/desc_cat_age.png'), cat_age, width = w, height = h, dpi = 300)
 ggsave(paste0(path_report, '- figures/desc_con_age.png'), con_age, width = w, height = h, dpi = 300)
 ggsave(paste0(path_report, '- figures/desc_cor_matrix.png'), cor_matrix, width = 9, height = h, dpi = 300)
+ggsave(paste0(path_report, '- figures/desc_study_area.png'), study_area, width = 7, height = 7, dpi = 300)
 
 # TABLES
 write.csv(base_desc, paste0(path_report, '- tables/desc_base.csv'), row.names = FALSE)
+write.csv(base_weat_loc, paste0(path_report, '- tables/desc_base_weat_loc.csv'), row.names = FALSE)
 write.csv(IMD_anova, paste0(path_report, '- tables/desc_IMD_anova.csv'), row.names = FALSE)
 write.csv(IMD_interaction_tests, paste0(path_report, '- tables/desc_IMD_interaction_tests.csv'), row.names = FALSE)
 write.csv(CLIM_anova, paste0(path_report, '- tables/desc_CLIM_anova.csv'), row.names = FALSE)
 write.csv(CLIM_interaction_tests, paste0(path_report, '- tables/desc_CLIM_interaction_tests.csv'), row.names = FALSE)
+
+

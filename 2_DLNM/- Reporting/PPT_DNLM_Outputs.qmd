@@ -20,112 +20,151 @@ editor: visual
 
 -   **Lag-response: How is the effect of a single exposure at time t distributed across future time points (lags)?** *E.g. If it's hot today, does the health impact occur immediately, or does it show up in 2–3 days?*
 
--   **Do these exposure–lag effects vary across vulnerable groups?** *E.g. Are children under 5 or the elderly more sensitive to specific temperatures or lag durations compared to the general population?*
+-   **Do these exposure–lag effects vary across vulnerable groups?** *E.g. Are children under 5 or the elderly more sensitive to specific temperatures or lag duration compared to the general population?*
 
--   **Do these exposures interact to produce compounding or synergistic effects?** *E.g. Does the combined effect of high temperature and heavy rainfall exceed the sum of their individual effects on healthcare demand?*
+-   **Do the exposure–lag effects vary across location?** *E.g. Are some locations more at risk due to their unique geographies (i.e. elevation) or population profiles (i.e. population density)?*
 
-## Distributed Lag Non-linear Models (DLNM)
+## Distributed Lag Nonlinear Model (DLNM): Multivariate, meta-analysis
 
-### General model
+Suppose that $N_i$ observations, indexed by $t = 1, \ldots, N_i$ are collected at site $i$ for each of the $i = 1, \ldots, m$ sites. Specifically, the data includes a response variable $Y_{ti}$, a non-linear exposure $x_{ti}$, and an optional set of $J$ confounding variables $c_{tji}$, with $j = 1, \ldots, J$.
 
-$$
-f(\mu_t) \;=\; \alpha + \sum_{j=1}^J s_j(x_{tj}; \beta_j) + \sum_{k=1}^K \gamma_k u_{tk} \tag{1}
-$$
+**Aims**
 
-where $\mu_t = E(Y_t)$, $f$ is a link function, and $Y_t$ is a series of outcomes with $t = 1, \ldots, n$, assumed to arise from an exponential distribution family.
+-   **Stage 1:** Define and estimate the association between $Y_{ti}$ and $x_{ti}$, while controlling for $c_{tji}$, specified through a function $s$, entirely defined in each site by the $k$-length vector of parameters $\theta_i$.
 
--   Non-linear: $s_j(\cdot)$ function specifies the relationship between non-linear variables $x_j$ and the linear predictor defined by the parameter vectors $\beta_j$.
+-   **Stage 2**: Derive a set of regression coefficients defining the average exposure-lag-response association across all studies.
 
--   Linear: $u_k$ includes other predictors assuming a linear relationship with coefficients $\gamma_k$.
+## Stage 1: Fit the general model
 
-## DLNM: Basis function
+The general model is defined as:
+
+$$ g(\mu_{ti}) \;=\; \alpha + s(x_{ti}; \theta_i) + \sum_{j=1}^J h_{ji}(c_{tji}; \gamma_k) \tag{1}$$
+
+where $g$ is a link function of $\mu_{ti} = E(Y_{ti})$ and confounders $c_{tji}$ are time variables (e.g. day of week and elapsed time) modeled through functions $h_{ij}$ and related parameters $\gamma_{ji}$.
+
+The $s$ function defines a non-linear exposure cross-basis, i.e. the bi-dimensional space of functions simultaneously describing the shape of the predictor relationship along $x$ and its distributed lag effects $\ell$.
+
+## Stage 2: Pooling results
 
 ::::: columns
 ::: column
-#### Step 1: Predictor dimension
+#### Meta-analysis
 
-Define the relationship in the space of the predictor
+The random-effects multivariate meta-analysis assumes a two-level structure to represent within-study variation, $\hat{\boldsymbol{\theta}}_i \sim N_k(\boldsymbol{\theta}_i, S_i)$, and between study variation $\boldsymbol{\theta}_i \sim N_k(\boldsymbol{\theta}, \Psi)$. The marginal distribution of the meta-analysis therefore follows:
 
-$$
-s_j(x_{tj}; \beta_j) \;=\; z_{t\cdot}^{\top} \beta
-$$ where $z_{t\cdot}$ denotes the $t^{\text{th}}$ row of the $n \times v_x$ basis matrix $Z$, where $v_x$ is the degrees of freedom proportional to function flexibility and $\beta$ are the unknown parameters estimated.
+$$ \hat{\theta}_i \sim N_k (\theta, S_i + \Psi) \tag{2} $$
+
+where $S_i + \Psi = \Sigma_i$.
 :::
 
 ::: column
-#### Step 2: Lag dimension
+#### Meta-regression
 
-Specify the relationship lags, to allow for delayed effects and predictor autocorrelations
+This formulation can be extended to a multivariate meta-regression by introducing study-level covariates, where $k$ outcomes are modeled in terms of study-level variables defining a set of $p$ meta-predictors $x_i={[x_{1i}, x_{2i}, ...x_{pi}]}^\top$ associated with the $i^{th}$ study, where $x_{1i}$ specifies the intercept terms. As a conventional linear mixed model, the model can be specified as:
 
-$$
-s(x_t; \eta) \;=\; q_{t\cdot}^{\top} C_{\eta}
-$$
+$$ \hat{\theta}_i |\mu_i \sim N_k ( X_i \boldsymbol{\beta}+\mu_i, S_i) \cdot \tag{3} $$
 
-where $C$ is an $(L+1) \times v\_{\ell}$ matrix of basis variables derived from the application of the specific basis functions to the lag vector $\ell$, and $\eta$ is a vector of unknown parameters.
+where $X_i = I_k \otimes \boldsymbol{x}_i$ is the design matrix formed by the Kronecker product of the identity matrix $I_k$ and the covariate vector $\boldsymbol{x}_i$. The vector $\boldsymbol{\beta}$ contains the fixed effects describing associations between outcomes and predictors, $\boldsymbol{u}_i$ are random study effects distributed as $N_k(0, \Psi)$.
 :::
 :::::
 
-## Sensitivity Analysis
+## Stage 2: Pooling results
 
-Based on previous sensitivity analysis by Xiao et al 2018 on "The exposure-response relationship between temeprature and childhood hand, foot and mouth disease..."
+-   The `mvmeta` package was used to estimate pooled effects via maximum likelihood (ML), using exposure specific coefficients and covariance matrices.
 
-1.  Controlling for long-term trends and seasonality
-2.  Controlling for the measured time-varying confounders, predictor and lag effects (i.e. weather)
-3.  Controlling for outcome autocorrelation
-4.  Choice of the flexibility of the shape of exposure-response relationship (i.e. quasi poisson vs negative binom)
+-   Hypothesis testing for fixed effects is done via multivariate Wald or likelihood ratio (LR) tests and random effects is done via the Cochran $Q$ test. Residual heterogeneity can also be summarized using the $H^2$ and $I^2$ statistics.
+
+-   AIC & BIC can be used to assess and compare meta-analysis models.
+
+-   Tests alone are limited in their interpretability, so prediction is key to linking study level variables with outcomes. There are 1 types of study specific predictions: raw (straight form the model) or Best Linear Unbiased Prediction (BLUP). BLUP combines the population-average prediction with the study-specific random-effect deviations and is preferable.
+
+See Gasparrini et al, 2012 for details
 
 ## R Formula
 
 ``` r
-# Fit cross-basis
-cb.t2m <- crossbasis(t2m, lag=c(0,14),argvar=list(fun='ns', df=3), arglag=list(fun='ns', df=4), group=year)
+# List of site-specific subsets
+datalist <- lapply(locations, function(region) df[df$location==region,])
 
-cb.tp <- crossbasis(tp, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=4), group=year)
+# Create objects where outputs will be stored
+m <- length(unique(df$location))
+ymat_t2m <- matrix(...)
+Slist_t2m <- vector("list", m)
 
-cb.fg10 <- crossbasis(fg10, lag=c(0,14),argvar=list(fun='ns', df=2), arglag=list(fun='ns', df=4), group=year)
+# Fit model for each site
+for(i in seq(m)) {
+  
+  # Load data
+  data <- datalist[[i]]
+  
+  # Fit cross-basis
+  cb.t2m <- crossbasis(t2m, lag=c(0,14), argvar=list(fun='ns', df=3),  arglag=list(fun='ns', df=4), group=year)
 
-# Fit model
-model <- glm.nb(total_patients ~ season + weekday + ns(time, df=9*9) + cb.t2m + cb.tp + cb.fg10 + patients_lag, data = df)
+  # Fit model
+  model <- glm.nb(total_patients ~ + cb.t2m + season + weekday + clsoed + ns(time, df=9*9), data = df)
+  
+  # Extract coefficients and covariance 
+  predt2m <- crosspred(cb.t2m, model, cen=cen_t2m)
+  ymat_t2m[i,] <- predt2m$coef
+  Slist_t2m[[i]] <- predt2m$vcov
+  
+}
+
+mv <- mvmeta(ymat_t2m, Slist_t2m, method="ml")
 ```
 
-## **Exposure-response**
+## Sensitivity Analysis
 
-![](-%20figures/MF_total_exp_rep_all.png)
+Based on previous sensitivity analysis by Xiao et al 2018, we need to assess:
 
-## **Lag-response**
+1.  Controlling for long-term trends and seasonality
+2.  Controlling for the measured time-varying confounders, predictor and lag effects (i.e. weather)
+3.  Controlling for outcome autocorrelation
+4.  Choice of the flexibility of the shape of exposure-response relationship (i.e. quasi poisson vs negative binomial)
 
-![](-%20figures/MF_total_lag_rep_perc.png)
+NB: Still needs updating. Currently still using parameters identified via Chamba analysis.
+
+## Cumulative exposure-response
+
+![](-%20figures/MF_total_er_overall.png)
+
+## Cumulative exposure-response, by city
+
+![](-%20figures/SF_city_t2m_er.png)
+
+## Lag-response, by percentile
+
+![](-%20figures/MF_total_lr.png)
 
 ## **Exposure-response, by lag**
 
-![](-%20figures/MF_total_exp_rep_lags.png){width="150%" height="150%"}
+![](-%20figures/MF_total_er.png){width="150%" height="150%"}
 
 ## Temperature: Do exposure effects vary across vulnerable groups?
 
-![](-%20figures/MF_disag_exp_rep_t2m.png){width="100%" height="100%"}
+![](-%20figures/MF_disag_er5_t2m.png){width="100%" height="100%"}
+
+## Temperature: Do exposure effects vary across vulnerable groups?
+
+![](-%20figures/MF_disag_er10_t2m.png){width="100%" height="100%"}
 
 ## Rainfall: Do exposure effects vary across vulnerable groups?
 
-![](-%20figures/MF_disag_exp_rep_tp.png){width="100%" height="100%"}
+![](-%20figures/MF_disag_er0_tp.png){width="100%" height="100%"}
 
-## Windspeed: Do exposure effects vary across vulnerable groups?
+## Humidity: Do exposure effects vary across vulnerable groups?
 
-![](-%20figures/MF_disag_exp_rep_fg10.png){width="100%" height="100%"}
+![](-%20figures/MF_disag_er14_rh.png){width="100%" height="100%"}
+
+## PM2.5: Do exposure effects vary across vulnerable groups?
+
+![](-%20figures/MF_disag_er14_pm25.png){width="100%" height="100%"}
 
 ## Timeline
 
--   For end of September...
-    -   Write up preliminary results
-    -   Present initial TSGC/DLNM results to HISP
-    -   Access the complete data sets from both HISP and NHS (i.e. have them downloaded to an accessible place)
-
-## Temperature: Do lag effects vary across vulnerable groups?
-
-![](-%20figures/MF_disag_lag_rep_t2m.png){width="100%" height="100%"}
-
-## Rainfall: Do lag effects vary across vulnerable groups?
-
-![](-%20figures/MF_disag_lag_rep_tp.png){width="100%" height="100%"}
-
-## Windspeed: Do lag effects vary across vulnerable groups?
-
-![](-%20figures/MF_disag_lag_rep_fg10.png){width="100%" height="100%"}
+-   For end of November...
+    -   Integrate data from other sites
+    -   Update code for sensitivity analysis and identify appropriate parameters to fit models
+    -   Update parameters and extract final results
+    -   Write up results for paper draft
+-   Bonus: I am writing up a multivariate meta-analysis tutorial for my own reference, but this be part of my chapter 1 supplement.

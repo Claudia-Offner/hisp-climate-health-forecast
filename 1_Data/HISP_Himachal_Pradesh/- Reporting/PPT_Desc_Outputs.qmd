@@ -7,17 +7,23 @@ format:
 editor: visual
 ---
 
-## Weather distribution
-![](-%20figures/desc_hist_weat.png)
+## New hospital sites
+
+![](-%20figures/desc_study_area.png)
 
 ## Hospital registration distribution
+
 ![](-%20figures/desc_hist_tota_loc.png)
 
+## Population groups: Wards
 
-## Population groups
 ![](-%20figures/desc_cat_ward_loc.png)
 
-## Extreme weather definitions: Continuous 
+## Weather distribution
+
+![](-%20figures/desc_hist_weat.png)
+
+## Weather, by site 
 
 ```{r desc_weat, echo=FALSE, message=FALSE, warning=FALSE}
 
@@ -26,7 +32,23 @@ library(officer)
 library(magrittr) 
 
 # Load table
-df <- read.csv('- figures/desc_base.csv')
+weat <- read.csv('- tables/desc_base_weat_loc.csv')
+
+# Create flextable
+ft_weat <- flextable(weat) %>%
+  fontsize(size = 12) %>%        # font size
+  autofit()                      # automatically adjust column widths
+
+ft_weat
+```
+
+
+## Extreme weather definitions: Continuous
+
+```{r desc_weat1, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Load table
+df <- read.csv('- tables/desc_base.csv')
 
 # Select data
 count <- df[37:43, c(1, 3:4)]
@@ -41,8 +63,8 @@ ft_count <- flextable(count) %>%
 # Use officer to center and scale
 ft_count
 ```
-## Extreme weather definitions: Categorical 
 
+## Extreme weather definitions: Categorical
 
 ```{r desc_weat2, echo=FALSE, message=FALSE, warning=FALSE}
 
@@ -65,8 +87,8 @@ ft_cat
 
 
 # Load table
-IMD_anova <- read.csv('- figures/desc_IMD_anova.csv')
-CLIM_anova <- read.csv('- figures/desc_CLIM_anova.csv')
+IMD_anova <- read.csv('- tables/desc_IMD_anova.csv')
+CLIM_anova <- read.csv('- tables/desc_CLIM_anova.csv')
 
 
 # Create flextable
@@ -89,8 +111,8 @@ ft_IMD_anova
 
 
 # Load table
-IMD_int <- read.csv('- figures/desc_IMD_interaction_tests.csv')
-CLIM_int <- read.csv('- figures/desc_CLIM_interaction_tests.csv')
+IMD_int <- read.csv('- tables/desc_IMD_interaction_tests.csv')
+CLIM_int <- read.csv('- tables/desc_CLIM_interaction_tests.csv')
 
 IMD_int <- IMD_int[IMD_int$p < 0.1, ]
 CLIM_int <- CLIM_int[CLIM_int$p < 0.1, ]
@@ -110,12 +132,14 @@ ft_IMD_int
 ```
 
 ## Statistical tests: Clim. ANOVA tests
+
 ```{r desc_weat6, echo=FALSE, message=FALSE, warning=FALSE}
 ft_CLIM_anova
 
 ```
 
 ## Statistical tests: Clim. ANOVA tests (interactions)
+
 ```{r desc_weat7, echo=FALSE, message=FALSE, warning=FALSE}
 
 ft_CLIM_int

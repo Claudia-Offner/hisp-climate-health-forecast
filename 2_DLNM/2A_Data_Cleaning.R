@@ -31,6 +31,11 @@ df <- df %>%
     all_of(w_cols)
   )
 
+# Rename rh
+df$rh <- df$rh_mean
+df$rh_mean <- NULL
+df$sh_mean <- NULL
+
 # Create a lag variable for outcome
 
 
@@ -52,3 +57,4 @@ df <- merge(df, loc_points, by='location')
 
 # Save as Rdata file
 save(df, file = paste0(path_project, 'ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide_DLNM.RData'))
+save(df, file = paste0(path_report, 'ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide_DLNM.RData'))

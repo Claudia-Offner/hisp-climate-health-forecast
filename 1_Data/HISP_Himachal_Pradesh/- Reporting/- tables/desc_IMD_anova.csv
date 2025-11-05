@@ -1,0 +1,9 @@
+"Variable","Factor","Df Between","Df Within","F","p"
+"Total patients","Season",3,7475,42.39,0
+"Total patients","IMD: Mx temp. >30°C",1,7477,69.775,0
+"Total patients","IMD: Min temp. <0°C",1,7477,0.64,0.424
+"Total patients","IMD: Rainfall >15mm",1,7477,2.894,0.089
+"Total patients","IMD: Wind speed >40km/h",1,7477,7.581,0.006
+"Total patients","IMD: Humidity <30%",1,7477,11.502,0.001
+"Total patients","IMD: Humidity >60%",1,7477,102.846,0
+"Total patients","IMD: PM2.5 >60 µg/m³",1,7477,0.018,0.893
