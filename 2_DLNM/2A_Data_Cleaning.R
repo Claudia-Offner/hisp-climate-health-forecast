@@ -26,7 +26,7 @@ df <- df %>%
     tp = exp(tp) # back transform tp
   ) %>%
   dplyr::select(
-    location, time, date, year, season, month, week, weekday, doy, closed, holiday,
+    location, time, date, year, season, month, week, weekday, doy, closed, holiday, elev, popu,
     all_of(h_cols),
     all_of(w_cols)
   )

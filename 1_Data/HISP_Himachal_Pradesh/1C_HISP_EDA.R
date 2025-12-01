@@ -162,7 +162,7 @@ get_desc <- function(df, h_cols, w_cols) {
             mutate(
               perc_visits = round((total_visits / sum(total_visits)) * 100, 1)
             ) %>%
-            select(Variable=location, total_visits, perc_visits, everything())
+            dplyr::dplyr::select(Variable=location, total_visits, perc_visits, everything())
           
         }
         
@@ -188,7 +188,7 @@ get_desc <- function(df, h_cols, w_cols) {
           paste0(min_daily_visit, ', ',max_daily_visit, ' (', skew_daily_visit, ')')
         )
       ) %>%
-      dplyr::select(Variable, Frequency, Average, Range))
+      dplyr::dplyr::select(Variable, Frequency, Average, Range))
   
   
   # Remove frequency values for raw weather data
@@ -287,7 +287,7 @@ plot_shp_elevation_map <- function(shp, loc_points, country_shp, zoom = 7, buffe
   bbox <- st_as_sfc(st_bbox(shp)) |> st_buffer(buffer_km * 1000)
   
   # 3. Elevation and terrain ----
-  elev_raster <- get_elev_raster(locations = st_sf(bbox), z = zoom, clip = "bbox")
+  elev_raster <- raster("2_Active_Data/205_envi/ind_envi_s3_AWSOpenData_elevation_raster.tif")
   slope <- terrain(elev_raster, opt = 'slope')
   aspect <- terrain(elev_raster, opt = 'aspect')
   hillshade <- hillShade(slope, aspect, angle = 40, direction = 315)
@@ -328,28 +328,28 @@ plot_shp_elevation_map <- function(shp, loc_points, country_shp, zoom = 7, buffe
                  label.padding = unit(0.15, "lines"), label.r = unit(0.15, "lines"), 
                  label.size = 0,   nudge_y = 0.1) +
       geom_label_repel(
-      data = cities[complete.cases(st_set_geometry(cities, NULL)), ],           # your locations + stats
-      aes(x = lon, y = lat,
-          label = paste0(location, 
-                         "\nMean Temp.: ", t2m, 
-                         "\nMin Temp.: ", mn2t, 
-                         "\nMax Temp.: ", mx2t, 
-                         "\nRainfall: ", tp, 
-                         "\nWindspeed: ", fg10, 
-                         "\nRel. Humidity: ", rh_mean, 
-                         "\nPM2.5: ", pm25 
-          )),
-      box.padding = 0.5,               # spacing between boxes
-      point.padding = 0.5,             # spacing from the point
-      segment.color = "darkred",        # line connecting label to point
-      segment.size = 0.5,
-      force = 2,
-      max.overlaps = 12,
-      fill='white',
-      color='darkred'
-    )
+        data = cities[complete.cases(st_set_geometry(cities, NULL)), ],           # your locations + stats
+        aes(x = lon, y = lat,
+            label = paste0(location, 
+                           "\nMean Temp.: ", t2m, 
+                           "\nMin Temp.: ", mn2t, 
+                           "\nMax Temp.: ", mx2t, 
+                           "\nRainfall: ", tp, 
+                           "\nWindspeed: ", fg10, 
+                           "\nRel. Humidity: ", rh_mean, 
+                           "\nPM2.5: ", pm25 
+            )),
+        box.padding = 0.5,               # spacing between boxes
+        point.padding = 0.5,             # spacing from the point
+        segment.color = "darkred",        # line connecting label to point
+        segment.size = 0.5,
+        force = 2,
+        max.overlaps = 12,
+        fill='white',
+        color='darkred'
+      )
   } else {
-
+    
     main_map <- main_map +
       geom_label(data = cities, aes(x = lon, y = lat, label = location),
                  size = 3, color = "darkred", fill = "white", fontface = "bold",
@@ -497,7 +497,7 @@ base_desc_loc <- replace_exact_matches(base_desc_loc, nm)
 summarize_weather <- function(df, w_col) {
   
   df %>%
-    select(location, all_of(w_col)) %>%     # keep only location + weather vars
+    dplyr::select(location, all_of(w_col)) %>%     # keep only location + weather vars
     pivot_longer(
       cols = all_of(w_col),
       names_to = "variable",
@@ -513,7 +513,7 @@ summarize_weather <- function(df, w_col) {
     mutate(
       formatted = sprintf("%.0f (%.0f, %.0f)", mean_val, min_val, max_val)
     ) %>%
-    select(location, variable, formatted) %>%
+    dplyr::select(location, variable, formatted) %>%
     pivot_wider(
       names_from = location,
       values_from = formatted,
@@ -526,7 +526,7 @@ base_weat_loc <- replace_exact_matches(base_weat_loc, nm)
 
 
 # FIG: Histograms total_patients, weather (hist_tota, hist_tota_loc, hist_weat) ####
-sub <- df_wide %>% select(location, total_patients, all_of(w_cols[!grepl('_p|IMD', w_cols)]))
+sub <- df_wide %>% dplyr::select(location, total_patients, all_of(w_cols[!grepl('_p|IMD', w_cols)]))
 skm <- skim(sub) %>% rename(min = numeric.p0, Q1 = numeric.p25, 
                             median = numeric.p50, Q3 = numeric.p75, 
                             max = numeric.p100) %>%
@@ -983,7 +983,13 @@ rev_nm <- setNames(names(nm), nm)
 names(map_stat)[-1] <- rev_nm[names(map_stat)[-1]]
 loc_stats <- merge(loc_points, map_stat, by = "location", all.x = TRUE)
 
+
+
+
+
+
 # Map
+# save_elev(hp, loc_stats, ind)
 (study_area <- plot_shp_elevation_map(hp, loc_stats, ind, stats=FALSE))
 # (study_area <- plot_shp_elevation_map(hp, loc_stats, ind, stats=TRUE))
 
@@ -991,7 +997,7 @@ loc_stats <- merge(loc_points, map_stat, by = "location", all.x = TRUE)
 # INTERACTION TESTS ####
 
 # FIG: Non-parametric spearman correlation tests from raw data (cor_matrix) ####
-sub <- df_wide %>% select(total_patients, all_of(w_cols[!grepl('_p|IMD', w_cols)]))
+sub <- df_wide %>% dplyr::dplyr::select(total_patients, all_of(w_cols[!grepl('_p|IMD', w_cols)]))
 cor_matrix <- cor(sub, use = 'complete.obs', method = 'spearman')
 melted_corr <- melt(cor_matrix)
 cor_matrix <- ggplot(data = melted_corr, aes(x=Var1, y=Var2, fill=value)) +
@@ -1022,7 +1028,7 @@ cor_matrix <- ggplot(data = melted_corr, aes(x=Var1, y=Var2, fill=value)) +
   )
 
 # TAB: IMD ANOVA tests (IMD_anova, IMD_interaction_tests) ####
-sub_IMD <- df_wide %>% select(total_patients, season, all_of(w_cols[grepl('IMD', w_cols)]))
+sub_IMD <- df_wide %>% dplyr::select(total_patients, season, all_of(w_cols[grepl('IMD', w_cols)]))
 test_cols <- names(sub_IMD[,-c(1, 2)])  # everything except total_patients
 (IMD_anova <- do.call(rbind, lapply(c('season', test_cols), function(f) anova_summary('total_patients', f, sub_IMD))))
 
@@ -1046,7 +1052,7 @@ row.names(IMD_interaction_tests) <- NULL
 
 
 # TAB: CLIM ANOVA tests (CLIM_anova, CLIM_interaction_tests) ####
-sub_clim <- df_wide %>% select(total_patients, season, all_of(w_cols[grepl('_p', w_cols)]))
+sub_clim <- df_wide %>% dplyr::select(total_patients, season, all_of(w_cols[grepl('_p', w_cols)]))
 test_cols <- names(sub_clim[,-c(1, 2)])  # everything except total_patients
 (CLIM_anova <- do.call(rbind, lapply(c('season', test_cols), function(f) anova_summary('total_patients', f, sub_clim))))
 test_cols <- c('season', 'tp_p90', 'fg10_p90', 'rh_mean_p10', 'rh_mean_p90')

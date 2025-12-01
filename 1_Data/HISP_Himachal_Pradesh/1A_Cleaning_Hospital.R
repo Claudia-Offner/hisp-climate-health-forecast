@@ -46,7 +46,7 @@ unpack_HISP <- function(file_path, hospital, download_path){
 
 ####  MAIN CODE ####
 
-# # Unpack HISP datasets
+# Unpack HISP datasets
 # datasets <- list.files('1_Original_Data/108_HISP/')
 # for (s in location_levels){
 #   file <- datasets[grepl(s, datasets)]
@@ -56,7 +56,7 @@ unpack_HISP <- function(file_path, hospital, download_path){
 #     message(paste0('Extracting files for ', s))
 #     unpack_HISP(hospital = s,
 #               file_path=paste0('1_Original_Data/108_HISP/', file),
-#               download_path='2_Active_Data/201_heal/ind_adm4_HISP-HP_2015-2023_patient_visits_ALL_raw.csv')
+#               download_path='2_Active_Data/201_heal/ind_adm4_HISP-HP_2011-2023_patient_visits_ALL_raw.csv')
 #   }
 # }
 
@@ -64,8 +64,8 @@ unpack_HISP <- function(file_path, hospital, download_path){
 # NB: WorldPop only has national holidays from 2010-19, which I supplement with 
 # regional holidays from 'Office Holidays'.
 df_heal <- read.csv('2_Active_Data/201_heal/ind_adm4_HISP-HP_2015-2023_patient_visits_ALL_raw.csv')
-hols <- read.csv('2_Active_Data/204_demo/glo_Adm0_WorldPop_2010-2019_public-school_holidays_daily.csv', check.names = FALSE, fileEncoding = 'UTF-8')
-hols_hp <- read.csv('2_Active_Data/204_demo/ind_Adm2_OfficeHolidays_2015-2023_HP_holidays_daily.csv', check.names = FALSE, fileEncoding = 'UTF-8')
+hols <- read.csv('2_Active_Data/204_misc/glo_Adm0_WorldPop_2010-2019_public-school_holidays_daily.csv', check.names = FALSE, fileEncoding = 'UTF-8')
+hols_hp <- read.csv('2_Active_Data/204_misc/ind_Adm2_OfficeHolidays_2015-2023_HP_holidays_daily.csv', check.names = FALSE, fileEncoding = 'UTF-8')
 
 # Set data types
 (column_types <- sapply(df_heal, class))
@@ -191,7 +191,7 @@ ward_wide <- df_heal %>%
   group_by(location, date, ward_name) %>%
   summarise(patients = n(), .groups = 'drop') %>%
   pivot_wider(names_from = ward_name, values_from = patients, values_fill = 0) %>%
-  select(location, date, !!!syms(ward_levels))
+  dplyr::select(location, date, !!!syms(ward_levels))
 
 # Aggregate by age
 age_wide <- df_heal %>%
@@ -199,7 +199,7 @@ age_wide <- df_heal %>%
   summarise(patients = n()) %>%
   pivot_wider(names_from = age_group, values_from = patients,
               values_fill = list(patients = 0)) %>%
-  select(-matches('Unknown'))
+  dplyr::select(-matches('Unknown'))
 
 # Aggregate by gender
 gender_wide <- df_heal %>%
@@ -207,7 +207,7 @@ gender_wide <- df_heal %>%
   summarise(patients = n()) %>%
   pivot_wider(names_from = gender, values_from = patients,
               values_fill = list(patients = 0)) %>%
-  select(-matches('O'))
+  dplyr::select(-matches('O'))
 
 # Aggregate by ward & age
 age_gender_wide <- df_heal %>%
@@ -216,7 +216,7 @@ age_gender_wide <- df_heal %>%
   pivot_wider(names_from = c(gender, age_group),
               values_from = patients,
               values_fill = list(patients = 0)) %>%
-  select(-matches('Unknown|O_'))
+  dplyr::select(-matches('Unknown|O_'))
 
 # # Aggregate by ward & age
 # age_ward_wide <- df_heal %>%
@@ -238,7 +238,7 @@ age_gender_wide <- df_heal %>%
 ward_select_exprs <- rlang::exprs(location, date, !!!lapply(ward_levels, function(w) rlang::expr(starts_with(!!w))))
 ward_disag <- list(ward_wide) %>%
   reduce(left_join, by = c('location', 'date')) %>%
-  select(!!!ward_select_exprs)
+  dplyr::select(!!!ward_select_exprs)
 
 df_heal_w <- total %>%
   left_join(gender_wide, by = c('location', 'date')) %>%
@@ -249,31 +249,31 @@ df_heal_w <- total %>%
 # GET long FORMAT DAILY
 total_long <- total %>%
   mutate(ward_name = 'TOTAL', age_group = 'TOTAL', gender = 'TOTAL', patients = total_patients) %>%
-  select(date, ward_name, age_group, gender, patients)
+  dplyr::select(date, ward_name, age_group, gender, patients)
 
 ward_long <- df_heal %>%
   group_by(location, date, ward_name) %>%
   summarise(patients = n()) %>%
   mutate(age_group = 'TOTAL', gender = 'TOTAL', patients = patients) %>%
-  select(date, ward_name, age_group, gender, patients)
+  dplyr::select(date, ward_name, age_group, gender, patients)
 
 age_long <- df_heal %>%
   group_by(location, date, age_group) %>%
   summarise(patients = n()) %>%
   mutate(ward_name = 'TOTAL', gender = 'TOTAL', patients = patients) %>%
-  select(date, ward_name, age_group, gender, patients)
+  dplyr::select(date, ward_name, age_group, gender, patients)
 
 gender_long <- df_heal %>%
   group_by(location, date, gender) %>%
   summarise(patients = n()) %>%
   mutate(ward_name = 'TOTAL', age_group = 'TOTAL', patients = patients) %>%
-  select(date, ward_name, age_group, gender, patients)
+  dplyr::select(date, ward_name, age_group, gender, patients)
 
 age_gender_long <- df_heal %>%
   group_by(location, date, age_group, gender) %>%
   summarise(patients = n()) %>% # ward_name
   mutate(ward_name = 'TOTAL') %>%
-  select(location, date, ward_name, everything())
+  dplyr::select(location, date, ward_name, everything())
 
 df_heal_l <- bind_rows(age_gender_long, ward_long, age_long, gender_long, total_long)%>%
   arrange(location, date)
@@ -386,7 +386,7 @@ account_not_tables
 filtered_list <- mapply(function(loc, days) {
   df_heal_w %>%
     dplyr::filter(location == loc & date %in% days) %>%
-    select(location, date, total_patients, ward_levels)
+    dplyr::select(location, date, total_patients, ward_levels)
 }, loc = zero$location, days = zero$zero_days, SIMPLIFY = FALSE)
 
 # Combine into a single data frame
@@ -403,10 +403,24 @@ count_non_zeros <- filtered_df_heal %>%
   summarise(across(-c(date), ~sum(. != 0)), .groups = 'drop')%>%
   mutate(count = 'Non-zeros')
 (x <- bind_rows(count_zeros, count_non_zeros) %>%
-  select(count, location, everything()))
+  dplyr::select(count, location, everything()))
 
 
-# 4. C: Address wide format ####
+# 4. C: Address all format ####
+
+# Add columns for weekdays, hospital closures (NA or total patients <50)
+# holiday (includes Sunday or bank or school holiday)
+df_heal$holiday <- ifelse(df_heal$date %in% all_hols, 1, 0)
+df_heal <- df_heal %>%
+  group_by(date, location) %>%
+  summarise(total_patients = n(), .groups = "drop") %>%
+  mutate(closed = if_else(total_patients < 50, 1, 0)) %>%
+  right_join(df_heal, by = c("date", "location"))
+df_heal <- df_heal[, c('location', 'date', 'closed', 'holiday', 
+                           setdiff(names(df_heal), c('location', 'date', 'closed', 'holiday')))]
+
+
+# 4. D: Address wide format ####
 
 # Add in missing dates 
 full_dates_df_heal <- expand.grid(location = unique(df_heal_w$location),
@@ -437,7 +451,7 @@ df_heal_w <- df_heal_w %>%
 (na_counts <- df_heal_w %>% dplyr::filter(is.na(total_patients)) %>% group_by(holiday) %>% summarise(count = n()))
 
 
-# 4. D: Address long format ####
+# 4. E: Address long format ####
 
 # Add in missing dates and full grid of category combinations
 full_grid <- expand.grid(
@@ -465,18 +479,18 @@ df_heal_long <- full_grid %>%
     ward_name = factor(ward_name, levels = c('TOTAL', ward_levels)) 
   ) %>%
   arrange(location, date, ward_name, age_group, gender) %>%
-  select(location, date, weekday, closed, holiday, everything())
+  dplyr::select(location, date, weekday, closed, holiday, everything())
 
 
 # Set all previously identified dates to NA & add holidays
 na_dates <- df_heal_w %>% 
   dplyr::filter(is.na(total_patients)) %>% 
-  select(location, date)
+  dplyr::select(location, date)
 
 df_heal_l <- df_heal_long %>%
   left_join(na_dates %>% mutate(na_flag = TRUE), by = c('location', 'date')) %>%
   mutate(patients = ifelse(!is.na(na_flag), NA, patients)) %>%
-  select(-na_flag)
+  dplyr::select(-na_flag)
 
 
 #### EXPORT ####

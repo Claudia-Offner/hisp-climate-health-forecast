@@ -23,7 +23,7 @@ editor: visual
 
 ![](-%20figures/desc_hist_weat.png)
 
-## Weather, by site 
+## Weather, by site
 
 ```{r desc_weat, echo=FALSE, message=FALSE, warning=FALSE}
 
@@ -41,7 +41,6 @@ ft_weat <- flextable(weat) %>%
 
 ft_weat
 ```
-
 
 ## Extreme weather definitions: Continuous
 

@@ -87,7 +87,7 @@ calculate_anomalies <- function(df, variables, window_size = 15, days = 366) {
 
 # Load data
 df_w <- read.csv(paste0('1_Original_Data/118_BigThaw/', weat_import, '.csv'))
-df_p <- get(load(paste0('2_Active_Data/202_weat/', pm25_import, '.RData')))
+df_p <- get(load(paste0('2_Active_Data/204_misc/', pm25_import, '.RData')))
 
 # Set hourly time parameters
 df_p$date <- as.Date(df_p$date)

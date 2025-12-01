@@ -21,7 +21,7 @@ packages <- c('tidyverse', 'terra', 'duckdb', 'tidyselect', 'sf',
               'ggplot2', 'data.table', 'tools', 'moments', 'grid',
               'patchwork', 'RColorBrewer', 'reshape2', 'zoo', 'ggnewscale',
               'skimr', 'DT', 'forecast', 'purrr', 'scales', 'xts', 'ggthemes',
-              'elevatr', 'rnaturalearth', 'rnaturalearthdata', 'raster')
+              'elevatr', 'rnaturalearth', 'rnaturalearthdata', 'raster', 'dplyr')
 
 
 

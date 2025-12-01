@@ -67,7 +67,7 @@ run_model <- function(data, locations, outcome){
   
   # 2. Stage 1: Fit the DLNM ----
   
-  # BUILT OBJECTS WHERE outputS WILL BE STORED:
+  # BUILT OBJECTS WHERE outputs WILL BE STORED:
   ymat_t2m <- matrix(NA,m,df_t2m,dimnames=list(locations,paste("spl",seq(df_t2m),sep="")))
   Slist_t2m <- vector("list",m)
   names(Slist_t2m) <- locations
