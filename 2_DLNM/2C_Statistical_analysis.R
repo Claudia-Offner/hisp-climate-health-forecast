@@ -14,6 +14,9 @@ source('2_DLNM/HISP_DLNM - Dependencies.R')
 # Function to run model with static formula
 run_model <- function(data, locations, outcome){
   
+  data <- df
+  outcome <- 'total_patients'
+  
   # Function to get reference meta-analysis
   get_meta_analysis <- function(ymat, Slist, arg, ranges, cen){
     
@@ -25,6 +28,26 @@ run_model <- function(data, locations, outcome){
     
     return(list(ymat=ymat, Slist=Slist, arg=arg, ranges=ranges, mv=mv, bound=bound, b_mean=b_mean, cen=cen))
     
+  }
+  
+  # Function to calculate comparative metrics for meta-DLNM
+  comp_metrics <- function(model) {
+    
+    res <- list()
+    
+    # Get sum aic
+    res[['aic']] <- summary(model)$deviance + 2* summary(model)$df[1] * summary(model)$dispersion
+    
+    # Get average of estimates (lag 4)
+    res[['esti_t2m']] <- predt2m$coef[4]  
+    res[['esti_tp']]  <- predtp$coef[4]  
+    res[['esti_rh']] <- predrh$coef[4]  
+    res[['esti_pm25']]  <- predpm25$coef[4]  
+    
+    # Get sum of PACF
+    res[['pacf']] <- pacf(residuals(model, type = "pearson"), plot = FALSE, lag.max = 28)$acf
+    
+    return(res) 
   }
   
   # 1. Data and dependency prep ----
@@ -68,6 +91,10 @@ run_model <- function(data, locations, outcome){
   # 2. Stage 1: Fit the DLNM ----
   
   # BUILT OBJECTS WHERE outputs WILL BE STORED:
+  
+  Slist_comp <- vector("list",m)
+  names(Slist_comp) <- locations
+  
   ymat_t2m <- matrix(NA,m,df_t2m,dimnames=list(locations,paste("spl",seq(df_t2m),sep="")))
   Slist_t2m <- vector("list",m)
   names(Slist_t2m) <- locations
@@ -130,20 +157,33 @@ run_model <- function(data, locations, outcome){
       ymat_pm25[i,] <- predpm25$coef
       Slist_pm25[[i]] <- predpm25$vcov  
       
+      # EXTRACT COMPARATIVE METRICS
+      Slist_comp[[i]] <- comp_metrics(model)
+      
     })
-
+  
   
   # 3. Stage 2: Multivariate Meta-analysis ----
   
+  # Meta coefs
   meta_t2m <- get_meta_analysis(ymat=ymat_t2m,  Slist=Slist_t2m, arg=arg_t2m, ranges=ranges_t2m, cen=cen_t2m)
   meta_tp <- get_meta_analysis(ymat=ymat_tp,  Slist=Slist_tp, arg=arg_tp, ranges=ranges_tp, cen=cen_tp)
   meta_rh <- get_meta_analysis(ymat=ymat_rh,  Slist=Slist_rh, arg=arg_rh, ranges=ranges_rh, cen=cen_rh)
   meta_pm25 <- get_meta_analysis(ymat=ymat_pm25,  Slist=Slist_pm25, arg=arg_pm25, ranges=ranges_pm25, cen=cen_pm25)
   
+  # Meta metrics
+  meta_comp <- list()
+  meta_comp[['avg_t2m']] <- mean(sapply(Slist_comp, function(x) x$esti_t2m))
+  meta_comp[['avg_tp']] <- mean(sapply(Slist_comp, function(x) x$esti_tp))
+  meta_comp[['avg_rh']] <- mean(sapply(Slist_comp, function(x) x$esti_rh))
+  meta_comp[['avg_pm25']] <- mean(sapply(Slist_comp, function(x) x$esti_pm25))
+  meta_comp[['sum_aic']] <- sum(sapply(Slist_comp, function(x) x$aic))
+  meta_comp[['sum_pacf']] <- rowSums(sapply(Slist_comp, function(x) as.numeric(x$pacf)))
+  
   # RESET WARNING
   options(warn=0)
   
-  return(list(meta_t2m=meta_t2m, meta_tp=meta_tp, meta_rh=meta_rh, meta_pm25=meta_pm25))
+  return(list(meta_comp=meta_comp, meta_t2m=meta_t2m, meta_tp=meta_tp, meta_rh=meta_rh, meta_pm25=meta_pm25))
   
 }
 
@@ -518,6 +558,7 @@ m <- length(locations)
 # Total patients
 primary <- 'total_patients'
 output <- run_model(df, locations, primary)
+
 main_res <- format_results(output, primary)
 total_er_overall <- main_res$p_er_overall + plot_annotation(title = replace_exact_matches(primary, nm))
 total_lr <- main_res$p_lr + plot_annotation(title = replace_exact_matches(primary, nm))

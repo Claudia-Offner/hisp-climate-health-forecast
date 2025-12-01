@@ -21,7 +21,7 @@ get_parameter_test <- function(variables, v_dist=NULL, v_lag=14, df_lag=4, time_
   if(baseline==TRUE){
     # Only fit the baseline model
     model <- glm(formula=as.formula(baseformula), data=df,  family = quasipoisson(link="log"), na.action='na.exclude') 
-    test_result <- get_model_fit(model,paste0('baseline(',time_df,')'))
+    test_result <- get_model_fit(model,paste0('baseline (',time_df,')'))
   } else{
     
     # LAG/SHAPE TESTS
@@ -69,7 +69,7 @@ get_autocorr_test <- function(lag, df){
 }
 
 # Function to plot AIC results (comparison)
-plot_aic_res <- function(modelfitstats, best_fit, main_title){
+plot_AIC_res <- function(modelfitstats, best_fit, main_title){
   
   modelfitstats$highlight <- ifelse(modelfitstats$model == best_fit, "yes", "no")
   
@@ -110,7 +110,7 @@ for(i in 1:10){
 }
 modelfitstats
 (best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model)
-(aic_season <- plot_aic_res(modelfitstats, best_fit, "Model AIC (seasonality)"))
+(AIC_season <- plot_AIC_res(modelfitstats, best_fit, "Model AIC (seasonality)"))
 
 # 2. Test autocorrelation of hospital admissions (AR=1) #####
 
@@ -145,7 +145,7 @@ pacf_plot <- autoplot(pacf(resid, plot = FALSE)) +
     legend.position = "none"  # hide legend if not needed
   )
 
-aic_ACF <- grid.arrange(acf_plot, pacf_plot, ncol = 2)
+AIC_ACF <- grid.arrange(acf_plot, pacf_plot, ncol = 2)
 
 
 # # Run lag tests
@@ -158,7 +158,7 @@ aic_ACF <- grid.arrange(acf_plot, pacf_plot, ncol = 2)
 #   acf(resid, plot = TRUE)
 # }
 # best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-# aic_2_autocorr <- plot_aic_res(modelfitstats, best_fit, "AIC by Model: Autocorrleation lags")
+# AIC_2_autocorr <- plot_AIC_res(modelfitstats, best_fit, "AIC by Model: Autocorrleation lags")
 
 # 3. Test single weather variables for lag structures ####
 
@@ -171,7 +171,7 @@ aic_ACF <- grid.arrange(acf_plot, pacf_plot, ncol = 2)
 #   modelfitstats <- rbind(modelfitstats, test_result$test)
 # }
 # best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-# aic_t2m_lag <- plot_aic_res(modelfitstats, best_fit, "AIC by Model: Temperature lags")
+# AIC_t2m_lag <- plot_AIC_res(modelfitstats, best_fit, "AIC by Model: Temperature lags")
 # 
 # # RAINFALL (lag=0-1)
 # setNames(modelfitstats <- data.frame(matrix(NA,0,6)),c('model','obs','dfmodel','dispersion','deviance','AIC' ))
@@ -180,7 +180,7 @@ aic_ACF <- grid.arrange(acf_plot, pacf_plot, ncol = 2)
 #   modelfitstats <- rbind(modelfitstats, test_result$test)
 # }
 # best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-# aic_tp_lag <- plot_aic_res(modelfitstats, best_fit, "AIC by Model: Rainfall lags")
+# AIC_tp_lag <- plot_AIC_res(modelfitstats, best_fit, "AIC by Model: Rainfall lags")
 # 
 # # WIND SPEED (lag=0-11)
 # setNames(modelfitstats <- data.frame(matrix(NA,0,6)),c('model','obs','dfmodel','dispersion','deviance','AIC' ))
@@ -189,10 +189,10 @@ aic_ACF <- grid.arrange(acf_plot, pacf_plot, ncol = 2)
 #   modelfitstats <- rbind(modelfitstats, test_result$test)
 # }
 # best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-# aic_fg10_lag <- plot_aic_res(modelfitstats, best_fit, "AIC by Model: Wind speed lags")
+# AIC_fg10_lag <- plot_AIC_res(modelfitstats, best_fit, "AIC by Model: Wind speed lags")
 # 
 # # Compile plots
-# aic_3_lags <- grid.arrange(aic_t2m_lag, aic_tp_lag, aic_fg10_lag, ncol = 3)
+# AIC_3_lags <- grid.arrange(AIC_t2m_lag, AIC_tp_lag, AIC_fg10_lag, ncol = 3)
 
 
 # 4. Test single weather variables for shape structures ####
@@ -207,7 +207,7 @@ for (j in 3:8){ # test exp-resp dfs (between 3 and 8 as per lit)
   modelfitstats <- rbind(modelfitstats, test_result$test)
 }
 best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-aic_t2m_shp <- plot_aic_res(modelfitstats, best_fit, "Model AIC (t2m shape)")
+AIC_t2m_shp <- plot_AIC_res(modelfitstats, best_fit, "Model AIC (t2m shape)")
 
 # RAINFALL (ns, df=4)
 # i <- 4
@@ -219,7 +219,7 @@ for (j in 3:8){ # test exp-resp dfs (between 3 and 8 as per lit)
   modelfitstats <- rbind(modelfitstats, test_result$test)
 }
 best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-aic_tp_shp <- plot_aic_res(modelfitstats, best_fit, "Model AIC (tp shape)")
+AIC_tp_shp <- plot_AIC_res(modelfitstats, best_fit, "Model AIC (tp shape)")
 
 # WIND SPEED (ns, df=5)
 # i <- 5
@@ -231,10 +231,10 @@ for (j in 3:8){ # test exp-resp dfs (between 3 and 8 as per lit)
   modelfitstats <- rbind(modelfitstats, test_result$test)
 }
 best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-aic_fg10_shp <- plot_aic_res(modelfitstats, best_fit, "Model AIC (fg10 shape)")
+AIC_fg10_shp <- plot_AIC_res(modelfitstats, best_fit, "Model AIC (fg10 shape)")
 
 # Compile plots
-aic_shape <- grid.arrange(aic_t2m_shp, aic_tp_shp, aic_fg10_shp, ncol = 3)
+AIC_shape <- grid.arrange(AIC_t2m_shp, AIC_tp_shp, AIC_fg10_shp, ncol = 3)
 
 # 5. Test shape of response (negative binom) #####
 
@@ -266,13 +266,13 @@ cp.t2m <- crosspred(cb.t2m, model, at=q_t2m)[c('predvar', 'allRRfit','allRRlow',
 cp <- crosspred(cb.t2m, model, at=seq(-10, 35, by=1))
 nb_plot <- get_visuals(cp, model, lag_rep=FALSE, col="#D74B3C", xlab="Temperature (C)", title="Negative Binomial: Cummulative RR")
 
-aic_model <- grid.arrange(qp_plot, nb_plot, ncol = 2)
+AIC_model <- grid.arrange(qp_plot, nb_plot, ncol = 2)
 
 
 #### EXPORT AIC plots ####
-sens_analysis <- list(aic_season=aic_season, aic_ACF=aic_ACF, 
-                      # aic_3_lags=aic_3_lags, 
-                      aic_shape=aic_shape, aic_model=aic_model)
+sens_analysis <- list(AIC_season=AIC_season, AIC_ACF=AIC_ACF, 
+                      # AIC_3_lags=AIC_3_lags, 
+                      AIC_shape=AIC_shape, AIC_model=AIC_model)
 
 for (nm in names(sens_analysis)) {
   ggsave(filename = paste0(path_ch2, '/IV. Figures/SM_', nm, '.png'), plot = sens_analysis[[nm]],
