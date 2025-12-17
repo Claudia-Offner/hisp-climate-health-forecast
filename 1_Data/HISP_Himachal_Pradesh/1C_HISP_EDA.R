@@ -2,7 +2,7 @@
 ### HISP Exploratory Data Analysis                                           ###
 ### ------------------------------------------------------------------------ ### 
 
-setwd(paste0('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/'))
+setwd(here())
 source('1_Data/HISP_Himachal_Pradesh/HISP_Cleaning - Dependencies.R')
 
 # Set data path
@@ -162,7 +162,7 @@ get_desc <- function(df, h_cols, w_cols) {
             mutate(
               perc_visits = round((total_visits / sum(total_visits)) * 100, 1)
             ) %>%
-            dplyr::dplyr::select(Variable=location, total_visits, perc_visits, everything())
+            dplyr::select(Variable=location, total_visits, perc_visits, everything())
           
         }
         
@@ -179,16 +179,19 @@ get_desc <- function(df, h_cols, w_cols) {
           paste0(
             round(mean_daily_visits),
             ifelse(Variable == 'tp', ' + ', ' ± '),
-            round(sd_daily_visits)
+            round(sd_daily_visits),
+            ' (', min_daily_visit, ', ', max_daily_visit, ')'
           )
+
         ),
-        Range = ifelse(
-          is.na(skew_daily_visit),
-          NA,
-          paste0(min_daily_visit, ', ',max_daily_visit, ' (', skew_daily_visit, ')')
-        )
+        # Range = ifelse(
+        #   is.na(skew_daily_visit),
+        #   NA,
+        #   # paste0(min_daily_visit, ', ',max_daily_visit, ' (', skew_daily_visit, ')')
+        #   paste0(sd_daily_visits, ' (', skew_daily_visit, ')')
+        # )
       ) %>%
-      dplyr::dplyr::select(Variable, Frequency, Average, Range))
+      dplyr::select(Variable, Frequency, Average))
   
   
   # Remove frequency values for raw weather data
@@ -198,7 +201,7 @@ get_desc <- function(df, h_cols, w_cols) {
   # FORMATING
   # Insert headings at fixed positions
   base_desc <- rbind(
-    tibble(Variable = 'Hospital Characteristics', Frequency = NA, Average = NA, Range = NA),
+    tibble(Variable = 'Hospital Characteristics', Frequency = NA, Average = NA),
     base_desc
   )
   # Find positions to insert before
@@ -207,7 +210,6 @@ get_desc <- function(df, h_cols, w_cols) {
     Variable = labels,
     Frequency = NA,
     Average = NA,
-    Range = NA
   )
   # Insert rows in reverse order so positions don't shift
   for (i in rev(seq_along(positions))) {
@@ -287,7 +289,7 @@ plot_shp_elevation_map <- function(shp, loc_points, country_shp, zoom = 7, buffe
   bbox <- st_as_sfc(st_bbox(shp)) |> st_buffer(buffer_km * 1000)
   
   # 3. Elevation and terrain ----
-  elev_raster <- raster("2_Active_Data/205_envi/ind_envi_s3_AWSOpenData_elevation_raster.tif")
+  elev_raster <- raster("2_Active_Data/204_misc/ind_envi_s3_AWSOpenData_elevation_raster.tif")
   slope <- terrain(elev_raster, opt = 'slope')
   aspect <- terrain(elev_raster, opt = 'aspect')
   hillshade <- hillShade(slope, aspect, angle = 40, direction = 315)
@@ -451,9 +453,6 @@ startdate <- as.Date('2015-02-14')
 enddate <- as.Date('2020-02-14')  
 df_wide <- df_wide[df_wide$date >= startdate & df_wide$date <= enddate,]
 
-# Back transform
-df_wide$tp <- exp(df_wide$tp)
-
 # Checks
 check <- df_wide[, !grepl('lag|_c|_p|IMD', names(df_wide))]
 names(check)
@@ -493,51 +492,47 @@ for (l in locations) {
 }
 base_desc_loc <- replace_exact_matches(base_desc_loc, nm)
 
-# Weather only (by location)
-summarize_weather <- function(df, w_col) {
-  
-  df %>%
-    dplyr::select(location, all_of(w_col)) %>%     # keep only location + weather vars
-    pivot_longer(
-      cols = all_of(w_col),
-      names_to = "variable",
-      values_to = "value"
-    ) %>%
-    group_by(location, variable) %>%
-    summarise(
-      mean_val = mean(value, na.rm = TRUE),
-      min_val  = min(value, na.rm = TRUE),
-      max_val  = max(value, na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    mutate(
-      formatted = sprintf("%.0f (%.0f, %.0f)", mean_val, min_val, max_val)
-    ) %>%
-    dplyr::select(location, variable, formatted) %>%
-    pivot_wider(
-      names_from = location,
-      values_from = formatted,
-      names_sort = FALSE
-    )
-}
 
-base_weat_loc <- summarize_weather(df_wide, w_cols[w_cols != 'sh_mean'])
-base_weat_loc <- replace_exact_matches(base_weat_loc, nm)
+# TAB: Table of weather averages & frequencies (weat_loc_tab) ####
+weat_av <- base_desc_loc[33:39, grepl('Variable|Average', names(base_desc_loc))]
+names(weat_av) <- c('Variable', as.character(location_levels))
+weat_freq <- base_desc_loc[40:nrow(base_desc_loc), grepl('Variable|Frequency', names(base_desc_loc))]
+names(weat_freq) <- c('Variable', as.character(location_levels))
+weat_loc_tab <- rbind(weat_av, weat_freq)
 
+# TAB: Table of population averages & frequencies (pop_loc_tab) ####
+pop_av <- base_desc_loc[1:12, grepl('Variable|Average', names(base_desc_loc))]
+names(pop_av) <- c('Variable', as.character(location_levels))
+pop_av$Variable <- paste0(pop_av$Variable, ' (Average)')
+pop_freq <- base_desc_loc[1:12, grepl('Variable|Frequency', names(base_desc_loc))]
+names(pop_freq) <- c('Variable', as.character(location_levels))
+pop_av$Variable <- paste0(pop_av$Variable, ' (Frequency)')
+pop_loc_tab <- rbind(pop_freq, pop_av)
+
+# TAB: Table of population averages & frequencies (ward_loc_tab) ####
+ward_av <- base_desc_loc[13:31, grepl('Variable|Average', names(base_desc_loc))]
+names(ward_av) <- c('Variable', as.character(location_levels))
+ward_av$Variable <- paste0(ward_av$Variable, ' (Average)')
+rownames(ward_av) <- NULL
+ward_freq <- base_desc_loc[14:31, grepl('Variable|Frequency', names(base_desc_loc))]
+names(ward_freq) <- c('Variable', as.character(location_levels))
+ward_freq$Variable <- paste0(ward_freq$Variable, ' (Frequency)')
+rownames(ward_freq) <- NULL
+ward_loc_tab <- rbind(ward_freq, ward_av)
 
 # FIG: Histograms total_patients, weather (hist_tota, hist_tota_loc, hist_weat) ####
-sub <- df_wide %>% dplyr::select(location, total_patients, all_of(w_cols[!grepl('_p|IMD', w_cols)]))
-skm <- skim(sub) %>% rename(min = numeric.p0, Q1 = numeric.p25, 
+sub1 <- df_wide %>% ungroup() %>% dplyr::select(total_patients, all_of(w_cols[!grepl('_p|IMD', w_cols)]))
+skm1 <- skim(sub1) %>% rename(min = numeric.p0, Q1 = numeric.p25, 
                             median = numeric.p50, Q3 = numeric.p75, 
                             max = numeric.p100) %>%
   mutate(across(where(is.numeric), ~ round(., 2)))
 
-colnames(skm) <- gsub('numeric.', '', colnames(skm))
-skm <- as.data.frame(skm)
+colnames(skm1) <- gsub('numeric.', '', colnames(skm1))
+skm1 <- as.data.frame(skm1)
 
 # HISTOGRAMS
 # Total patients only (individual)
-hist_tota <- create_histogram(sub, 'total_patients', skm, color=mypalette[2])
+hist_tota <- create_histogram(sub1, 'total_patients', skm1, color=mypalette[2])
 (hist_tota <- hist_tota +
   ggtitle('All total patient distribution') +
   xlab('Total patients') +           # Change Y-axis label
@@ -546,10 +541,14 @@ hist_tota <- create_histogram(sub, 'total_patients', skm, color=mypalette[2])
     plot.title = element_text(hjust = 0.5)        # Center the title
   ))
 
+
+
 # Total patients only (by location)
+sub2 <- df_wide %>% dplyr::select(total_patients, all_of(w_cols[!grepl('_p|IMD', w_cols)]))
+
 plots_by_location <- lapply(location_levels, function(loc) {
   # Subset data for this location
-  sub_loc <- subset(sub, location == loc)
+  sub_loc <- subset(sub2, location == loc)
   skm_loc <- skim(sub_loc) %>%
     rename(min = numeric.p0, Q1 = numeric.p25, 
            median = numeric.p50, Q3 = numeric.p75, 
@@ -573,8 +572,8 @@ plots_by_location <- lapply(location_levels, function(loc) {
 (hist_tota_loc <- wrap_plots(plots_by_location, ncol = 3))
 
 # Weather only
-cols_to_plot <- colnames(sub[, -c(1, 2)])
-plots <- lapply(cols_to_plot, function(col) create_histogram(sub, col, skm))
+cols_to_plot <- colnames(sub1[, -c(1, 2)])
+plots <- lapply(cols_to_plot, function(col) create_histogram(sub1, col, skm1))
 (hist_weat <- wrap_plots(plots, nrow=2))
 
 # # Density curves by season
@@ -644,7 +643,7 @@ plots_by_location <- lapply(location_levels, function(loc) {
     ggtitle(loc) +  
     xlab('Ward') + 
     ylab('Count') + 
-    scale_y_continuous(limits = c(0, 1200000), labels = scales::comma) +  # Remove scientific notation (comma format)
+    scale_y_continuous(limits = c(0, 750000), labels = scales::comma) +  # Remove scientific notation (comma format)
     scale_x_discrete(labels = function(x) {
       sapply(x, function(lbl) if (lbl %in% names(nm)) nm[[lbl]] else lbl)
     }) +
@@ -703,7 +702,7 @@ plots_by_location <- lapply(location_levels, function(loc) {
               lbl
             }})}) +
         scale_fill_manual(values = mypalette) +
-        scale_y_continuous(limits = c(0, 2550000), labels = scales::comma) +  # Remove scientific notation (comma format)
+        scale_y_continuous(limits = c(0, 1300000), labels = scales::comma) +  # Remove scientific notation (comma format)
         theme_minimal() +   
         theme(
           legend.position = 'none', 
@@ -716,28 +715,9 @@ plots_by_location <- lapply(location_levels, function(loc) {
 })
 (cat_age_loc <- wrap_plots(plots_by_location, ncol = 3))
 
-# CHECK DISTRIBUTION
-con_age <- ggplot(df_all, aes(x = age)) +
-  geom_histogram(binwidth = 1, fill = mypalette[1], color = 'black') +  # Set bin width to 1
-  ggtitle('Histogram of All Age Distribution') +
-  xlab('Age') +
-  ylab('Frequency') +
-  xlim(-25, 125) +
-  theme(legend.position = 'none',
-        plot.title = element_text(hjust = 0.5))
-
-# CHECK ANOMALY PATTERNS
-# There are 286 anomalies in feasible age
-table(df_all$age_group)
-sort(unique(df_all$age))
-# No clear pattern across wards
-df_all %>% filter(age_group == 'Unknown') %>% count(age) # No clear pattern
-df_all %>% filter(age_group == 'Unknown') %>% count(ward_name) # No clear pattern
-df_all %>% filter(age_group == 'Unknown') %>% count(gender) 
-
 # FIG: Gender--
 # CHECK FREQUENCY
-cat_sex <- ggplot(df_all, aes(x = gender, fill = gender)) +
+(cat_sex <- ggplot(df_all, aes(x = gender, fill = gender)) +
             geom_bar(color = 'black') +  # Bar color
             ggtitle('All Gender Distribution') +  # Title
             xlab('Gender') +  # X-axis label
@@ -746,7 +726,7 @@ cat_sex <- ggplot(df_all, aes(x = gender, fill = gender)) +
             scale_y_continuous(labels = scales::comma) +  # Remove scientific notation (comma format)
             theme_minimal() +   # Minimal theme for clean appearance
             theme(legend.position = 'none',
-                  plot.title = element_text(hjust = 0.5))
+                  plot.title = element_text(hjust = 0.5)))
 
 
 # CHECK BY LOCATION
@@ -760,7 +740,7 @@ plots_by_location <- lapply(location_levels, function(loc) {
     xlab('Gender') +  # X-axis label
     ylab('Count') +   # Y-axis label
     scale_fill_manual(values = mypalette) +  # Manual colors for Male and Female
-    scale_y_continuous(limits = c(0, 2500000), labels = scales::comma) +  # Remove scientific notation (comma format)
+    scale_y_continuous(limits = c(0, 1300000), labels = scales::comma) +  # Remove scientific notation (comma format)
     theme_minimal() +   # Minimal theme for clean appearance
     theme(legend.position = 'none',
           plot.title = element_text(hjust = 0.5))
@@ -768,13 +748,6 @@ plots_by_location <- lapply(location_levels, function(loc) {
   return(p)
 })
 (cat_sex_loc <- wrap_plots(plots_by_location, ncol = 3))
-
-# CHECK ANOMALY PATTERNS
-# Only 500 listed as 'Other' - 276 of which are from Pediatrics and aged 1-17y
-table(df_all$gender)
-df_all %>% filter(gender == 'O') %>% count(ward_name)
-df_all %>% filter(gender == 'O') %>% count(age_group)
-
 
 # TEMPORAL CHARACTERISTICS ####
 
@@ -808,17 +781,17 @@ for (v in w_vars){
     plot_annotation(title = 'Weather time series, across all locations', theme = theme(
       plot.title = element_text(hjust = 0.5, face = "bold", size = 16))))
 
-# CHECK ALL BY LOCATION
-ts_loc <- list()
-for (i in location_levels){
-  
-  (ts <- wrap_plots(lapply(plots_loc, `[[`, i), ncol = 4) + 
-     plot_annotation(title = i, theme = theme(
-    plot.title = element_text(hjust = 0.5, face = "bold", size = 16))))
-  ts_loc[[i]] <- ts
-  
-}
-ts_loc
+# # CHECK ALL BY LOCATION
+# ts_weat_loc <- list()
+# for (i in location_levels){
+# 
+#   (ts <- wrap_plots(lapply(plots_loc, `[[`, i), ncol = 4) +
+#      plot_annotation(title = i, theme = theme(
+#        plot.title = element_text(hjust = 0.5, face = "bold", size = 16))))
+#   ts_weat_loc[[i]] <- ts
+# 
+# }
+# ts_weat_loc
 
 # CHECK LOCATIONS BY WEATHER
 ts_loc_weat <- list()
@@ -869,18 +842,18 @@ for (v in pop_vars){
     plot.title = element_text(hjust = 0.5, face = "bold", size = 16))))
 
 # CHECK ALL BY LOCATION
-ts_pop_loc <- list()
-for (i in location_levels){
-  
-  (ts <- wrap_plots(lapply(plots_loc, `[[`, i), ncol = 4) + 
-     plot_annotation(title = i, theme = theme(
-       plot.title = element_text(hjust = 0.5, face = "bold", size = 16))))
-  ts_pop_loc[[i]] <- ts
-  
-}
-ts_pop_loc
+# ts_pop_loc <- list()
+# for (i in location_levels){
+#   
+#   (ts <- wrap_plots(lapply(plots_loc, `[[`, i), ncol = 4) + 
+#      plot_annotation(title = i, theme = theme(
+#        plot.title = element_text(hjust = 0.5, face = "bold", size = 16))))
+#   ts_pop_loc[[i]] <- ts
+#   
+# }
+# ts_pop_loc
 
-# CHECK LOCATIONS BY WEATHER
+# CHECK LOCATIONS BY POP GROUP
 ts_pop_loc_heal <- list()
 for (v in pop_vars){
   
@@ -900,7 +873,7 @@ ts_pop_loc_heal
 
 
 # FIG: 2-month moving average of  WARD HEALTH across locations (ts_heal_ward, ts_ward_loc, ts_ward_loc_heal) #####
-ward_var <- vars[(which(vars == "general")):length(vars)]
+ward_var <- vars[(which(vars == "general")):which(vars == "dermatology")]
 
 # Identify variables of interest
 pop_vars <- vars[1:(which(vars == "over_65"))]
@@ -929,19 +902,19 @@ for (v in ward_var){
     plot_annotation(title = 'Population hospital time series, across all locations', theme = theme(
       plot.title = element_text(hjust = 0.5, face = "bold", size = 16))))
 
-# CHECK ALL BY LOCATION
-ts_ward_loc <- list()
-for (i in location_levels){
-  
-  (ts <- wrap_plots(lapply(plots_loc, `[[`, i), ncol = 4) + 
-     plot_annotation(title = i, theme = theme(
-       plot.title = element_text(hjust = 0.5, face = "bold", size = 16))))
-  ts_ward_loc[[i]] <- ts
-  
-}
-ts_ward_loc
+# # CHECK ALL BY LOCATION
+# ts_ward_loc <- list()
+# for (i in location_levels){
+#   
+#   (ts <- wrap_plots(lapply(plots_loc, `[[`, i), ncol = 4) + 
+#      plot_annotation(title = i, theme = theme(
+#        plot.title = element_text(hjust = 0.5, face = "bold", size = 16))))
+#   ts_ward_loc[[i]] <- ts
+#   
+# }
+# ts_ward_loc
 
-# CHECK LOCATIONS BY WEATHER
+# CHECK LOCATIONS BY WARD
 ts_ward_loc_heal <- list()
 for (v in ward_var){
   
@@ -964,9 +937,6 @@ ts_ward_loc_heal
 
 # SPATIAL CHARACTERISTICS ####
 
-# TAB: Table of cat weather frequencies ####
-base_desc_loc[40:nrow(base_desc_loc), grepl('Variable|Frequency', names(base_desc_loc))]
-
 
 # FIG: Spatial distribution of weather variables (study_area) ####
 
@@ -983,21 +953,18 @@ rev_nm <- setNames(names(nm), nm)
 names(map_stat)[-1] <- rev_nm[names(map_stat)[-1]]
 loc_stats <- merge(loc_points, map_stat, by = "location", all.x = TRUE)
 
-
-
-
-
-
 # Map
 # save_elev(hp, loc_stats, ind)
 (study_area <- plot_shp_elevation_map(hp, loc_stats, ind, stats=FALSE))
 # (study_area <- plot_shp_elevation_map(hp, loc_stats, ind, stats=TRUE))
 
 # Test for spatial autocorrelation ####
+
+
 # INTERACTION TESTS ####
 
 # FIG: Non-parametric spearman correlation tests from raw data (cor_matrix) ####
-sub <- df_wide %>% dplyr::dplyr::select(total_patients, all_of(w_cols[!grepl('_p|IMD', w_cols)]))
+sub <- df_wide %>% ungroup() %>% dplyr::select(total_patients, all_of(w_cols[!grepl('_p|IMD', w_cols)]))
 cor_matrix <- cor(sub, use = 'complete.obs', method = 'spearman')
 melted_corr <- melt(cor_matrix)
 cor_matrix <- ggplot(data = melted_corr, aes(x=Var1, y=Var2, fill=value)) +

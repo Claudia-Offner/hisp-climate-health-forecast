@@ -58,7 +58,7 @@ w_cols <- c('t2m', 'mn2t','mx2t','tp','fg10', 'rh_mean', 'sh_mean', 'pm25')
 h_cols <- c('total_patients',
             'F','M','under_5','age5_14','age15_24','age25_64','over_65',
             'general', 'emergency', 'ophthalmology', 'ent', 'paediatrics',
-            'gynaecology', 'orthopedics', 'dermatology', 'surgery',
+            'gynaecology', 'orthopaedics', 'dermatology', 'surgery',
             'psychiatry', 'pulmonary', 'disability', 'dentistry', 'oncology',
             'ncd', 'antiretroviral', 'substance_counselling', 'physiotherapy')
 
@@ -70,7 +70,7 @@ weekday_levels  <- c('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
 age_levels      <- c('under_5', 'age5_14', 'age15_24', 'age25_64',  'over_65','Unknown')
 gender_levels   <- c('F', 'M', 'O')
 ward_levels     <- c('general', 'emergency', 'ophthalmology', 'ent', 'paediatrics',
-                     'gynaecology', 'orthopedics', 'dermatology', 'surgery',
+                     'gynaecology', 'orthopaedics', 'dermatology', 'surgery',
                      'psychiatry', 'pulmonary', 'disability', 'dentistry', 'oncology',
                      'ncd', 'mch', 'antiretroviral', 'substance_counselling', 'physiotherapy')
 
@@ -81,7 +81,7 @@ nm <- c(season='Season', closed='Closed', holiday='Holiday', total_patients='Tot
         under_5='Under 5', age5_14='Ages 5-14', age15_24='Ages15-24', age25_64='Ages 25-64', over_65='Ages 65+', 
         # WARDS
         general='General', emergency='Emergency', ophthalmology='Ophthalmology', 
-        paediatrics='Paediatric', orthopedics='Orthopedics', ent='ENT', 
+        paediatrics='Paediatric', orthopaedics='Orthopaedics', ent='ENT', 
         gynaecology='Gynaecology', dermatology='Dermatology', surgery='Surgery', 
         dentistry='Dentistry', psychiatry='Psychiatry', oncology='Oncology', 
         pulmonary='Pulmonary', disability='Disability', ncd='NCD', mch='MCH',
@@ -91,7 +91,7 @@ nm <- c(season='Season', closed='Closed', holiday='Holiday', total_patients='Tot
         t2m='Mean temp. (\u00B0C)', mx2t='Max temp. (\u00B0C)', mn2t='Min temp. (\u00B0C)',
         rh_mean='Relative humidity (%)', tp='Rainfall (mm)', fg10='Windspeed (km/hr)', pm25='Air pollution (µg/m³)',
         # IMD DEFINITIONS
-        mx2t_IMD='IMD: Mx temp. >30\u00B0C', mn2t_IMD='IMD: Min temp. <0\u00B0C', 
+        mx2t_IMD='IMD: Max temp. >30\u00B0C', mn2t_IMD='IMD: Min temp. <0\u00B0C', 
         tp_IMD='IMD: Rainfall >15mm', fg10_IMD='IMD: Wind speed >40km/h', pm25_IMD='IMD: PM2.5 >60 µg/m³', 
         rh_low_IMD='IMD: Humidity <30%', rh_hig_IMD='IMD: Humidity >60%',
         # CLIM. DEFINITIONS

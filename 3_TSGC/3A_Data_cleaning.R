@@ -48,6 +48,5 @@ df <- df[df$date >= startdate & df$date <= enddate,]
 # Back transform tp variables
 df$tp <- exp(df$tp)
 
-
 # Save as Rdata file
 save(df, file = paste0(path1, '3_TSGC/', file_name, '.RData'))

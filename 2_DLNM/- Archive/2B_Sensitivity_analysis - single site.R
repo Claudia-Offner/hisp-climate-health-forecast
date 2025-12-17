@@ -2,6 +2,8 @@
 ###  DNLM - Sensitivity Analysis                                             ###
 ### ------------------------------------------------------------------------ ### 
 
+library(gridExtra)
+
 setwd(paste0('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/'))
 source('2_DLNM/HISP_DLNM - Dependencies.R')
 
@@ -15,7 +17,7 @@ get_parameter_test <- function(variables, v_dist=NULL, v_lag=14, df_lag=4, time_
   
   # Set baseline time parameters
   years <- length(unique(df$year))
-  baseformula <- paste0('total_patients ~  season + weekday + holiday + ns(time, df=', time_df,'*years)')
+  baseformula <- paste0('total_patients ~  location + season + weekday + holiday + ns(time, df=', time_df,'*years)')
   
   # BASELINE TESTS
   if(baseline==TRUE){
@@ -52,7 +54,7 @@ get_autocorr_test <- function(lag, df){
   
   if(lag==0){
     # Fit base model (no lag)
-    model <- glm(formula=as.formula('total_patients ~  season + weekday + holiday + ns(time, df=9*9)'),family=quasipoisson,data=df, na.action='na.exclude') 
+    model <- glm(formula=as.formula('total_patients ~  location + season + weekday + holiday + ns(time, df=9*9)'),family=quasipoisson,data=df, na.action='na.exclude') 
     test_result <- get_model_fit(model,paste0('autocorr(', 0 ,')'))
     
   } else{
@@ -60,7 +62,7 @@ get_autocorr_test <- function(lag, df){
     df <- df %>% arrange(date) %>% mutate(patients_lag = lag(total_patients, lag))
     
     # Fit multivariate model
-    model <- glm(formula=as.formula('total_patients ~  season + weekday + holiday + ns(time, df=9*9) + patients_lag'),family=quasipoisson,data=df, na.action='na.exclude') 
+    model <- glm(formula=as.formula('total_patients ~  season + weekday + holiday + ns(time, df=10*9) + patients_lag'),family=quasipoisson,data=df, na.action='na.exclude') 
     test_result <- get_model_fit(model,paste0('autocorr(', lag ,')'))
     
   }
@@ -118,6 +120,7 @@ modelfitstats
 test_result <- get_autocorr_test(lag=0, df)
 resid <- residuals(test_result$model, type = "pearson")
 resid <- resid[!is.na(resid)]
+
 acf_plot <- autoplot(acf(resid, plot = FALSE)) + 
   ggtitle("ACF of DLNM Model Residuals") +
   geom_hline(yintercept = 0, linetype = "solid", color = "grey20") +
@@ -148,17 +151,17 @@ pacf_plot <- autoplot(pacf(resid, plot = FALSE)) +
 AIC_ACF <- grid.arrange(acf_plot, pacf_plot, ncol = 2)
 
 
-# # Run lag tests
-# setNames(modelfitstats <- data.frame(matrix(NA,0,6)),c('model','obs','dfmodel','dispersion','deviance','AIC' ))
-# for(i in 0:7){
-#   test_result <- get_autocorr_test(lag=1, df)
-#   modelfitstats <- rbind(modelfitstats, test_result$test)
-#   resid <- residuals(test_result$model, type = "pearson")
-#   resid <- resid[!is.na(resid)]
-#   acf(resid, plot = TRUE)
-# }
-# best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-# AIC_2_autocorr <- plot_AIC_res(modelfitstats, best_fit, "AIC by Model: Autocorrleation lags")
+# Run lag tests
+setNames(modelfitstats <- data.frame(matrix(NA,0,6)),c('model','obs','dfmodel','dispersion','deviance','AIC' ))
+for(i in 0:7){
+  test_result <- get_autocorr_test(lag=i, df)
+  modelfitstats <- rbind(modelfitstats, test_result$test)
+  resid <- residuals(test_result$model, type = "pearson")
+  resid <- resid[!is.na(resid)]
+  acf(resid, plot = TRUE)
+}
+best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
+(AIC_2_autocorr <- plot_AIC_res(modelfitstats, best_fit, "AIC by Model: Autocorrleation lags"))
 
 # 3. Test single weather variables for lag structures ####
 

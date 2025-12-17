@@ -8,7 +8,7 @@ source('1_Data/HISP_Himachal_Pradesh/HISP_Cleaning - Dependencies.R')
 # Set data paths
 setwd(path_data)
 pm25_import <- 'ind_adm4_LongPMInd_PM25_2000-2022'
-weat_import <- 'ind_5km_JASMIN-BigThaw_2015-2023'
+weat_import <- 'ind_5km_JASMIN-BigThaw_2015-2023_ALL'
 weat_export <- 'ind_5km_JASMIN-BigThaw_2015-2023_anom'
 
 ####  FUNCTIONS  #####
@@ -89,6 +89,9 @@ calculate_anomalies <- function(df, variables, window_size = 15, days = 366) {
 df_w <- read.csv(paste0('1_Original_Data/118_BigThaw/', weat_import, '.csv'))
 df_p <- get(load(paste0('2_Active_Data/204_misc/', pm25_import, '.RData')))
 
+# Remove duplicates
+df_w <- df_w %>% distinct()
+
 # Set hourly time parameters
 df_p$date <- as.Date(df_p$date)
 df_w <- df_w %>%
@@ -100,7 +103,7 @@ df_w <- df_w %>%
     day = day(timestamp),
     hour = hour(timestamp)
   ) %>%
-  select(date, year, month, day, hour, location, everything(), -time)
+  dplyr::select(date, year, month, day, hour, location, everything(), -time)
 
 # 1. Clean data ####
 
@@ -149,7 +152,7 @@ wind <- df_w %>%
 
 # Select all humidity variables
 humid <- df_w %>%
-  select(date, location, contains('humid', ignore.case = TRUE)) %>%
+  dplyr::select(date, location, contains('humid', ignore.case = TRUE)) %>%
   rename_with(~ str_replace_all(., regex('rel_humid', ignore_case = TRUE), 'rh')) %>%
   rename_with(~ str_replace_all(., regex('spec_humid', ignore_case = TRUE), 'sh')) %>%
   group_by(date,location) %>%
@@ -187,16 +190,16 @@ df_w <- df_w %>%
       month %in% c('Jun', 'Jul', 'Aug', 'Sep') ~ 'Monsoon (Jun-Sep)',
       month %in% c('Oct', 'Nov', 'Dec') ~ 'Post-Monsoon (Oct-Dec)'
     )) %>%
-  select(location, date, year, season, month, week, weekday, day, everything())
+  dplyr::select(location, date, year, season, month, week, weekday, day, everything())
 
 # *** Quick extreme temperature checks *** ####
 # summary(df_w$t2m)
 # summary(df_w$mx2t)
 # summary(df_w$mn2t)
-# dplyr::filtered_df <- df_w[df_w$location == 'Chamba', ]
-# summary(dplyr::filtered_df$t2m)
-# summary(dplyr::filtered_df$mx2t)
-# summary(dplyr::filtered_df$mn2t)
+# filtered_df <- df_w[df_w$location == 'Chamba', ]
+# summary(filtered_df$t2m)
+# summary(filtered_df$mx2t)
+# summary(filtered_df$mn2t)
 
 # 2. Set thresholds provided by IMD ####
 # Source: https://mausam.imd.gov.in/imd_latest/contents/pdf/forecasting_sop.pdf
@@ -242,8 +245,6 @@ df_w <- df_w %>%
     tp > tp_IMD$ex_heavy ~ 6
   ),
   tp_IMD_b = if_else(tp_IMD >=3, 1, 0))
-# Take log of tp
-df_w$tp <- log(df_w$tp+ 1e-6)
 
 # STORM
 fg10_IMD <- list(light=40,
