@@ -2,20 +2,23 @@
 ###  DNLM - Multi-city Sensitivity  Analysis                                 ###
 ### ------------------------------------------------------------------------ ### 
 
-# LOAD THE PACKAGE
-library(dlnm); library(splines); library(xtable); library(mvmeta); library(MASS);
-library(ggplot2); library(dplyr); library(purrr); library(patchwork)
-
+# Prep environment
+set.seed(123)
+rm(list = ls())
 setwd(paste0('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/'))
 source('2_DLNM/HISP_DLNM - Dependencies.R')
+
+# Load packages
+library(dlnm); library(splines); library(xtable); library(mvmeta); library(MASS);
+library(ggplot2); library(dplyr); library(purrr); library(patchwork)
 
 #### FUNCTIONS ####
 
 # Function for parameter testing
 get_parameter_test <- function(data, locations, reference='50%',
                                test='Variable Lag', variables=NULL, 
-                               v_lag=14, time_df=8, auto_lag=1,
-                               arg_var=list(fun='ns', df=3), 
+                               v_lag=14, time_df=8, auto_lag1=1, auto_lag2=7,
+                               arg_var=list(fun='ns', df=4), 
                                arg_lag=list(fun='ns', df=3)){
   
   # SET PARAMETERS
@@ -61,37 +64,50 @@ get_parameter_test <- function(data, locations, reference='50%',
       # RUN THE MODEL & EXTRACT COMPARATIVE METRICS
       if(test=='Longterm'){
         # Fit model
-        baseformula <- as.formula(paste0('total_patients ~  season + weekday + ns(time, df=', time_df,'*', years, ')'))
+        baseformula <- as.formula(paste0('total_patients ~  season + weekday +  ns(time, df=', time_df,'*', years, ')'))
         model <- glm(formula=baseformula,family=quasipoisson(),data)
         list_comp[[i]] <- comp_metrics(model)
         list_model[[i]] <- model
       } else if (test == 'Autocorrelation') {
         
-        if (auto_lag==0) {
+        if (auto_lag1==0) {
           # Fit model
-          baseformula <- as.formula(paste0('total_patients ~  season + weekday +  ns(time, df=', time_df,'*', years, ')'))
+          baseformula <- as.formula(paste0('total_patients ~  season + weekday + ns(time, df=', time_df,'*', years, ')'))
           model <- glm(formula=baseformula,family=quasipoisson(),data)
           list_comp[[i]] <- comp_metrics(model)
           list_model[[i]] <- model
         } else{
+          
+          if(!is.null(auto_lag2)) {
+            data <- data %>% arrange(date) %>% mutate(patients_lag1 = lag(total_patients, auto_lag1),
+                                                      patients_lag2 = lag(total_patients, auto_lag2))
+            baseformula <- as.formula(paste0('total_patients ~  season + weekday + ns(time, df=', time_df,'*', years, ') + patients_lag1 + patients_lag2'))
+          } else {
+            data <- data %>% arrange(date) %>% mutate(patients_lag1 = lag(total_patients, auto_lag1))
+            baseformula <- as.formula(paste0('total_patients ~  season + weekday + ns(time, df=', time_df,'*', years, ') + patients_lag1'))
+          }
           # Add lags to df
-          data <- data %>% arrange(date) %>% mutate(patients_lag = lag(total_patients, auto_lag))
+
           # Fit model
-          baseformula <- as.formula(paste0('total_patients ~  season + weekday + ns(time, df=', time_df,'*', years, ') + patients_lag '))
           model <- glm(formula=baseformula,family=quasipoisson(),data)
           list_comp[[i]] <- comp_metrics(model)
           list_model[[i]] <- model
         }
       } else if (grepl('Variable', test)){
         # Add lags to df
-        data <- data %>% arrange(date) %>% mutate(patients_lag = lag(total_patients, auto_lag))
+        data <- data %>% arrange(date) %>% mutate(patients_lag1 = lag(total_patients, auto_lag1),
+                                                  patients_lag2 = lag(total_patients, auto_lag2))
         # Fit cross basis
         cb <- crossbasis(data[[variables]], lag=c(0,v_lag),argvar=arg_var, arglag=arg_lag, group=data$year)
         # Fit model
-        baseformula <- as.formula(paste0('total_patients ~  season + weekday + ns(time, df=', time_df,'*', years, ') + cb + patients_lag'))
+        baseformula <- as.formula(paste0('total_patients ~  season + weekday + holiday + ns(time, df=', time_df,'*', years, ') + cb + patients_lag1 + patients_lag2'))
         model <- glm(formula=as.formula(baseformula),family=quasipoisson(),data)
         list_comp[[i]] <- comp_metrics(model, cb=cb, cen=cen[reference,i])
         list_model[[i]] <- model
+        # Make predictions
+        pred <- crosspred(cb, model, cen=cen[reference,i])
+        ymat[i,] <- pred$coef
+        Slist[[i]] <- pred$vcov
       }
     })
   
@@ -105,14 +121,21 @@ get_parameter_test <- function(data, locations, reference='50%',
   if (grepl('Variable', test)) {
     
     meta_comp[['avg']] <- mean(sapply(list_comp, function(x) x$esti))
-    
+    meta_coef <- get_meta_analysis(ymat=ymat,  Slist=Slist, arg=arg, ranges=ranges, cen=cen)
+
+  } else {
+    meta_coef <- NULL
   }
   
   # Format AIC
   if(test=='Longterm'){
     aic_result <- data.frame(paste0(test, ' (',time_df,')'), meta_comp[['sum_aic']])
   } else if (test == 'Autocorrelation') {
-    aic_result <- data.frame(paste0(test, ' (',auto_lag,')'), meta_comp[['sum_aic']])
+    if(!is.null(auto_lag2)){
+      aic_result <- data.frame(paste0(test, ' (',auto_lag1, ' + ', auto_lag2,')'), meta_comp[['sum_aic']])
+    } else {
+      aic_result <- data.frame(paste0(test, ' (',auto_lag1,')'), meta_comp[['sum_aic']])
+    }
   } else if (test == 'Variable Lag'){
     aic_result <- data.frame(paste0(variables, 
                                     ' (arglag=', arg_lag$fun, '|', arg_lag$df,  ')'), meta_comp[['sum_aic']])
@@ -122,7 +145,7 @@ get_parameter_test <- function(data, locations, reference='50%',
   }
   names(aic_result) <- c('model','AIC' )
   
-  return(list(aic_result=aic_result, models=list_model,
+  return(list(aic_result=aic_result, models=list_model, meta_coef=meta_coef,
               pacf_result=meta_comp[['sum_pacf']], 
               acf_result=meta_comp[['sum_acf']]))
   
@@ -174,7 +197,7 @@ plot_pooled_acf <- function(test_result, plot='PACF'){
     geom_hline(yintercept = 0, color = 'black') +
     geom_hline(yintercept = c(-1.96 / sqrt(n_obs), 1.96 / sqrt(n_obs)),
                linetype = 'dashed', color = 'blue') +
-    labs(title = paste0('Pooled ', plot), x = 'Lag', y = plot) +
+    labs(title = paste0(plot, ': ', test_result$aic_result$model), x = 'Lag', y = plot) +
     theme_classic() +
     theme(
       axis.line = element_line(color = 'black'),
@@ -196,7 +219,7 @@ locations <- as.character(unique(df$location))
 m <- length(locations)
 
 
-# 1. (Longterm) Test time df for capturing long-term/seasonal (time_df=14; AIC_season) ####
+# 1. (Longterm) Test time df for capturing long-term/seasonal (time_df=8; AIC_season) ####
 
 setNames(modelfitstats <- data.frame(matrix(NA,0,2)),c('model', 'AIC' ))
 for(i in 1:10){
@@ -211,46 +234,57 @@ modelfitstats
 # 2. (Autocorr) Test autocorrelation of hospital admissions (AR=1; AIC_autocorr) #####
 
 # Visualize PACF plot
-test_result <- get_parameter_test(data=df, locations=locations, test='Autocorrelation', auto_lag=0)
-acf_plot <- plot_pooled_acf(test_result, plot='ACF')
-pacf_plot <- plot_pooled_acf(test_result, plot='PACF')
-(AIC_ACF <- acf_plot + pacf_plot + plot_layout(ncol = 2))
+test_result <- get_parameter_test(data=df, locations=locations, test='Autocorrelation', auto_lag1=0, auto_lag2=NULL)
+acf_plot_raw <- plot_pooled_acf(test_result, plot='ACF')
+pacf_plot_raw <- plot_pooled_acf(test_result, plot='PACF')
+(AIC_ACF_raw <- acf_plot_raw + pacf_plot_raw + plot_layout(ncol = 2))
 
-# Assess AR lag term
+# Assess 1st AR lag term
 setNames(modelfitstats <- data.frame(matrix(NA,0,2)),c('model', 'AIC' ))
-for(i in 0:14){
-  test_result <- get_parameter_test(data=df, locations=locations, test='Autocorrelation', auto_lag=i)
+for(i in 0:15){
+  test_result <- get_parameter_test(data=df, locations=locations, test='Autocorrelation', auto_lag1=i, auto_lag2=NULL)
   modelfitstats <- rbind(modelfitstats, test_result$aic_result)
+  print(AIC_ACF <- acf_plot_raw + plot_pooled_acf(test_result, plot='ACF') + plot_layout(ncol = 2))
 }
 modelfitstats %>% arrange(AIC)
 (best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model)
 (AIC_autocorr <- plot_AIC_res(modelfitstats, best_fit, 'Pooled AIC: Autocorrelation lags'))
 
-# Visualize PACF plot
-test_result <- get_parameter_test(data=df, locations=locations, test='Autocorrelation', auto_lag=1)
-acf_plot <- plot_pooled_acf(test_result, plot='ACF')
-pacf_plot <- plot_pooled_acf(test_result, plot='PACF')
-(AIC_ACF <- acf_plot + pacf_plot + plot_layout(ncol = 2))
+# Assess 2nd AR lag term
+for(i in 2:15){
+  test_result <- get_parameter_test(data=df, locations=locations, test='Autocorrelation', auto_lag1=1,  auto_lag2=i)
+  modelfitstats <- rbind(modelfitstats, test_result$aic_result)
+  print(AIC_ACF <- acf_plot_raw + plot_pooled_acf(test_result, plot='ACF') + plot_layout(ncol = 2))
+}
+modelfitstats %>% arrange(AIC)
+(best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model)
+(AIC_autocorr <- plot_AIC_res(modelfitstats, best_fit, 'Pooled AIC: Autocorrelation lags'))
+
+# Visualize final PACF plot
+test_result <- get_parameter_test(data=df, locations=locations, test='Autocorrelation', auto_lag1=1,  auto_lag2=7)
+(acf_plot_fin <- plot_pooled_acf(test_result, plot='ACF'))
+# pacf_plot <- plot_pooled_acf(test_result, plot='PACF')
+(AIC_ACF <- acf_plot_raw + acf_plot_fin + plot_layout(ncol = 2))
 
 
 # 3. (Lag) Test single weather variables for lag structures ####
 
 # STATIC CHOICE: We are interested in two week periods (i.e. 14 days)
 
-# TEMPERATURE (lag=6)
+# TEMPERATURE (lag=4)
 setNames(modelfitstats <- data.frame(matrix(NA,0,2)),c('model', 'AIC' ))
 for(i in 3:8){
   test_result <- get_parameter_test(data=df, locations=locations, test='Variable Lag' ,
-                                    variables=c('t2m'), 
+                                    variables=c('wb'), 
                                     # arg_var=list(fun='lin'), 
                                     arg_lag=list(fun='ns', df=i))
   modelfitstats <- rbind(modelfitstats, test_result$aic_result)
 }
 modelfitstats %>% arrange(AIC)
 (best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model)
-(AIC_t2m_lag <- plot_AIC_res(modelfitstats, best_fit, "Pooled AIC: Temperature lags"))
+(AIC_wb_lag <- plot_AIC_res(modelfitstats, best_fit, "Pooled AIC: Temperature lags"))
 
-# RAINFALL (lag=3)
+# RAINFALL (lag=5)
 setNames(modelfitstats <- data.frame(matrix(NA,0,2)),c('model', 'AIC' ))
 for(i in 3:8){
   test_result <- get_parameter_test(data=df, locations=locations, test='Variable Lag' ,
@@ -303,112 +337,129 @@ modelfitstats %>% arrange(AIC)
 (best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model)
 (AIC_pm25_lag <- plot_AIC_res(modelfitstats, best_fit, "Pooled AIC: PM2.5 lags"))
 
-
 # Compile plots
-(AIC_lags <- AIC_t2m_lag + AIC_tp_lag + AIC_rh_lag + AIC_fg10_lag + AIC_pm25_lag + plot_layout(ncol = 3))
+(AIC_lags <- AIC_wb_lag + AIC_tp_lag + AIC_rh_lag + AIC_fg10_lag + AIC_pm25_lag + plot_layout(ncol = 3))
 
 
 # 4. (Shape) Test single weather variables for shape structures ####
 
-# TEMPERATURE (ns, df=4)
-i <- 6
+# TEMPERATURE (ns, df=3)
+i <- 4
+wb_shp <- list()
 setNames(modelfitstats <- data.frame(matrix(NA,0,2)),c('model', 'AIC' ))
 test_result <- get_parameter_test(data=df, locations=locations, test='Variable Shape' ,
-                                  variables=c('t2m'), 
-                                  arg_var=list(fun='lin'), 
-                                  arg_lag=list(fun='ns', df=i))
+                                  variables=c('wb'), arg_var=list(fun='lin'),arg_lag=list(fun='ns', df=i))
 modelfitstats <- rbind(modelfitstats, test_result$aic_result)
+wb_shp[['Linear']] <- city_exp_res(city='ALL', lag=NULL, meta=test_result$meta_coef, col='#D74B3C', xlab='WB Temperature (%)', title='Linear')$p_raw
 for (j in 3:8){ # test exp-resp dfs (between 3 and 8 as per lit)
+  name <- paste0('NS df=', j)
   test_result <- get_parameter_test(data=df, locations=locations, test='Variable Shape' ,
-                                    variables=c('t2m'), 
+                                    variables=c('wb'), 
                                     arg_var=list(fun='ns', df=j), 
                                     arg_lag=list(fun='ns', df=i))
   modelfitstats <- rbind(modelfitstats, test_result$aic_result)
+  wb_shp[[name]] <- city_exp_res(city='ALL', lag=NULL, meta=test_result$meta_coef, col='#D74B3C', xlab='WB Temperature (%)', title=name)$p_raw
 }
 modelfitstats %>% arrange(AIC)
 (best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model)
-(AIC_t2m_shp <- plot_AIC_res(modelfitstats, best_fit, "Pooled AIC: Temperature shape"))
+(AIC_wb_shp <- plot_AIC_res(modelfitstats, best_fit, "Pooled AIC: Temperature shape"))
+(DIS_wb_shp <- (wrap_plots(wb_shp, ncol=4)& theme(legend.position='none')) +
+    plot_annotation(title='Pooled AIC: Temperature shape', theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold'))))
 
 # RAINFALL (ns, df=3)
-i <- 3
+i <- 5
+tp_shp <- list()
 setNames(modelfitstats <- data.frame(matrix(NA,0,2)),c('model', 'AIC' ))
 test_result <- get_parameter_test(data=df, locations=locations, test='Variable Shape' ,
-                                  variables=c('tp'), 
-                                  arg_var=list(fun='lin'), 
-                                  arg_lag=list(fun='ns', df=i))
+                                  variables=c('tp'), arg_var=list(fun='lin'),arg_lag=list(fun='ns', df=i))
 modelfitstats <- rbind(modelfitstats, test_result$aic_result)
+tp_shp[['Linear']] <- city_exp_res(city='ALL', lag=NULL, meta=test_result$meta_coef, col='#1D98EB', xlab='Precipitation (%)', title='Linear')$p_raw
 for (j in 3:8){ # test exp-resp dfs (between 3 and 8 as per lit)
+  name <- paste0('NS df=', j)
   test_result <- get_parameter_test(data=df, locations=locations, test='Variable Shape' ,
                                     variables=c('tp'), 
                                     arg_var=list(fun='ns', df=j), 
                                     arg_lag=list(fun='ns', df=i))
   modelfitstats <- rbind(modelfitstats, test_result$aic_result)
+  tp_shp[[name]] <- city_exp_res(city='ALL', lag=NULL, meta=test_result$meta_coef, col='#1D98EB', xlab='Precipitation (%)', title=name)$p_raw
 }
 modelfitstats %>% arrange(AIC)
 (best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model)
-(AIC_tp_shp <- plot_AIC_res(modelfitstats, best_fit, "Pooled AIC: Rainfall shape"))
+(AIC_tp_shp <- plot_AIC_res(modelfitstats, best_fit, "Pooled AIC: Precipitation shape"))
+(DIS_tp_shp <- (wrap_plots(tp_shp, ncol=4)& theme(legend.position='none')) +
+    plot_annotation(title='Pooled AIC: Precipitation shape', theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold'))))
 
 # HUMIDITY (lin)
 i <- 5
+rh_shp <- list()
 setNames(modelfitstats <- data.frame(matrix(NA,0,2)),c('model', 'AIC' ))
 test_result <- get_parameter_test(data=df, locations=locations, test='Variable Shape' ,
-                                  variables=c('rh'), 
-                                  arg_var=list(fun='lin'), 
-                                  arg_lag=list(fun='ns', df=i))
+                                  variables=c('rh'), arg_var=list(fun='lin'),arg_lag=list(fun='ns', df=i))
 modelfitstats <- rbind(modelfitstats, test_result$aic_result)
+rh_shp[['Linear']] <- city_exp_res(city='ALL', lag=NULL, meta=test_result$meta_coef, col='#A6B727', xlab='Relative humidity (%)', title='Linear')$p_raw
 for (j in 3:8){ # test exp-resp dfs (between 3 and 8 as per lit)
+  name <- paste0('NS df=', j)
   test_result <- get_parameter_test(data=df, locations=locations, test='Variable Shape' ,
                                     variables=c('rh'), 
                                     arg_var=list(fun='ns', df=j), 
                                     arg_lag=list(fun='ns', df=i))
   modelfitstats <- rbind(modelfitstats, test_result$aic_result)
+  rh_shp[[name]] <- city_exp_res(city='ALL', lag=NULL, meta=test_result$meta_coef, col='#A6B727', xlab='Relative humidity (%)', title=name)$p_raw
 }
 modelfitstats %>% arrange(AIC)
 (best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model)
 (AIC_rh_shp <- plot_AIC_res(modelfitstats, best_fit, "Pooled AIC: Relative humidity shape"))
-
-# Wind speed (lin)
-i <- 3
-setNames(modelfitstats <- data.frame(matrix(NA,0,2)),c('model', 'AIC' ))
-test_result <- get_parameter_test(data=df, locations=locations, test='Variable Shape' ,
-                                  variables=c('fg10'), 
-                                  arg_var=list(fun='lin'), 
-                                  arg_lag=list(fun='ns', df=i))
-modelfitstats <- rbind(modelfitstats, test_result$aic_result)
-for (j in 3:8){ # test exp-resp dfs (between 3 and 8 as per lit)
-  test_result <- get_parameter_test(data=df, locations=locations, test='Variable Shape' ,
-                                    variables=c('fg10'), 
-                                    arg_var=list(fun='ns', df=j), 
-                                    arg_lag=list(fun='ns', df=i))
-  modelfitstats <- rbind(modelfitstats, test_result$aic_result)
-}
-modelfitstats %>% arrange(AIC)
-(best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model)
-(AIC_fg10_shp <- plot_AIC_res(modelfitstats, best_fit, "Pooled AIC: Windspeed shape"))
-
+(DIS_rh_shp <- (wrap_plots(rh_shp, ncol=4)& theme(legend.position='none')) +
+    plot_annotation(title='Pooled AIC: Relative humidity shape', theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold'))))
 
 # AIR POLLUTION (lin)
 i <- 3
+pm25_shp <- list()
 setNames(modelfitstats <- data.frame(matrix(NA,0,2)),c('model', 'AIC' ))
 test_result <- get_parameter_test(data=df, locations=locations, test='Variable Shape' ,
-                                  variables=c('pm25'), 
-                                  arg_var=list(fun='lin'), 
-                                  arg_lag=list(fun='ns', df=i))
+                                  variables=c('pm25'), arg_var=list(fun='lin'),arg_lag=list(fun='ns', df=i))
 modelfitstats <- rbind(modelfitstats, test_result$aic_result)
+pm25_shp[['Linear']] <- city_exp_res(city='ALL', lag=NULL, meta=test_result$meta_coef, col='#E569BF', xlab='Air pollution (%)', title='Linear')$p_raw
 for (j in 3:8){ # test exp-resp dfs (between 3 and 8 as per lit)
+  name <- paste0('NS df=', j)
   test_result <- get_parameter_test(data=df, locations=locations, test='Variable Shape' ,
                                     variables=c('pm25'), 
                                     arg_var=list(fun='ns', df=j), 
                                     arg_lag=list(fun='ns', df=i))
   modelfitstats <- rbind(modelfitstats, test_result$aic_result)
+  pm25_shp[[name]] <- city_exp_res(city='ALL', lag=NULL, meta=test_result$meta_coef, col='#E569BF', xlab='Air pollution (%)', title=name)$p_raw
 }
 modelfitstats %>% arrange(AIC)
 (best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model)
-(AIC_pm25_shp <- plot_AIC_res(modelfitstats, best_fit, "Pooled AIC: PM2.5 shape"))
+(AIC_pm25_shp <- plot_AIC_res(modelfitstats, best_fit, "Pooled AIC: Air pollution shape"))
+(DIS_pm25_shp <- (wrap_plots(pm25_shp, ncol=4)& theme(legend.position='none')) +
+    plot_annotation(title='Pooled AIC: Air pollution shape', theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold'))))
 
+# WIND SPEED (lin)
+i <- 3
+fg10_shp <- list()
+setNames(modelfitstats <- data.frame(matrix(NA,0,2)),c('model', 'AIC' ))
+test_result <- get_parameter_test(data=df, locations=locations, test='Variable Shape' ,
+                                  variables=c('fg10'), arg_var=list(fun='lin'),arg_lag=list(fun='ns', df=i))
+modelfitstats <- rbind(modelfitstats, test_result$aic_result)
+fg10_shp[['Linear']] <- city_exp_res(city='ALL', lag=NULL, meta=test_result$meta_coef, col='#8968CD', xlab='Wind speed (%)', title='Linear')$p_raw
+for (j in 3:8){ # test exp-resp dfs (between 3 and 8 as per lit)
+  name <- paste0('NS df=', j)
+  test_result <- get_parameter_test(data=df, locations=locations, test='Variable Shape' ,
+                                    variables=c('fg10'), 
+                                    arg_var=list(fun='ns', df=j), 
+                                    arg_lag=list(fun='ns', df=i))
+  modelfitstats <- rbind(modelfitstats, test_result$aic_result)
+  fg10_shp[[name]] <- city_exp_res(city='ALL', lag=NULL, meta=test_result$meta_coef, col='#8968CD', xlab='Wind speed (%)', title=name)$p_raw
+}
+modelfitstats %>% arrange(AIC)
+(best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model)
+(AIC_fg10_shp <- plot_AIC_res(modelfitstats, best_fit, "Pooled AIC: Wind speed shape"))
+(DIS_fg10_shp <- (wrap_plots(fg10_shp, ncol=4)& theme(legend.position='none')) +
+    plot_annotation(title='Pooled AIC: Wind speed shape', theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold'))))
 
 # Compile plots
-(AIC_shape <- AIC_t2m_shp + AIC_tp_shp + AIC_rh_shp + AIC_fg10_shp + AIC_pm25_shp + plot_layout(ncol=3))
+(AIC_shape <- AIC_wb_shp + AIC_tp_shp + AIC_rh_shp + AIC_fg10_shp + AIC_pm25_shp + plot_layout(ncol=3))
 
 
 # 5. (Shape) Test shape of response (Quasi) #####
@@ -435,31 +486,17 @@ qp_plot_titled <- qp_plot + plot_annotation(title = "Quasipoisson")
 nb_plot_titled <- nb_plot + plot_annotation(title = "Negative binomial")
 qp_wrapped <- wrap_elements(full = qp_plot_titled)
 nb_wrapped <- wrap_elements(full = nb_plot_titled)
-(AIC_model <- qp_wrapped + nb_wrapped)
+(AIC_model <- qp_wrapped / nb_wrapped)
 
 #### EXPORT AIC plots ####
-sens_analysis <- list(AIC_season=AIC_season, AIC_autocorr=AIC_autocorr, #AIC_ACF=AIC_ACF, 
-                      AIC_lags=AIC_lags, AIC_shape=AIC_shape, AIC_model=AIC_model)
+sens_analysis <- list(AIC_season=AIC_season, AIC_autocorr=AIC_autocorr, AIC_ACF=AIC_ACF, 
+                      AIC_lags=AIC_lags, AIC_shape=AIC_shape, AIC_model=AIC_model,
+                      DIS_wb_shp=DIS_wb_shp, DIS_tp_shp=DIS_tp_shp, DIS_rh_shp=DIS_rh_shp,
+                      DIS_pm25_shp=DIS_pm25_shp, DIS_fg10_shp=DIS_fg10_shp)
 
 for (nm in names(sens_analysis)) {
   ggsave(filename = paste0(path_ch2, '/IV. Figures/SM_', nm, '.png'), plot = sens_analysis[[nm]],
-         width = 10, height = 7, dpi = 300)
+         width = 12, height = 7, dpi = 300)
   ggsave(filename = paste0(path_report, '- figures/SM_', nm, '.png'), plot = sens_analysis[[nm]],
-         width = 10, height = 7, dpi = 300)
+         width = 12, height = 7, dpi = 300)
 }
-
-
-
-
-
-
-
-test_result <- get_parameter_test(data=df, locations=locations, test='Variable Shape' ,
-                                  variables=c('t2m'), 
-                                  arg_var=list(fun='ns', df=4), 
-                                  arg_lag=list(fun='ns', df=3))
-main_res <- format_results(test_result)
-(total_er_overall <- main_res$p_er_overall + plot_annotation(title = replace_exact_matches(primary, nm)))
-(total_lr <- main_res$p_lr + plot_annotation(title = replace_exact_matches(primary, nm)))
-(total_er <- main_res$p_er + plot_annotation(title = replace_exact_matches(primary, nm)))
-

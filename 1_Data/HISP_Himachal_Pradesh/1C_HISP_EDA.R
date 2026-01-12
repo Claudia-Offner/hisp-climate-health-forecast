@@ -277,7 +277,7 @@ plot_moving_avg <- function(variable, all.cases=TRUE, MA=7, y.lab='', colour='re
 }
 
 # Function to extract study area elevation map w/ point locations
-plot_shp_elevation_map <- function(shp, loc_points, country_shp, zoom = 7, buffer_km = 20, stats=FALSE) {
+plot_shp_elevation_map <- function(shp, loc_points, country_shp, zoom = 7, buffer_km = 20, stats=FALSE, new_points=NULL) {
   
   # 1. Convert sf_points to sf sf_points ----
   cities <- st_as_sf(loc_points, coords = c("lon", "lat"), crs = 4326)
@@ -357,6 +357,18 @@ plot_shp_elevation_map <- function(shp, loc_points, country_shp, zoom = 7, buffe
                  size = 3, color = "darkred", fill = "white", fontface = "bold",
                  label.padding = unit(0.15, "lines"), label.r = unit(0.15, "lines"), 
                  label.size = 0,   nudge_y = 0.1)
+  }
+  
+  if (!is.null(new_points)){
+    
+    # Add points and labels
+    main_map <- main_map + 
+      geom_point(data=new_points, aes(x=lon, y=lat), color='black', shape=17, size=2.5) +
+      geom_label(data=new_points, aes(x = lon, y = lat, label=name),
+                 size = 3, color = "black", fill = "white", fontface = "bold",
+                 label.padding = unit(0.15, "lines"), label.r = unit(0.15, "lines"), 
+                 label.size = 0,   nudge_y = -0.1)
+    
   }
   
   # 8. Inset map ----
@@ -494,6 +506,7 @@ base_desc_loc <- replace_exact_matches(base_desc_loc, nm)
 
 
 # TAB: Table of weather averages & frequencies (weat_loc_tab) ####
+
 weat_av <- base_desc_loc[33:39, grepl('Variable|Average', names(base_desc_loc))]
 names(weat_av) <- c('Variable', as.character(location_levels))
 weat_freq <- base_desc_loc[40:nrow(base_desc_loc), grepl('Variable|Frequency', names(base_desc_loc))]
@@ -951,11 +964,22 @@ rownames(map_stat) <- NULL
 map_stat <- map_stat[, c(ncol(map_stat), 1:(ncol(map_stat)-1))]
 rev_nm <- setNames(names(nm), nm)
 names(map_stat)[-1] <- rev_nm[names(map_stat)[-1]]
+map_stat$location[map_stat$location == "ReckongPeo"] <- "Reckong Peo"
 loc_stats <- merge(loc_points, map_stat, by = "location", all.x = TRUE)
+# Filter to exisitng locations
+loc_stats <- loc_stats %>% filter(!is.na(t2m)) %>% filter(location != 'Bilaspur')
+
+
+# New points
+new_points <- data.frame(
+  lon = c(76.92898, 76.27332772176327, 76.76117),
+  lat = c(31.71256, 32.102957165868474, 31.34124),
+  name = c("Mandi", "Kangra", 'Bilaspur')
+)
 
 # Map
 # save_elev(hp, loc_stats, ind)
-(study_area <- plot_shp_elevation_map(hp, loc_stats, ind, stats=FALSE))
+(study_area <- plot_shp_elevation_map(hp, loc_stats, ind, stats=FALSE, new_points=new_points))
 # (study_area <- plot_shp_elevation_map(hp, loc_stats, ind, stats=TRUE))
 
 # Test for spatial autocorrelation ####
@@ -1058,6 +1082,9 @@ ggsave(paste0(path_report, '- figures/desc_cat_age.png'), cat_age, width = w, he
 ggsave(paste0(path_report, '- figures/desc_con_age.png'), con_age, width = w, height = h, dpi = 300)
 ggsave(paste0(path_report, '- figures/desc_cor_matrix.png'), cor_matrix, width = 9, height = h, dpi = 300)
 ggsave(paste0(path_report, '- figures/desc_study_area.png'), study_area, width = 7, height = 7, dpi = 300)
+ggsave(paste0('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/2_DLNM/- Reporting/- figures/desc_study_area.png'), study_area, width = 7, height = 7, dpi = 300)
+
+
 
 # TABLES
 write.csv(base_desc, paste0(path_report, '- tables/desc_base.csv'), row.names = FALSE)

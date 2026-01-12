@@ -2,6 +2,9 @@
 ###  DNLM - Data cleaning and tests                                          ###
 ### ------------------------------------------------------------------------ ### 
 
+# Prep environment
+set.seed(123)
+rm(list = ls())
 setwd(paste0('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/'))
 source('2_DLNM/HISP_DLNM - Dependencies.R')
 
@@ -18,25 +21,16 @@ startdate <- as.Date('2015-01-01')
 enddate <- as.Date('2020-02-14')  
 df <- df_wide[df$date >= startdate & df$date <= enddate,]
 
-# Select variables of interest
-df <- df %>%
-  mutate(
-    doy = yday(date),
-    time = row_number(),
-  ) %>%
-  dplyr::select(
-    location, time, date, year, season, month, week, weekday, doy, closed, holiday, elev, popu,
-    all_of(h_cols),
-    all_of(w_cols)
-  )
+# Remove Sundays for now:
+df <- df %>% filter(weekday != 'Sun')
+
+# Add lags for outcome
+df <- df %>% arrange(date) %>% mutate(patients_lag1 = lag(total_patients, 1),
+                                      patients_lag7 = lag(total_patients, 7))
 
 # Rename rh
 df$rh <- df$rh_mean
 df$rh_mean <- NULL
-df$sh_mean <- NULL
-
-# Create a lag variable for outcome
-
 
 # Add lat lon back into df
 loc_points <- data.frame(
@@ -68,8 +62,6 @@ df$tp <- log(df$tp + 1e-6)
 # Diurnal range
 df$dt <- df$mx2t-df$mn2t
 
-
-
 # WET BULB TEMP
 # https://github.com/open-meteo/open-meteo/discussions/1091
 # library(psychrolib)
@@ -78,7 +70,6 @@ pressure_from_elevation <- function(elevation_m) {
 }
 df$pre <- pressure_from_elevation(df$elev)
 # (wb <- t2m*atan(0.151977*sqrt(rh+8.313659)) + atan(t2m+rh)-atan(rh-1.67631) + 0.00391838*rh^1.5*atan(0.023101*rh) - 4.686035)
-library(psychrolib)
 SetUnitSystem("SI")
 # Safely compute wet bulb temperature
 GetTw_safe <- Vectorize(function(T, RH, P) {
@@ -87,41 +78,18 @@ GetTw_safe <- Vectorize(function(T, RH, P) {
 })
 df$wb <- GetTw_safe(df$t2m, df$rh / 100, df$pre)
 
-
-
-df <- df %>% group_by(location) %>% arrange(date) %>% mutate(patients_lag = lag(total_patients, 1))
-
-
-w_cols <- c(setdiff(w_cols, "rh_mean"), "rh", "dt", "wb")
-sub <- df %>% ungroup() %>% dplyr::select(total_patients, all_of(w_cols[!grepl('_p|IMD', w_cols)]))
-cor_matrix <- cor(sub, use = 'complete.obs', method = 'spearman')
-melted_corr <- reshape2::melt(cor_matrix)
-(cor_matrix <- ggplot(data = melted_corr, aes(x=Var1, y=Var2, fill=value)) +
-  geom_tile() +
-  scale_fill_gradient2(low = 'blue', high = 'red', mid = 'white', midpoint = 0, limit = c(-1,1)) +
-  theme_minimal() +
-  scale_x_discrete(labels = function(x) {
-    # If x is in nm, replace with nm value, else keep original
-    sapply(x, function(lbl) {
-      if (lbl %in% names(nm)) {
-        nm[[lbl]]
-      } else {
-        lbl
-      }})}) +
-  scale_y_discrete(labels = function(x) {
-    # If x is in nm, replace with nm value, else keep original
-    sapply(x, function(lbl) {
-      if (lbl %in% names(nm)) {
-        nm[[lbl]]
-      } else {
-        lbl
-      }})}) +
-  geom_text(aes(label=round(value,2)), color='black', size=4) +
-  labs(title = 'Spearman Correlation Matrix', x='', y='') +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),  # rotate x-axis labels
-    axis.text.y = element_text(angle = 0)                # rotate y-axis labels if needed
-  ))
+# Select variables of interest
+df <- df %>%
+  mutate(
+    doy = yday(date),
+    time = row_number(),
+  ) %>%
+  dplyr::select(
+    location, lat, lon, time, date, year, season, month, week, weekday, doy, closed, holiday, elev, popu,
+    all_of(h_cols),
+    all_of(setdiff(w_cols, "rh_mean")), rh, dt, wb,
+    patients_lag1, patients_lag7
+  )
 
 # max_lag <- 14
 # for (lag in 0:max_lag) {

@@ -45,7 +45,7 @@ load(paste0('2_DLNM/ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide_DLNM.RData'))
 
 # Add lags to df
 df <- df %>% arrange(date) %>% mutate(patients_lag = lag(total_patients, 1)) %>%
-  filter(location=='Nahan')
+  filter(location=='Reckong Peo')
 
 # Set primary outcome
 outcome <- 'total_patients'
