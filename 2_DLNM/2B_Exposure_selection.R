@@ -3,13 +3,12 @@
 ### ------------------------------------------------------------------------ ### 
 
 # Prep environment
-set.seed(123)
 rm(list = ls())
 setwd(paste0('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/'))
 source('2_DLNM/HISP_DLNM - Dependencies.R')
 
 # Load packages
-library(xgboost); library(dplyr); library(data.table); library(caret)
+library(xgboost); library(dplyr); library(data.table); library(caret); library(purrr)
 
 #### FUNCTIONS ####
 
@@ -134,8 +133,7 @@ m <- length(locations)
 
 # 1. Non parameter correlation test ####
 
-w_cols <- c(setdiff(w_cols, "rh_mean"), "rh", "dt", "wb")
-sub <- df %>% ungroup() %>% dplyr::select(total_patients, all_of(w_cols[!grepl('_p|IMD', w_cols)]))
+sub <- df %>% ungroup() %>% dplyr::select(total_patients, all_of(w_cols))
 cor_matrix <- cor(sub, use = 'complete.obs', method = 'spearman')
 melted_corr <- reshape2::melt(cor_matrix)
 (cor_matrix <- ggplot(data = melted_corr, aes(x=Var1, y=Var2, fill=value)) +
@@ -166,22 +164,47 @@ melted_corr <- reshape2::melt(cor_matrix)
       plot.title = ggplot2::element_text(hjust = 0.5)
       ))
 
-# 2. XG Boost feature importance test ####
+# 2A. No Lags: XG Boost feature importance test ####
 
+# # Select parameters
+# var_list <- paste(c(control_cols, w_cols), collapse = "|")
+# 
 # # Get best parameters & results
 # start_time <- Sys.time()
-# var_list <- 'location|season|weekday|time|patients_lag1|patients_lag7|elev|popu|t2m|mn2t|mx2t|wb|dt|tp|rh|pm25|fg10'
 # xg_res <- list()
 # xg_res[['all']] <- xgboost(df, "XGBoost Feature Importance", var_list, params=NULL)
 # for (l in locations){
 #   sub <- df %>% filter(location==l)
-#   xg_res[[l]] <- xgboost(sub, l, var_list, params=NULL) 
+#   xg_res[[l]] <- xgboost(sub, l, var_list, params=NULL)
 # }
 # end_time <- Sys.time()
 # # Print time & save (~35min)
 # print(difftime(end_time, start_time, units = "mins"))
 # save(xg_res, file = paste0(path_project, 'xgboost_params.RData'))
 
+
+# 2B. Lags: XG Boost feature importance test ####
+
+# # Select parameters
+# control_cols <- c('location', 'time', 'season', 'weekday', 'elev', 'popu')
+# lagged_cols <- grep("_lag[1-7]$", names(df), value = TRUE)
+# var_list <- paste(c(control_cols, w_cols, lagged_cols), collapse = "|")
+# 
+# # Get best parameters & results
+# start_time <- Sys.time()
+# xg_res <- list()
+# xg_res[['all']] <- xgboost(df, "XGBoost Feature Importance", var_list, params=NULL)
+# for (l in locations){
+#   sub <- df %>% filter(location==l)
+#   xg_res[[l]] <- xgboost(sub, l, var_list, params=NULL)
+# }
+# end_time <- Sys.time()
+# # Print time & save (~80min)
+# print(difftime(end_time, start_time, units = "mins"))
+# save(xg_res, file = paste0(path_project, 'xgboost_params_lags.RData'))
+# 
+
+# 3A. No Lags: Format results ####
 # Get results
 load('2_DLNM/xgboost_params.RData')
 
@@ -210,39 +233,70 @@ imp_loc_plot <- wrap_plots(imp_loc, ncol=2)
 
 # Assessment table of feature importance consistency 
 imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
+# Assessment table of feature importance consistency 
+imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
 (imp_rank <- imp %>%
-  group_by(subpop) %>%
-  arrange(desc(Gain)) %>%
-  mutate(
-    top5    = row_number() <= 5,
-    bottom5 = row_number() > (n() - 5)
-  ) %>%
-  ungroup() %>%
-  group_by(Feature) %>%
-  summarise(
-    `Top 5 Count`    = sum(top5),
-    `Bottom 5 Count` = sum(bottom5),
-    `Mean Gain`     = mean(Gain),
-    .groups = "drop"
-  ) %>% arrange(`Bottom 5 Count`, desc(`Mean Gain`)) %>% 
-  mutate(Important= `Bottom 5 Count` <= `Top 5 Count`))
+    group_by(subpop) %>%
+    arrange(desc(Gain)) %>%
+    mutate(
+      top    = row_number() <= 7,
+      bottom = row_number() > (n() - 7)
+    ) %>%
+    ungroup() %>%
+    group_by(Feature) %>%
+    summarise(
+      `Top Half`    = sum(top),
+      `Bottom Half` = sum(bottom),
+      `Mean Gain`     = mean(Gain),
+      .groups = "drop"
+    ) %>% 
+    mutate(Important= `Bottom Half` < `Top Half`) %>%
+    arrange(desc(Important), desc(`Mean Gain`))) 
+imp_rank <- replace_exact_matches(imp_rank, nm)
+
+# 3B. Lags: Format results ####
+# Get results
+load('2_DLNM/xgboost_params_lags.RData')
+
+# Assessment table of feature importance consistency 
+imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
+# Assessment table of feature importance consistency 
+imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
+(imp_rank_lag <- imp %>%
+    group_by(subpop) %>%
+    arrange(desc(Gain)) %>%
+    mutate(
+      top    = row_number() <= 20,
+      bottom = row_number() > (n() - 120)
+    ) %>%
+    ungroup() %>%
+    group_by(Feature) %>%
+    summarise(
+      `Top 20`    = sum(top),
+      `Bottom 120` = sum(bottom),
+      `Mean Gain`     = mean(Gain),
+      .groups = "drop"
+    ) %>% 
+    mutate(Important= `Bottom 120` < `Top 20`) %>%
+    filter(Important==TRUE) %>%
+    arrange(desc(Important), desc(`Mean Gain`))) 
+imp_rank_lag <- replace_exact_matches(imp_rank_lag, nm)
 
 #### EXPORT ####
 
-# Figures
-export <- list('SF_corr_plot'=list(p=cor_matrix, w=8, h=6),
-               'SF_xgb_importance'=list(p=imp_plot, w=8, h=6),
-               'SF_xgb_importance_loc'=list(p=imp_loc_plot, w=8, h=10))
-for (name in names(export)){
-  e <- export[[name]]
-  ggsave(paste0(path_ch2, '/IV. Figures/', name, '.png'), e$p, width = e$w, height = e$h, dpi = 300)
-  ggsave(paste0(path_report, '- figures/', name, '.png'), e$p, width = e$w, height = e$h, dpi = 300)
-}
-
-# Table
-write.csv(imp_rank, file = paste0(path_report, '- tables/ST_imp_rank.csv'), row.names = FALSE)
-
-
+# # Figures
+# export <- list('SF_corr_plot'=list(p=cor_matrix, w=8, h=6),
+#                'SF_xgb_importance'=list(p=imp_plot, w=8, h=6),
+#                'SF_xgb_importance_loc'=list(p=imp_loc_plot, w=8, h=10))
+# for (name in names(export)){
+#   e <- export[[name]]
+#   ggsave(paste0(path_ch2, '/IV. Figures/', name, '.png'), e$p, width = e$w, height = e$h, dpi = 300)
+#   ggsave(paste0(path_report, '- figures/', name, '.png'), e$p, width = e$w, height = e$h, dpi = 300)
+# }
+# 
+# # Table
+# write.csv(imp_rank, file = paste0(path_report, '- tables/ST_imp_rank.csv'), row.names = FALSE)
+# write.csv(imp_rank_lag, file = paste0(path_report, '- tables/ST_imp_rank_lags.csv'), row.names = FALSE)
 
 # # Interaction strength ----
 # 

@@ -1,6 +1,7 @@
 ### ------------------------------------------------------------------------ ### 
 ###  DNLM - Multi-city meta-analysis                                         ###
 ### ------------------------------------------------------------------------ ### 
+rm(list=ls())
 
 # LOAD THE PACKAGE
 library(dlnm); library(splines); library(xtable); library(mvmeta); library(MASS);
@@ -83,15 +84,17 @@ main_res <- format_results(output, outcome)
 # city_con_res(meta=output$meta_wb, xlab='Temperature (%)', title='Wet-bulb temperature')
 # city_con_res(meta=output$meta_tp, xlab='Rainfall (%)', title='5-day cummulative precipitation')
 # city_con_res(meta=output$meta_rh, xlab='Relative humidity (%)', title='Relative humidity')
+
 # Overall
 (total_er_overall <- main_res$p_er_overall + plot_annotation(title=replace_exact_matches(outcome, nm)))
+
 (total_lr <- main_res$p_lr + plot_annotation(title=paste0('Lag-response: ', replace_exact_matches(outcome, nm))))
 (total_er <- main_res$p_er + plot_annotation(title=paste0('Exposure-response: ', replace_exact_matches(outcome, nm))))
 
 # Main exposure-response, by city
 (city_wb_er <- get_city_legend(pred='wb', plot=main_res$p_er_wb_city + plot_annotation(title='Exposure-response, by city')))
 (city_tp_er <- get_city_legend(pred='tp', plot=main_res$p_er_tp_city + plot_annotation(title='Exposure-response, by city')))
-(city_rh_er <- get_city_legend(pred='rh', plot=main_res$p_er_rh_city + plot_annotation(title='Exposure-response, by city')))
+# (city_rh_er <- get_city_legend(pred='rh', plot=main_res$p_er_rh_city + plot_annotation(title='Exposure-response, by city')))
 # (city_pm25_er <- get_city_legend(pred='pm25', plot=main_res$p_er_pm25_city + plot_annotation(title='Exposure-response, by city')))
 # (city_fg10_er <- get_city_legend(pred='fg10', plot=main_res$p_er_fg10_city + plot_annotation(title='Exposure-response, by city')))
 

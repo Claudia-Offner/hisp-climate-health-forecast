@@ -3,9 +3,8 @@
 ### ------------------------------------------------------------------------ ### 
 
 # Prep environment
-set.seed(123)
-rm(list = ls())
-setwd(paste0('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/'))
+rm(list = ls()); graphics.off(); gc()
+setwd('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/')
 source('2_DLNM/HISP_DLNM - Dependencies.R')
 
 # Set data path
@@ -13,26 +12,12 @@ setwd(path_data)
 
 #### MAIN CODE ####
 
-load('2_Active_Data/203_comb/ind_5km_BigThaw-HISP-ALL_2015-2023_daily_hosp_wide.Rdata')
-df <- df_wide
+df <- get(load('2_Active_Data/203_comb/ind_5km_BigThaw-HISP-ALL_2015-2023_daily_hosp_wide.Rdata'))
+rm(df_wide)
 
-# Remove COVID years for now:
-startdate <- as.Date('2015-01-01')
-enddate <- as.Date('2020-02-14')  
-df <- df_wide[df$date >= startdate & df$date <= enddate,]
+# 1. Data formatting ####
 
-# Remove Sundays for now:
-df <- df %>% filter(weekday != 'Sun')
-
-# Add lags for outcome
-df <- df %>% arrange(date) %>% mutate(patients_lag1 = lag(total_patients, 1),
-                                      patients_lag7 = lag(total_patients, 7))
-
-# Rename rh
-df$rh <- df$rh_mean
-df$rh_mean <- NULL
-
-# Add lat lon back into df
+# Add lat/lon back into df
 loc_points <- data.frame(
   location = c("Chamba", "Dharamshala", "Solan", "Hamirpur", "Kullu",
                "Reckong Peo", "Kyelang", "Nahan", "Bilaspur", "Mandi",
@@ -44,94 +29,84 @@ loc_points <- data.frame(
           31.539809, 32.571883, 30.564781, 31.341244, 31.712559,
           31.104221, 31.479129)
 )
-
 df <- merge(df, loc_points, by='location')
 
-# Filter out Bilaspur
-df <- df %>% filter(location != 'Bilaspur')
+# Filter out Bilaspur (incomplete series)
+df <- df %>%   filter(!location %in% c("Bilaspur"))
 
-# 7 day rolling sum
-df <- df %>%
-  group_by(location) %>%
-  mutate(tp=rollapply(tp,   width = 7, FUN = sum,  align = "right", fill = NA)) %>%
-  ungroup()
+# Filter out COVID years
+startdate <- as.Date('2015-01-01')
+enddate <- as.Date('2020-02-14')  
+df <- df[df$date >= startdate & df$date <= enddate,]
 
-# Log transform tp
-df$tp <- log(df$tp + 1e-6)
-
-# Diurnal range
-df$dt <- df$mx2t-df$mn2t
-
-# WET BULB TEMP
-# https://github.com/open-meteo/open-meteo/discussions/1091
-# library(psychrolib)
-pressure_from_elevation <- function(elevation_m) {
-  101325 * (1 - 2.25577e-5 * elevation_m) ^ 5.25588
-}
-df$pre <- pressure_from_elevation(df$elev)
-# (wb <- t2m*atan(0.151977*sqrt(rh+8.313659)) + atan(t2m+rh)-atan(rh-1.67631) + 0.00391838*rh^1.5*atan(0.023101*rh) - 4.686035)
-SetUnitSystem("SI")
-# Safely compute wet bulb temperature
-GetTw_safe <- Vectorize(function(T, RH, P) {
-  if (is.na(T) | is.na(RH) | is.na(P)) return(NA)
-  GetTWetBulbFromRelHum(T, RH, P)
-})
-df$wb <- GetTw_safe(df$t2m, df$rh / 100, df$pre)
+# !!! Remove Sundays for now !!!
+# df <- df %>% filter(weekday != 'Sun')
 
 # Select variables of interest
+names(df) <- gsub("rh_mean", "rh", names(df))
+names(df) <- gsub("sh_mean", "sh", names(df))
 df <- df %>%
-  mutate(
-    doy = yday(date),
-    time = row_number(),
-  ) %>%
-  dplyr::select(
-    location, lat, lon, time, date, year, season, month, week, weekday, doy, closed, holiday, elev, popu,
-    all_of(h_cols),
-    all_of(setdiff(w_cols, "rh_mean")), rh, dt, wb,
-    patients_lag1, patients_lag7
-  )
+  group_by(location) %>%
+  arrange(date, .by_group = TRUE) %>% 
+  # Compute time within each location
+  mutate(doy = yday(date), time = row_number()) %>%
+  ungroup() %>%
+  # Select cols of interest
+  dplyr::select(location, lat, lon, time, date, year, season, month, week, 
+                weekday, doy, closed, holiday, elev, popu, all_of(h_cols), 
+                all_of(w_cols))
 
-# max_lag <- 14
-# for (lag in 0:max_lag) {
-#   df[[paste0('t2m_l', lag)]] <- dplyr::lag(df$t2m, lag)
-#   df[[paste0('mn2t_l', lag)]]  <- dplyr::lag(df$mn2t, lag)
-#   df[[paste0('mx2t_l', lag)]]  <- dplyr::lag(df$mx2t, lag)
-#   df[[paste0('tp_l', lag)]]  <- dplyr::lag(df$tp, lag)
-#   df[[paste0('fg10_l', lag)]]  <- dplyr::lag(df$fg10, lag)
-#   df[[paste0('rh_l', lag)]]  <- dplyr::lag(df$rh, lag)
-#   df[[paste0('pm25_l', lag)]] <- dplyr::lag(df$pm25, lag)
-#   df[[paste0('dt_l', lag)]] <- dplyr::lag(df$dt, lag)
-#   df[[paste0('wb_l', lag)]] <- dplyr::lag(df$wb, lag)
-# }
-# 
-# 
+# 2. Data transformations ####
 
-# Elevation filter
-# df <- df %>%
-#   # filter(elev > 1000)
-#   filter(elev < 1000)
+# PRECIPITATION: Create 7-day rolling sum & log transform
+df <- df %>%
+  group_by(location) %>%
+  mutate(tp_roll=rollapply(tp,   width = 7, FUN = sum,  align = "right", fill = NA)) %>%
+  ungroup()
+df$tp_roll_log <- log(df$tp_roll+10)
 
-# Seasonal filter
-# df <- df %>%
-#   filter(season %in% c('Winter (Jan-Feb)', 'Pre-Monsoon (Mar-May)'))
-#   filter(season %in% c('Monsoon (Jun-Sep)', 'Post-Monsoon (Oct-Dec)'))
+# Check
+p1 <- ggplot(df, aes(x = tp)) + 
+  geom_histogram(binwidth = 25, fill = "grey", color = "black") +
+  labs(title = "Raw") + 
+  theme_minimal()
 
-# # Categories for exp
-# features <- names(df)[grepl('t2m|tp|rh|pm25|fg10', names(df))]
-# df <- df %>%
-#   mutate(across(
-#     all_of(features),
-#     ~ cut(.x, breaks = 20, labels = FALSE),  # divide into 20 bins
-#     .names = "{.col}_cat"                     # new column names
-#   ))
+p2 <- ggplot(df, aes(x = tp_roll)) +
+  geom_histogram(binwidth = 75, fill = "grey", color = "black") +
+  labs(title = "Rolling (7-day)") + 
+  theme_minimal()
 
-# # Test 3-way interactions for all exposures. 
-# # NB: wind and humidity are not considered key exposures but potential exacerbaters
-# m0 <- lm(total_patients ~ t2m + tp + fg10 + rh + pm25, data = df)
-# m1 <- lm(total_patients ~ (t2m + tp + pm25 + fg10 + rh)^3, data = df)
-# anova(m0, m1)
-# summary(m0)
+p3 <- ggplot(df, aes(x = tp_roll_log)) +
+  geom_histogram(binwidth = 1, fill = "grey", color = "black") +
+  labs(title = "Rolling + 10 with log") + 
+  theme_minimal()
 
-# Save as Rdata file
+tp_dist <- wrap_plots(list(p1, p2, p3), nrow = 1) + plot_annotation(title = "Distribution of precipitation Variables")
+
+df$tp <- df$tp_roll_log
+df$tp_roll <- NULL
+df$tp_roll_log <- NULL
+
+# LAGS: Add lags for outcome & w_col
+lag_cols <- c('total_patients', w_cols)
+for (col in lag_cols) {
+  for (i in 1:30) {
+    df <- df %>%
+      group_by(location) %>%
+      mutate("{col}_lag{i}" := lag(.data[[col]], i)) %>%
+      ungroup()
+  }
+}
+
+# Forward-fill ONLY the lagged variables
+lagged_vars <- grep("_lag\\d+$", names(df), value = TRUE)
+
+df <- df %>%
+  group_by(location) %>%
+  fill(all_of(lagged_vars), .direction = "down") %>%
+  ungroup()
+
+# EXPORT ####
+ggsave(paste0(path_report, '- figures/desc_tp_dist.png'), tp_dist, width=8, height=6, dpi = 300, bg='white')
 save(df, file = paste0(path_project, 'ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide_DLNM.RData'))
 save(df, file = paste0(path_report, 'ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide_DLNM.RData'))
