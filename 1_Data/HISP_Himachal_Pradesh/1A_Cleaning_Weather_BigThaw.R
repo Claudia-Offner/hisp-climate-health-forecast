@@ -2,16 +2,20 @@
 ### HP Weather cleaning - BigThaw Data                                       ###
 ### ------------------------------------------------------------------------ ### 
 
-setwd(here())
-source('1_Data/HISP_Himachal_Pradesh/HISP_Cleaning - Dependencies.R')
+# Prep environment
+rm(list = ls()); graphics.off(); gc()
+setwd('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/')
+
+
+####  DEPENDENCIES  #####
 
 # Set data paths
+source('1_Data/HISP_Himachal_Pradesh/HISP_Cleaning - Dependencies.R')
 setwd(path_data)
 pm25_import <- 'ind_adm4_LongPMInd_PM25_2000-2022'
+elev_import <- 'ind_misc_cont_adm4_elev'
 weat_import <- 'ind_5km_JASMIN-BigThaw_2015-2023_ALL'
 weat_export <- 'ind_5km_JASMIN-BigThaw_2015-2023_anom'
-
-####  FUNCTIONS  #####
 
 ### Function to calculate SD anomalies dynamically with col names
 calculate_anomalies <- function(df, variables, window_size = 15, days = 366) {
@@ -88,6 +92,7 @@ calculate_anomalies <- function(df, variables, window_size = 15, days = 366) {
 # Load data
 df_w <- read.csv(paste0('1_Original_Data/118_BigThaw/', weat_import, '.csv'))
 df_p <- get(load(paste0('2_Active_Data/204_misc/', pm25_import, '.RData')))
+df_e <- get(load(paste0('2_Active_Data/204_misc/', elev_import, '.RData')))
 
 # Remove duplicates
 df_w <- df_w %>% distinct()
@@ -172,7 +177,8 @@ df_w <- temp_all %>%
   full_join(precip, by = c('date', 'location')) %>%
   full_join(wind, by = c('date', 'location')) %>%
   full_join(humid, by = c('date', 'location')) %>%
-  full_join(df_p, by = c('date', 'location'))
+  full_join(df_p, by = c('date', 'location')) %>%
+  full_join(df_e, by='location')
   
 # Set daily time parameters
 # NB: Seasons were set based on HP crop calendar, pg. 10 
@@ -192,6 +198,21 @@ df_w <- df_w %>%
     )) %>%
   dplyr::select(location, date, year, season, month, week, weekday, day, everything())
 
+# 2. Calculate additional variables from OG data ####
+
+# WET BULB TEMPERATURE (psychrolib, SI units)
+# https://github.com/open-meteo/open-meteo/discussions/1091
+
+SetUnitSystem("SI")
+df_w <- df_w %>% mutate(dt  = mx2t - mn2t, # Diurnal range
+                        pre = 101325 * (1 - 2.25577e-5 * elev)^5.25588 ) # Pressure
+# Safely compute wet bulb temperature
+GetTw_safe <- Vectorize(function(T, RH, P) {
+  if (is.na(T) | is.na(RH) | is.na(P)) return(NA)
+  GetTWetBulbFromRelHum(T, RH, P)
+})
+df_w$wb <- GetTw_safe(df_w$t2m, df_w$rh_mean / 100, df_w$pre)
+
 # *** Quick extreme temperature checks *** ####
 # summary(df_w$t2m)
 # summary(df_w$mx2t)
@@ -201,7 +222,7 @@ df_w <- df_w %>%
 # summary(filtered_df$mx2t)
 # summary(filtered_df$mn2t)
 
-# 2. Set thresholds provided by IMD ####
+# 3. Set thresholds provided by IMD ####
 # Source: https://mausam.imd.gov.in/imd_latest/contents/pdf/forecasting_sop.pdf
 
 # TEMPERATURE 
@@ -298,7 +319,7 @@ df_w <- df_w %>%
     )
 
 
-# 3. Calculate climatology anomalies ####
+# 4. Calculate climatology anomalies ####
 
 result <- data.frame()
 for (l in location_levels){
@@ -317,12 +338,12 @@ df_w <- result
 # dplyr::filtered_result <- result %>% dplyr::filter(location == 'Chamba')
 # table(dplyr::filtered_result$year, dplyr::filtered_result$t2m_p90)
 
-# 4. Create lag variables ####
+# 5. Create lag variables ####
 
-# Add lags 1-21 for all w_anom_cols (remove the date with NA for certain variables, across locations)
+# Add lags 1-14 for all w_anom_cols (remove the date with NA for certain variables, across locations)
 w_anom_cols <- grep('IMD|_p', names(df_w), value = TRUE)
 df_weat <- df_w %>% group_by(location) %>% arrange(date) %>% ungroup()
-for (i in 1:21) {
+for (i in 1:14) {
   df_weat <- df_weat %>%
     group_by(location) %>%
     arrange(date) %>%

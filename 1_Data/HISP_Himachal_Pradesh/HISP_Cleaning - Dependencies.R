@@ -3,8 +3,10 @@
 ### ------------------------------------------------------------------------ ### 
 # NB COLOURS: https://r-charts.com/colors/
 
-# Turn off scientific notation
+# Turn off scientific notation & set seed
 options(scipen=999)
+set.seed(123)
+
 
 #### PATHS ####
 user <- 'claer14'
@@ -22,8 +24,6 @@ packages <- c('tidyverse', 'terra', 'duckdb', 'tidyselect', 'sf',
               'patchwork', 'RColorBrewer', 'reshape2', 'zoo', 'ggnewscale',
               'skimr', 'DT', 'forecast', 'purrr', 'scales', 'xts', 'ggthemes',
               'elevatr', 'rnaturalearth', 'rnaturalearthdata', 'raster', 'dplyr')
-
-
 
 # Install if needed
 installed <- packages %in% rownames(installed.packages())
@@ -54,7 +54,7 @@ replace_exact_matches <- function(df, dict) {
 mypalette <- c('#1D98EB','#D74B3C','#A6B727','#FEC306','#EC800A','#E569BF','#8968CD','#52C5B0FF', '#910030FF', '#127804FF',
                '#A1C8F2','#F1A6A6','#C2D77D','#F6D974','#F9B34D','#F1C2D1','#B8A8D9','#52C5B080', '#91003080', '#12780480') 
 
-w_cols <- c('t2m', 'mn2t','mx2t','tp','fg10', 'rh_mean', 'sh_mean', 'pm25')
+w_cols <- c('t2m', 'mn2t','mx2t', 'wb', 'dt','tp','fg10', 'rh_mean', 'sh_mean', 'pm25')
 h_cols <- c('total_patients',
             'F','M','under_5','age5_14','age15_24','age25_64','over_65',
             'general', 'emergency', 'ophthalmology', 'ent', 'paediatrics',
@@ -88,7 +88,7 @@ nm <- c(season='Season', closed='Closed', holiday='Holiday', total_patients='Tot
         antiretroviral='HIV Treatment', substance_counselling='Substance counselling',
         physiotherapy='Physiotherapy', 
         # CONTINUOUS WEATHER
-        t2m='Mean temp. (\u00B0C)', mx2t='Max temp. (\u00B0C)', mn2t='Min temp. (\u00B0C)',
+        t2m='Mean temp. (\u00B0C)', mx2t='Max temp. (\u00B0C)', mn2t='Min temp. (\u00B0C)', wb='Wet-bulb temp. (\u00B0C)', dt='Diurnal Range (\u00B0C)',
         rh_mean='Relative humidity (%)', tp='Rainfall (mm)', fg10='Windspeed (km/hr)', pm25='Air pollution (µg/m³)',
         # IMD DEFINITIONS
         mx2t_IMD='IMD: Max temp. >30\u00B0C', mn2t_IMD='IMD: Min temp. <0\u00B0C', 

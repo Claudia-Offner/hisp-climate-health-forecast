@@ -2,13 +2,15 @@
 ### HISP Exploratory Data Analysis                                           ###
 ### ------------------------------------------------------------------------ ### 
 
-setwd(here())
+# Prep environment
+rm(list = ls()); graphics.off(); gc()
+setwd('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts')
+
+
+####  DEPENDENCIES ####
+
 source('1_Data/HISP_Himachal_Pradesh/HISP_Cleaning - Dependencies.R')
-
-# Set data path
 setwd(path_data)
-
-#### FUNCTIONS ####
 
 # Function to create a histogram for a column
 create_histogram <- function(df_all, column_name, stat=NULL, color=mypalette[1]) {
@@ -250,7 +252,7 @@ plot_moving_avg <- function(variable, all.cases=TRUE, MA=7, y.lab='', colour='re
   
   # Plot Figure 1
   p1 <- p1 +
-    geom_line(aes(y = Centered.7.day.MA, color = 'Centered 7 day MA'), linewidth = 1) +
+    geom_line(aes(y = Centered.7.day.MA, color = 'Centered 7 day MA'), linewidth = 0.5) +
     scale_color_manual(name = '', values = c('Real data' = 'black', 'Centered 7 day MA' = colour)) +
     scale_y_continuous(n.breaks = 6) +
     scale_x_date(labels = scales::date_format('%b %y'), 
@@ -262,14 +264,16 @@ plot_moving_avg <- function(variable, all.cases=TRUE, MA=7, y.lab='', colour='re
     ) +
     theme_economist_white(gray_bg = FALSE, base_size = 12) +
     theme(
-      legend.position = 'none',
-      axis.text.x = element_text(angle = 45, vjust = 0.75),
-      axis.title = element_text(size = rel(1), margin = margin(t = 10, r = 10)),
-      axis.text = element_text(size = rel(1)),
-      plot.title = element_text(hjust = 0.5, face = 'bold', margin = margin(b = 5)),
-      plot.caption = element_text(size = rel(1)),
-      text = element_text(size = rel(1.1))
-      ) +
+      legend.position = "none",
+      plot.title = element_text(size = 10, hjust = 0.5, face = "bold", margin = margin(b = 5)),
+      axis.text  = element_text(size = 8),
+      axis.title = element_text(size = 8),
+      axis.text.x  = element_text(angle = 45, vjust =1, hjust=1, margin = margin(t = 2)),
+      axis.title.x = element_text(margin = margin(t = 1)),
+      axis.text.y  = element_text(margin = margin(r = 2)),
+      axis.title.y = element_text(margin = margin(r = 3)),
+      plot.margin = margin(5, 5, 5, 5, unit = "pt")
+    ) +
     scale_linetype_manual(values = rep('solid', 3)) +
     scale_size_manual(values = rep(1, 3))
   
@@ -471,63 +475,62 @@ names(check)
 
 # Expand cols of interest
 h_cols <- c('closed', 'total_patients', 'location', h_cols[-1])
-w_cols <- c(w_cols[-7],
+w_cols <- c(w_cols[!grepl("^sh_", w_cols)],
             'mx2t_IMD_b', 'mn2t_IMD_b', 'tp_IMD_b', 'fg10_IMD_b', 
             'rh_low_IMD_b', 'rh_hig_IMD_b', 'pm25_IMD_b',
             'mx2t_p90', 'mn2t_p10', 'tp_p90', 'fg10_p90', 
             'rh_mean_p10', 'rh_mean_p90', 'pm25_p90')
-
 location_levels <- unique(df_wide$location)
 
 # GENERAL CHARACTERISTICS ####
 
-# TAB: Base statistics (base_desc, base_desc_loc, base_weat_loc) ####
+# TAB: Base statistics (base, base_loc) ####
 
 # OVERALL
-base_desc <- get_desc(df_wide, h_cols, w_cols)
-base_desc <- replace_exact_matches(base_desc, nm)
+base <- get_desc(df_wide, h_cols, w_cols)
+base <- replace_exact_matches(base, nm)
 
 # SITE SPECIFIC
 locations <- as.character(location_levels)
-base_desc_loc <- NULL
+base_loc <- NULL
 
 for (l in locations) {
   sub <- df_wide %>% dplyr::filter(location == l)
   res <- get_desc(sub, h_cols, w_cols)
   names(res)[-1] <- paste0(names(res)[-1], ' (', l, ')')
   
-  if (is.null(base_desc_loc)) {
-    base_desc_loc <- res
+  if (is.null(base_loc)) {
+    base_loc <- res
   } else {
-    base_desc_loc <- cbind(base_desc_loc, res[-1])  # drop first column if it's repeated
+    base_loc <- cbind(base_loc, res[-1])  # drop first column if it's repeated
   }
 }
-base_desc_loc <- replace_exact_matches(base_desc_loc, nm)
+base_loc <- replace_exact_matches(base_loc, nm)
 
 
 # TAB: Table of weather averages & frequencies (weat_loc_tab) ####
 
-weat_av <- base_desc_loc[33:39, grepl('Variable|Average', names(base_desc_loc))]
+weat_av <- base_loc[33:39, grepl('Variable|Average', names(base_loc))]
 names(weat_av) <- c('Variable', as.character(location_levels))
-weat_freq <- base_desc_loc[40:nrow(base_desc_loc), grepl('Variable|Frequency', names(base_desc_loc))]
+weat_freq <- base_loc[40:nrow(base_loc), grepl('Variable|Frequency', names(base_loc))]
 names(weat_freq) <- c('Variable', as.character(location_levels))
 weat_loc_tab <- rbind(weat_av, weat_freq)
 
 # TAB: Table of population averages & frequencies (pop_loc_tab) ####
-pop_av <- base_desc_loc[1:12, grepl('Variable|Average', names(base_desc_loc))]
+pop_av <- base_loc[1:12, grepl('Variable|Average', names(base_loc))]
 names(pop_av) <- c('Variable', as.character(location_levels))
 pop_av$Variable <- paste0(pop_av$Variable, ' (Average)')
-pop_freq <- base_desc_loc[1:12, grepl('Variable|Frequency', names(base_desc_loc))]
+pop_freq <- base_loc[1:12, grepl('Variable|Frequency', names(base_loc))]
 names(pop_freq) <- c('Variable', as.character(location_levels))
 pop_av$Variable <- paste0(pop_av$Variable, ' (Frequency)')
 pop_loc_tab <- rbind(pop_freq, pop_av)
 
 # TAB: Table of population averages & frequencies (ward_loc_tab) ####
-ward_av <- base_desc_loc[13:31, grepl('Variable|Average', names(base_desc_loc))]
+ward_av <- base_loc[13:31, grepl('Variable|Average', names(base_loc))]
 names(ward_av) <- c('Variable', as.character(location_levels))
 ward_av$Variable <- paste0(ward_av$Variable, ' (Average)')
 rownames(ward_av) <- NULL
-ward_freq <- base_desc_loc[14:31, grepl('Variable|Frequency', names(base_desc_loc))]
+ward_freq <- base_loc[14:31, grepl('Variable|Frequency', names(base_loc))]
 names(ward_freq) <- c('Variable', as.character(location_levels))
 ward_freq$Variable <- paste0(ward_freq$Variable, ' (Frequency)')
 rownames(ward_freq) <- NULL
@@ -555,10 +558,8 @@ hist_tota <- create_histogram(sub1, 'total_patients', skm1, color=mypalette[2])
   ))
 
 
-
 # Total patients only (by location)
 sub2 <- df_wide %>% dplyr::select(total_patients, all_of(w_cols[!grepl('_p|IMD', w_cols)]))
-
 plots_by_location <- lapply(location_levels, function(loc) {
   # Subset data for this location
   sub_loc <- subset(sub2, location == loc)
@@ -585,9 +586,9 @@ plots_by_location <- lapply(location_levels, function(loc) {
 (hist_tota_loc <- wrap_plots(plots_by_location, ncol = 3))
 
 # Weather only
-cols_to_plot <- colnames(sub1[, -c(1, 2)])
+cols_to_plot <- colnames(sub1[, -c(1)])
 plots <- lapply(cols_to_plot, function(col) create_histogram(sub1, col, skm1))
-(hist_weat <- wrap_plots(plots, nrow=2))
+(hist_weat <- wrap_plots(plots, ncol=3))
 
 # # Density curves by season
 # labels_map <- c('Winter (Jan-Feb)' = 'Jan-Feb',
@@ -662,9 +663,15 @@ plots_by_location <- lapply(location_levels, function(loc) {
     }) +
     theme_minimal() +   
     theme(
-      legend.position = 'none', 
-      axis.text.x = element_text(angle = 45, hjust = 1),
-      plot.title = element_text(hjust = 0.5)
+      legend.position = "none",
+      plot.title = element_text(size = 10, hjust = 0.5, face = "bold", margin = margin(b = 5)),
+      axis.text  = element_text(size = 8),
+      axis.title = element_text(size = 8),
+      axis.text.x  = element_text(angle = 45, vjust=1, hjust=1, margin = margin(t = -5)),
+      axis.title.x = element_text(margin = margin(t = 1)),
+      axis.text.y  = element_text(margin = margin(r = -2)),
+      axis.title.y = element_text(margin = margin(r = 3)),
+      plot.margin = margin(1, 1, 1, 1, unit = "pt")
     )
   
   return(p)
@@ -790,9 +797,9 @@ for (v in w_vars){
   names(plots_by_location) <- location_levels
   plots_loc[[v]] <- plots_by_location
 }
-(ts_weat <- wrap_plots(plots, ncol = 4) + 
+ts_weat <- wrap_plots(plots, ncol = 3) + 
     plot_annotation(title = 'Weather time series, across all locations', theme = theme(
-      plot.title = element_text(hjust = 0.5, face = "bold", size = 16))))
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16)))
 
 # # CHECK ALL BY LOCATION
 # ts_weat_loc <- list()
@@ -821,7 +828,9 @@ for (v in w_vars){
         plot.title = element_text(hjust = 0.5, face = "bold", size = 16))))
   ts_loc_weat[[v]] <- ts
 }
-ts_loc_weat
+ts_tp <- ts_loc_weat$tp
+ts_mx2t<- ts_loc_weat$mx2t
+ts_fg10 <- ts_loc_weat$fg10
 
 # FIG: 2-month moving average of  POPULATION HEALTH across locations (ts_heal_pop, ts_pop_loc, ts_pop_loc_heal) #####
 clean <- df_wide[!is.na(df_wide$total_patients), ]
@@ -850,9 +859,9 @@ for (v in pop_vars){
   names(plots_by_location) <- location_levels
   plots_loc[[v]] <- plots_by_location
 }
-(ts_heal_pop <- wrap_plots(plots, ncol = 4) + 
+ts_heal_pop <- wrap_plots(plots, ncol = 4) + 
   plot_annotation(title = 'Population hospital time series, across all locations', theme = theme(
-    plot.title = element_text(hjust = 0.5, face = "bold", size = 16))))
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16)))
 
 # CHECK ALL BY LOCATION
 # ts_pop_loc <- list()
@@ -881,15 +890,10 @@ for (v in pop_vars){
         plot.title = element_text(hjust = 0.5, face = "bold", size = 16))))
   ts_pop_loc_heal[[v]] <- ts
 }
-ts_pop_loc_heal
-
 
 
 # FIG: 2-month moving average of  WARD HEALTH across locations (ts_heal_ward, ts_ward_loc, ts_ward_loc_heal) #####
 ward_var <- vars[(which(vars == "general")):which(vars == "dermatology")]
-
-# Identify variables of interest
-pop_vars <- vars[1:(which(vars == "over_65"))]
 
 plots <- list()
 plots_loc <- list()
@@ -912,7 +916,7 @@ for (v in ward_var){
   plots_loc[[v]] <- plots_by_location
 }
 (ts_heal_ward <- wrap_plots(plots, ncol = 4) + 
-    plot_annotation(title = 'Population hospital time series, across all locations', theme = theme(
+    plot_annotation(title = 'Ward hospital time series, across all locations', theme = theme(
       plot.title = element_text(hjust = 0.5, face = "bold", size = 16))))
 
 # # CHECK ALL BY LOCATION
@@ -942,7 +946,9 @@ for (v in ward_var){
         plot.title = element_text(hjust = 0.5, face = "bold", size = 16))))
   ts_ward_loc_heal[[v]] <- ts
 }
-ts_ward_loc_heal
+
+# Get emergency plot
+ts_emergency <- ts_ward_loc_heal$emergency
 
 
 
@@ -954,7 +960,7 @@ ts_ward_loc_heal
 # FIG: Spatial distribution of weather variables (study_area) ####
 
 # !! Merge stats !!
-map_stat <- base_desc_loc[33:39, !grepl('Frequency', names(base_desc_loc))]
+map_stat <- base_loc[33:40, !grepl('Frequency', names(base_loc))]
 rownames(map_stat) <- map_stat[,1]
 map_stat <- map_stat[, !grepl("Range", names(map_stat))]
 names(map_stat) <- gsub("Average|\\(|\\)|\\ ", "", names(map_stat))
@@ -1068,30 +1074,37 @@ row.names(CLIM_interaction_tests) <- NULL
 
 
 ##### EXPORT ####
+
+# Figures
 w <- 6
 h <- 6
+figs <- list('hist_weat'=list(w=12, h=8), 
+             'hist_tota'=list(w=w, h=h), 
+             'hist_tota_loc'=list(w=12, h=8),
+             'cat_ward'=list(w=8, h=h),
+             'cat_ward_loc'=list(w=12, h=8),
+             # 'cat_sex'=list(w=w, h=h),
+             # 'cat_age'=list(w=w, h=h),
+             'ts_weat'=list(w=8, h=h),
+             'ts_tp'=list(w=8, h=h),
+             'ts_mx2t'=list(w=8, h=h),
+             'ts_fg10'=list(w=8, h=h),
+             # 'ts_heal_pop'=list(w=12, h=8),
+             'ts_heal_ward'=list(w=8, h=h),
+             'ts_emergency'=list(w=8, h=h),
+             'cor_matrix'=list( w=9, h=h),
+             'study_area'=list(w=7, h=7))
 
-# FIGURES
-ggsave(paste0(path_report, '- figures/desc_hist_weat.png'), hist_weat, width = 12, height = h, dpi = 300)
-ggsave(paste0(path_report, '- figures/desc_hist_tota.png'), hist_tota, width = w, height = h, dpi = 300)
-ggsave(paste0(path_report, '- figures/desc_hist_tota_loc.png'), hist_tota_loc, width = 12, height = h, dpi = 300)
-ggsave(paste0(path_report, '- figures/desc_cat_ward.png'), cat_ward, width = 8, height = h, dpi = 300)
-ggsave(paste0(path_report, '- figures/desc_cat_ward_loc.png'), cat_ward_loc, width = 12, height = h, dpi = 300)
-ggsave(paste0(path_report, '- figures/desc_cat_sex.png'), cat_sex, width = w, height = h, dpi = 300)
-ggsave(paste0(path_report, '- figures/desc_cat_age.png'), cat_age, width = w, height = h, dpi = 300)
-ggsave(paste0(path_report, '- figures/desc_con_age.png'), con_age, width = w, height = h, dpi = 300)
-ggsave(paste0(path_report, '- figures/desc_cor_matrix.png'), cor_matrix, width = 9, height = h, dpi = 300)
-ggsave(paste0(path_report, '- figures/desc_study_area.png'), study_area, width = 7, height = 7, dpi = 300)
-ggsave(paste0('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/2_DLNM/- Reporting/- figures/desc_study_area.png'), study_area, width = 7, height = 7, dpi = 300)
-
-
+for (f in names(figs)){
+  ggsave(paste0(path_report, '- figures/desc_', f, '.png'), get(f), width = figs[[f]]$w, height = figs[[f]]$h, dpi = 300, bg='white')
+  ggsave(paste0(path_git, '2_DLNM/- Reporting/- figures/desc_', f, '.png'), get(f), width = figs[[f]]$w, height = figs[[f]]$h, dpi = 300, bg='white')
+}
 
 # TABLES
-write.csv(base_desc, paste0(path_report, '- tables/desc_base.csv'), row.names = FALSE)
-write.csv(base_weat_loc, paste0(path_report, '- tables/desc_base_weat_loc.csv'), row.names = FALSE)
-write.csv(IMD_anova, paste0(path_report, '- tables/desc_IMD_anova.csv'), row.names = FALSE)
-write.csv(IMD_interaction_tests, paste0(path_report, '- tables/desc_IMD_interaction_tests.csv'), row.names = FALSE)
-write.csv(CLIM_anova, paste0(path_report, '- tables/desc_CLIM_anova.csv'), row.names = FALSE)
-write.csv(CLIM_interaction_tests, paste0(path_report, '- tables/desc_CLIM_interaction_tests.csv'), row.names = FALSE)
-
-
+tabs <- c('base', 'weat_loc_tab', 'IMD_anova', 'IMD_interaction_tests', 'CLIM_anova', 'CLIM_interaction_tests')
+for (t in tabs){
+  
+  write.csv(get(t), paste0(path_report, '- tables/desc_', t, '.csv'), row.names = FALSE)
+  write.csv(get(t), paste0(path_git, '2_DLNM/- Reporting/- tables/desc_', t, '.csv'), row.names = FALSE)
+  
+}

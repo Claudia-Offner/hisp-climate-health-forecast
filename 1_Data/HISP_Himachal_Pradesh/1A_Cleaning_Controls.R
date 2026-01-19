@@ -2,13 +2,14 @@
 ### HP Hospital cleaning - Controls                                          ###
 ### ------------------------------------------------------------------------ ### 
 
-setwd(paste0('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/'))
+# Prep environment
+rm(list = ls()); graphics.off(); gc()
+setwd('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/')
+
+
+#### DEPENDENCIES ####
 source('1_Data/HISP_Himachal_Pradesh/HISP_Cleaning - Dependencies.R')
-
-# Set data path
 setwd(path_data)
-
-#### FUNCTIONS ####
 
 # Function to extract and save elevtaion raster according to bounding area
 save_elev <- function(shp, loc_points, zoom = 7, buffer_km = 20){
@@ -28,7 +29,6 @@ save_elev <- function(shp, loc_points, zoom = 7, buffer_km = 20){
   writeRaster(elev_raster, "2_Active_Data/205_envi/ind_envi_s3_AWSOpenData_elevation_raster.tif", overwrite = TRUE)
   
 }
-
 
 #### MAIN CODE ####
 
@@ -115,8 +115,8 @@ pm25_res <- out %>%
 elev_raster <- raster("2_Active_Data/204_misc/ind_envi_s3_AWSOpenData_elevation_raster.tif")
 
 # Extract
-loc_points$elevation <- raster::extract(elev_raster, loc_points_sf)
-elev_res <- dplyr::select(loc_points, location, elevation)
+loc_points$elev <- raster::extract(elev_raster, loc_points_sf)
+elev_res <- dplyr::select(loc_points, location, elev)
 
 # 3. Population data (WorldPop Counts via worldpop.org) ####
 
@@ -163,6 +163,7 @@ pop_res <- dplyr::select(pop_res, location, year, population_density)
 
 #### EXPORT ####
 
-save(elev_res, pop_res, file = '2_Active_Data/204_misc/ind_misc_cont_adm4_pop_elev_2000-2023.RData')
 save(pm25_res, file = '2_Active_Data/204_misc/ind_adm4_LongPMInd_PM25_2000-2022.RData')
+save(elev_res, file = '2_Active_Data/204_misc/ind_misc_cont_adm4_elev.RData')
+save(pop_res, file = '2_Active_Data/204_misc/ind_misc_cont_adm4_pop_2000-2023.RData')
 

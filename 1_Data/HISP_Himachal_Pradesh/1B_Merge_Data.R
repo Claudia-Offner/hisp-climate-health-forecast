@@ -2,33 +2,32 @@
 ### HISP weather and hospital data merge                                     ###
 ### ------------------------------------------------------------------------ ### 
 
-library(here)
-setwd(here())
+# Prep environment
+rm(list = ls()); graphics.off(); gc()
+setwd('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/')
+
+
+####  DEPENDENCIES  #####
 source('1_Data/HISP_Himachal_Pradesh/HISP_Cleaning - Dependencies.R')
 
 # Set data path
 setwd(path_data)
 weat_import <- 'ind_5km_JASMIN-BigThaw_2015-2023_anom'
 heal_import <- 'ind_adm4_HISP-HP_2015-2023_patient_visits_ALL_clean'
-cont_import <- 'ind_misc_cont_adm4_pop_elev_2000-2023'
+pop_import <- 'ind_misc_cont_adm4_pop_2000-2023'
 file_export <- 'ind_5km_BigThaw-HISP-ALL_2015-2023_daily_hosp'
-
-####  FUNCTIONS  #####
 
 ####  MAIN CODE ####
 
 load(paste0('2_Active_Data/202_weat/', weat_import, '.RData'))
 load(paste0('2_Active_Data/201_heal/', heal_import, '.RData'))
-load(paste0('2_Active_Data/204_misc/', cont_import, '.RData'))
+load(paste0('2_Active_Data/204_misc/', pop_import, '.RData'))
 
-# Add control information to weat
-
+# Add population information to weat
 df_weat <- df_weat %>%
-  left_join(elev_res, by='location') %>%
   left_join(pop_res, b=c('location', 'year')) %>%
   arrange(date, location) %>%
-  rename(popu=population_density, 
-         elev=elevation) %>%
+  rename(popu=population_density) %>%
   dplyr::select(location, date, year, season, month, week, 
          weekday, day, elev, popu, everything())
 
