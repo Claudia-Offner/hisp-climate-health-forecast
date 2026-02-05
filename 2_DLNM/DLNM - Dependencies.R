@@ -1,5 +1,5 @@
 ### ------------------------------------------------------------------------ ### 
-### HISP DLNM: Dependencies
+### DLNM: Dependencies
 ### ------------------------------------------------------------------------ ### 
 # NB COLOURS: https://r-charts.com/colors/
 
@@ -11,28 +11,15 @@ set.seed(123)
 user <- 'claer14'
 ### Project
 path_data <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
-path_ch2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 2 - Causal Inference/')
 ### Git
 path_git <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
 path_project <- paste0(path_git, '2_DLNM/')
-path_report <- paste0(path_project, '- Reporting/')
+path_report <- paste0(path_git, '0_Reporting/')
 
 #### PACKAGES ####
 
-# List packages
-packages <- c('dplyr', 'tidyr', 'lubridate', 'zoo', 'dlnm', 'splines', 
-              'ggplot2', 'patchwork', 'psychrolib')
-
-# library(MASS); library(ggfortify); library(gridExtra)
-
-# Install if needed
-installed <- packages %in% rownames(installed.packages())
-if(any(!installed)) {
-  install.packages(packages[!installed])
-}
-
-# Load packages
-lapply(packages, library, character.only=TRUE)
+library(dplyr); library(tidyr); library(lubridate); library(zoo); library(dlnm);
+library(splines); library(ggplot2); library(patchwork); library(psychrolib);
 
 #### FUNCTIONS ####
 
@@ -906,30 +893,30 @@ city_lag_res <- function(city='ALL', meta, col, xlab=NULL, quant_v=NULL, title=N
 
 # Function to extract and plot overall & city specific 2D contour plots
 city_con_res <- function(meta, xlab=NULL, title=NULL, reference='50%'){
-  
+
    make_dlnm_plot <- function(df, xlab="", title="",
                              ncol=300,   # resolution of color ramp
                              nbreaks=15, # number of breaks for contour lines / ticks
                              contour_size=0.35) {
-    
+
     # Colour palette
     pal <- colorRampPalette(c('#1D98EB', 'white', '#D74B3C'))(ncol)
-    
+
     # Breaks for contour lines
     brks <- pretty(range(df$z, na.rm=TRUE), n=nbreaks)
-    
+
     # Base ggplot
     p <- ggplot(df, aes(x=x, y=y, fill=z)) +
-      
+
       # Raster background
       geom_raster(interpolate=TRUE) +
-      
+
       # Contour lines coloured by same scale
       geom_contour(aes(z=z, colour=..level..),
                    breaks=brks,
                    size=contour_size,
                    show.legend=FALSE) +
-      
+
       # Fill gradient + legend
       scale_fill_gradientn(
         colours=pal,
@@ -944,7 +931,7 @@ city_con_res <- function(meta, xlab=NULL, title=NULL, reference='50%'){
           ticks.colour="black"
         )
       ) +
-      
+
       # Contour lines use same palette
       scale_colour_gradientn(
         colours=pal,
@@ -952,22 +939,22 @@ city_con_res <- function(meta, xlab=NULL, title=NULL, reference='50%'){
         breaks =brks,
         guide="none"
       ) +
-      
+
       # Optional light band-outline
       geom_contour(aes(z=z), breaks=brks, colour="white", size=0.7, alpha=0.6) +
-      
+
       # Axis breaks dynamically
       scale_x_continuous(breaks=pretty(df$x, n=6)) +
       scale_y_continuous(breaks=pretty(df$y, n=6)) +
-      
+
       labs(
         x=xlab,
         y="Lag (days)",
         title=title
       ) +
-      
+
       coord_cartesian(expand=FALSE) +
-      
+
       # Theme with panel outline and tick marks
       theme_classic(base_size=13) +
       theme(
@@ -980,30 +967,29 @@ city_con_res <- function(meta, xlab=NULL, title=NULL, reference='50%'){
         legend.text=element_text(size=10),
         plot.title=element_text(size=14, face="plain", hjust=0.5)  # centered
       )
-    
+
     return(p)
   }
 
-  
-  
+
+
   # Unlist meta-analysis w/ prediction basis
   list2env(meta, envir=environment())
-  
+
   # Remove duplicates from cen list (especially for tp)
   rows_with_dup <- apply(cen, 1, function(row) any(duplicated(row)))
   cen <- cen[!rows_with_dup, ]
   perc <- as.numeric(sub("%", "", names(rowMeans(cen))))
-  
+
   # Get overall estimates (for specific lag, if applicable)
   cp <- crosspred(b_mean, coef=coef(mv),vcov=vcov(mv), model.link='log', at=rowMeans(cen), cen=rowMeans(cen)[reference])
   df_overall <- expand.grid(x=perc, y=seq(cp$lag[1], cp$lag[2]))
   df_overall$z <- as.vector(cp$matRRfit)
 
   p <- make_dlnm_plot(df_overall, xlab=xlab, title=paste0("Exposure-lag-response: ", title))
- 
+
   return(p)
 }
-
 
 #### DEPENDENCIES ####
 
@@ -1058,211 +1044,3 @@ nm <- c(season='Season', closed='Closed', holiday='Holiday', total_patients='Tot
         mx2t_p90='Clim: Max temp. >90th', mn2t_p10='Clim: Min temp. <10th', 
         tp_p90='Clim: Precipitation >90th', fg10_p90='Clim: Wind speed >90th', pm25_p90='Clim: PM2.5 >90th', 
         rh_mean_p10 ='Clim: Humidity <10th', rh_mean_p90='Clim: Humidity >90th') 
-
-
- 
-# #### OTHER ####
-# 
-# # Function to check significant increases by exp levels and get table
-# meta_checks <- function(meta, threshold){
-#   
-#   cp <- crosspred(meta$b_mean, coef=coef(meta$mv),vcov=vcov(meta$mv), model.link='log', cen=meta$cen)
-#   (checks <- apply(cp$matRRlow, 2, function(x) rownames(cp$matRRlow)[x > threshold]))
-#   (table <- as.data.frame(matrix(
-#     paste0(
-#       sprintf('%.3f', cp$matRRfit),   # RR with 3 decimals
-#       ' (',
-#       sprintf('%.3f', cp$matRRlow),   # lower CI with 3 decimals
-#       ', ',
-#       sprintf('%.3f', cp$matRRhigh),  # upper CI with 3 decimals
-#       ')'
-#     ),
-#     nrow=nrow(cp$matRRfit),
-#     ncol=ncol(cp$matRRfit),
-#     dimnames=dimnames(cp$matRRfit)  # keep original row/col names
-#   )))
-#   
-#   return(list(checks=checks, table=table))
-# }
-# 
-# # Function to extract model diagnostics
-# get_model_fit <- function(model,name) {
-#   modelfit <- data.frame(name,
-#                          summary(model)$df.null+1,
-#                          summary(model)$df[1],
-#                          summary(model)$dispersio,
-#                          summary(model)$deviance,
-#                          summary(model)$deviance + 2* summary(model)$df[1] * summary(model)$dispersion)
-#   names(modelfit) <- c('model','obs','dfmodel','dispersion','deviance','AIC' )
-#   return(modelfit)
-# }
-# 
-# # Function to retrieve results from each predictor, with visuals and tables
-# get_results <- function(df, outcome, quant_v=0.50, lag_v=NULL){
-#   
-#   df <- df %>%
-#     # dplyr::group_by(location) %>%
-#     dplyr::arrange(date, .by_group=TRUE) %>%
-#     dplyr::mutate(patients_lag=lag(total_patients, 1))
-#   
-#   # Fit cross-basis
-#   cb.tmp <- crossbasis(df$wb, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=3), group=df$year)
-#   cb.tp <- crossbasis(df$tp, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=3), group=df$year)
-#   cb.fg10 <- crossbasis(df$fg10, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=3), group=df$year)
-#   cb.rh <- crossbasis(df$rh, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=3), group=df$year)
-#   cb.pm25 <- crossbasis(df$pm25, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=3), group=df$year)
-#   
-#   # Fit model
-#   model <- glm(formula=as.formula(paste0(outcome, ' ~ ns(time, df=8*length(unique(df$year))) +
-#                                          patients_lag + season + weekday + holiday + 
-#                                          cb.tmp + cb.tp + cb.fg10 + cb.rh + cb.pm25')), data=df, family=quasipoisson(link='log'))
-#   
-#   # Select quantile
-#   q_tmp <- quantile(df$wb, probs=quant_v, na.rm=TRUE)
-#   q_tp <- quantile(df$tp, probs=quant_v, na.rm=TRUE)
-#   q_fg10 <- quantile(df$fg10, probs=quant_v, na.rm=TRUE)
-#   q_rh <- quantile(df$rh, probs=quant_v, na.rm=TRUE)
-#   q_pm25<- quantile(df$pm25, probs=quant_v, na.rm=TRUE)
-#   
-#   # DISPLAY ESTIMATE OF RR FOR BENCHMARK TP INCREMENT OF 23.4 (99th perc)
-#   cp.tmp <- crosspred(cb.tmp, model, at=q_tmp)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
-#   cp.tp <- crosspred(cb.tp, model, at=q_tp)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
-#   cp.fg10 <- crosspred(cb.fg10, model, at=q_fg10)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
-#   cp.rh <- crosspred(cb.rh, model, at=q_rh)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
-#   cp.pm25<- crosspred(cb.pm25, model, at=q_pm25)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
-#   cp <- data.frame(rbind(cp.tmp, cp.tp, cp.fg10, cp.rh, cp.pm25))
-#   df_cp <- data.frame(variables=rownames(cp), cp, row.names=NULL)
-#   
-#   # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK wb value
-#   cp <- crosspred(cb.tmp, model, at=q_tmp)
-#   p_lr_tmp <- get_visuals(cp, model, lag_rep=TRUE, col='#D74B3C', title='Lag-response of wb (at 95th percentile)')
-#   # GRAPH CUMULATIVE wb-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR TP & FG10)
-#   cp <- crosspred(cb.tmp, model, at=seq(-10, 35, by=1))
-#   p_er_tmp <- get_visuals(cp, model, lag_rep=FALSE, lag=lag_v, col='#D74B3C', xlab='Temperature (C)', title=lag_v)
-#   
-#   # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK TP value
-#   cp <- crosspred(cb.tp, model, at=q_tp)
-#   p_lr_tp <- get_visuals(cp, model, lag_rep=TRUE, col='#1D98EB', title='Lag-response of tp (at 95th percentile)')
-#   # GRAPH CUMULATIVE TP-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR wb & FG10)
-#   cp <- crosspred(cb.tp, model)
-#   p_er_tp <- get_visuals(cp, model, lag_rep=FALSE, lag=lag_v, col='#1D98EB', xlab='Precipitation (mm)', title=lag_v)
-#   
-#   # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK FG10 value
-#   cp <- crosspred(cb.rh, model, at=q_rh)
-#   p_lr_rh <- get_visuals(cp, model, lag_rep=TRUE, col='#A6B727', title='Lag-response of fh (at 95th percentile)')
-#   # GRAPH CUMULATIVE FG10-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR TP & wb)
-#   cp <- crosspred(cb.rh, model)
-#   p_er_rh <- get_visuals(cp, model, lag_rep=FALSE, lag=lag_v, col='#A6B727', xlab='Relative humidity (%)', title=lag_v)
-#   
-#   result <- list(model=model, overall=df_cp,
-#                  exp_rep=list(wb=p_er_tmp, tp=p_er_tp, rh=p_er_rh),
-#                  lag_rep=list(wb=p_lr_tmp, tp=p_lr_tp, rh=p_lr_rh))
-#   
-#   return(result)
-#   
-# }
-# 
-# # Function to get cumulative exposure-response and lag-response effects
-# get_visuals <- function(cp, model, xlab, title, col, lag_rep=FALSE, lag=NULL){
-#   
-#   
-#   if(lag_rep==FALSE){
-#     if(!is.null(lag)){
-#       cum <- data.frame(x=cp$predvar, RR=cp$matRRfit[, lag + 1], lower=cp$matRRlow[, lag + 1], upper=cp$matRRhigh[, lag + 1], row.names=NULL)
-#     } else {
-#       cum <- data.frame(x=cp$predvar, RR=cp$allRRfit, lower=cp$allRRlow, upper=cp$allRRhigh, row.names=NULL)
-#     }
-#     if (grepl('Precipitation', xlab)) {
-#       cum$x <- round(exp(cp$predvar)-10, 2)
-#     }
-#     p <- ggplot(cum, aes(x=x, y=RR)) +
-#       geom_line(color=col) +
-#       geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.3, fill=col) +
-#       geom_hline(yintercept=1, color='gray20') +
-#       scale_x_continuous(breaks=pretty(cum$x, n=6)) +
-#       # scale_y_continuous(limits=c(-0.5, 2.5)) +
-#       labs(x=xlab, y='RR',
-#            title=title) +
-#       theme_classic() +
-#       theme(
-#         axis.line=element_line(color='gray20'),      # pale axis lines
-#         axis.text=element_text(color='gray20'),      # pale axis labels
-#         axis.ticks=element_line(color='gray20'),     # pale ticks
-#         plot.title=element_text(face='bold', hjust=0.5, size=12)  # center title
-#       )
-#   } else {
-#     
-#     slice <- data.frame(lag=seq(cp$lag[1], cp$lag[2]), RR=t(cp$matRRfit), lower=t(cp$matRRlow), upper=t(cp$matRRhigh), row.names=NULL)
-#     names(slice) <- c('lag', 'RR', 'lower','upper')
-#     p <- ggplot(slice, aes(x=lag, y=RR)) +
-#       geom_hline(yintercept=1, color='gray20') +
-#       geom_errorbar(aes(ymin=lower, ymax=upper), width=0.2,  size=0.2) +
-#       geom_point(color=col,  size=2.5) +
-#       scale_x_continuous(breaks=seq(min(slice$lag), max(slice$lag), by=2)) +  # more breaks
-#       labs(x='Lag (days)', y='RR',
-#            title=title) +
-#       theme_classic() +
-#       theme(
-#         axis.line=element_line(color='gray20'),      # pale axis lines
-#         axis.text=element_text(color='gray20'),      # pale axis labels
-#         axis.ticks=element_line(color='gray20'),     # pale ticks
-#         plot.title=element_text(face='bold', hjust=0.5, size=12)  # center title
-#       )
-#     
-#   }
-#   
-#   return(p)
-# }
-# 
-# # Function to format and organizing visuals
-# get_all_plots <- function(plot_list, single_outcome=NULL, rows=3){
-#   
-#   # Function: Format plots for visualizing (2*4 grid)
-#   multi_plot_format <- function(plot_list){
-#     
-#     p <- plot_list
-#     
-#     # Loop to remove existing titles and replace with the list name
-#     p <- lapply(names(p), function(n) {
-#       p[[n]] + labs(title=n)
-#     })
-#     
-#     # Keep names after lapply
-#     names(p) <- names(p)
-#     
-#     # result <- (p[[1]] | p[[2]] | p[[3]] | p[[4]]) / (p[[5]] | p[[6]] | p[[7]] | p[[8]])
-#     
-#     result <- wrap_plots(p, nrow=rows)
-#     
-#     return(result)
-#   }
-#   
-#   
-#   # Visualise all outputs
-#   if(!is.null(single_outcome)){
-#     
-#     # Arrange your 2x3 grid
-#     exp_rep <- (plots$exp_rep_tmp[[single_outcome]] | plots$exp_rep_tp[[single_outcome]] | plots$exp_rep_fg10[[single_outcome]]) + plot_annotation(title=paste0('Outcome: ', single_outcome), theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-#     lag_rep <- (plots$lag_rep_tmp[[single_outcome]] | plots$lag_rep_tp[[single_outcome]] | plots$lag_rep_fg10[[single_outcome]]) + plot_annotation(title=paste0('Outcome: ', single_outcome), theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-#     all <- (exp_rep / lag_rep) + plot_annotation(title=paste0('Outcome: ', single_outcome), theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-#     
-#     # Add a main title
-#     grid_plots <- list(all=all, exp_rep=exp_rep, lag_rep=lag_rep)
-#     
-#   } else {
-#     
-#     exp_rep_tmp <- multi_plot_format(plot_list$exp_rep_tmp) + plot_annotation(title='RR of wb exposure-response (lag=5)', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-#     lag_rep_tmp <- multi_plot_format(plot_list$lag_rep_tmp) + plot_annotation(title='Lag-response of wb (at 95th percentile)', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-#     exp_rep_tp <- multi_plot_format(plot_list$exp_rep_tp) + plot_annotation(title='RR of tp exposure-response (lag=6)', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-#     lag_rep_tp <- multi_plot_format(plot_list$lag_rep_tp) + plot_annotation(title='Lag-response of tp (at 95th percentile)', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-#     exp_rep_fg10 <- multi_plot_format(plot_list$exp_rep_fg10) + plot_annotation(title='Overall RR of fg10 exposure-response', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-#     lag_rep_fg10 <- multi_plot_format(plot_list$lag_rep_fg10) + plot_annotation(title='Lag-response of fg10 (at 95th percentile)', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-#     
-#     grid_plots <- list(exp_rep_tmp=exp_rep_tmp, lag_rep_tmp=lag_rep_tmp, exp_rep_tp=exp_rep_tp,
-#                        lag_rep_tp=lag_rep_tp, exp_rep_fg10=exp_rep_fg10, lag_rep_fg10=lag_rep_fg10)
-#     
-#   }
-#   
-#   return(grid_plots)
-#   
-# }

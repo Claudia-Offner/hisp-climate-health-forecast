@@ -5,7 +5,7 @@
 # Prep environment
 rm(list = ls())
 setwd(paste0('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/'))
-source('2_DLNM/HISP_DLNM - Dependencies.R')
+source('2_DLNM/DLNM - Dependencies.R')
 
 # Load packages
 library(xgboost); library(dplyr); library(data.table); library(caret); library(purrr)
@@ -180,7 +180,7 @@ melted_corr <- reshape2::melt(cor_matrix)
 # end_time <- Sys.time()
 # # Print time & save (~35min)
 # print(difftime(end_time, start_time, units = "mins"))
-# save(xg_res, file = paste0(path_project, 'xgboost_params.RData'))
+# save(xg_res, file = paste0(path_project, 'ind_xgboost_params.RData'))
 
 
 # 2B. Lags: XG Boost feature importance test ####
@@ -201,12 +201,12 @@ melted_corr <- reshape2::melt(cor_matrix)
 # end_time <- Sys.time()
 # # Print time & save (~80min)
 # print(difftime(end_time, start_time, units = "mins"))
-# save(xg_res, file = paste0(path_project, 'xgboost_params_lags.RData'))
+# save(xg_res, file = paste0(path_project, 'ind_xgboost_params_lags.RData'))
 # 
 
 # 3A. No Lags: Format results ####
 # Get results
-load('2_DLNM/xgboost_params.RData')
+load('2_DLNM/ind_xgboost_params.RData')
 
 # Plot all feature importance
 imp_plot <- xg_res$all$plot
@@ -256,7 +256,7 @@ imp_rank <- replace_exact_matches(imp_rank, nm)
 
 # 3B. Lags: Format results ####
 # Get results
-load('2_DLNM/xgboost_params_lags.RData')
+load('2_DLNM/ind_xgboost_params_lags.RData')
 
 # Assessment table of feature importance consistency 
 imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
@@ -294,8 +294,8 @@ imp_rank_lag <- replace_exact_matches(imp_rank_lag, nm)
 # }
 # 
 # # Table
-# write.csv(imp_rank, file = paste0(path_report, '- tables/ST_imp_rank.csv'), row.names = FALSE)
-# write.csv(imp_rank_lag, file = paste0(path_report, '- tables/ST_imp_rank_lags.csv'), row.names = FALSE)
+# write.csv(imp_rank, file = paste0(path_report, 'tables/ST_imp_rank.csv'), row.names = FALSE)
+# write.csv(imp_rank_lag, file = paste0(path_report, 'tables/ST_imp_rank_lags.csv'), row.names = FALSE)
 
 # # Interaction strength ----
 # 

@@ -5,7 +5,7 @@
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
 setwd('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/')
-source('2_DLNM/HISP_DLNM - Dependencies.R')
+source('2_DLNM/DLNM - Dependencies.R')
 
 # Set data path
 setwd(path_data)

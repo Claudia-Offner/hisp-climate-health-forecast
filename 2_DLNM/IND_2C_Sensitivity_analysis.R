@@ -5,7 +5,7 @@
 # Prep environment
 rm(list=ls()); graphics.off(); gc()
 setwd(paste0('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/'))
-source('2_DLNM/HISP_DLNM - Dependencies.R')
+source('2_DLNM/DLNM - Dependencies.R')
 
 # Load packages
 library(dlnm); library(splines); library(xtable); library(mvmeta); library(MASS);
@@ -1165,7 +1165,7 @@ for (n in names(shape_res)) {
 
 # EXPORT PARAMS ####
 
-save(sens_res, final_params, file=paste0(path_project, 'sens_params.RData'))
+save(sens_res, final_params, file=paste0(path_project, 'ind_sens_params.RData'))
 
 # End timer: 1 hours 31 minutes 10 seconds (20/01/2026) ####
 end <- Sys.time()

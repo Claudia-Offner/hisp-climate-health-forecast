@@ -1,7 +1,16 @@
+# Ignore file types
+*.RData
+*.docx
+*.pptx
+*.html
+*.bib
+
+# Ignore specific files
 .Rproj.user
 .Rhistory
-*.RData
 .Ruserdata
 .RDataTmp
+
+# Ignore specific folders
 0_Reporting/figures/
 0_Reporting/tables/
