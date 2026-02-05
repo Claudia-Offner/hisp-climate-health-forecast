@@ -1,0 +1,180 @@
+---
+title: "DLNM Analysis"
+author: "Claudia Offner"
+format:
+  # docx:
+  #   reference-doc: template.docx
+  pptx:
+    reference-doc: template.pptx
+editor: visual
+---
+
+## Agenda
+
+-   Research questions
+-   DLNM model and sensitivity analysis
+-   Results
+-   Timeline
+
+## Research questions
+
+-   **Exposure-response: How do different levels of the exposure variables affect the outcome?** *E.g. How does the risk of hospital admissions change when temperature increases from 20°C to 30°C?*
+
+-   **Lag-response: How is the effect of a single exposure at time t distributed across future time points (lags)?** *E.g. If it's hot today, does the health impact occur immediately, or does it show up in 2–3 days?*
+
+-   **Do these exposure–lag effects vary across vulnerable groups?** *E.g. Are children under 5 or the elderly more sensitive to specific temperatures or lag duration compared to the general population?*
+
+-   **Do the exposure–lag effects vary across location?** *E.g. Are some locations more at risk due to their unique geographies (i.e. elevation) or population profiles (i.e. population density)?*
+
+## Distributed Lag Nonlinear Model (DLNM): Multivariate, meta-analysis
+
+Suppose that $N_i$ observations, indexed by $t = 1, \ldots, N_i$ are collected at site $i$ for each of the $i = 1, \ldots, m$ sites. Specifically, the data includes a response variable $Y_{ti}$, a non-linear exposure $x_{ti}$, and an optional set of $J$ confounding variables $c_{tji}$, with $j = 1, \ldots, J$.
+
+**Aims**
+
+-   **Stage 1:** Define and estimate the association between $Y_{ti}$ and $x_{ti}$, while controlling for $c_{tji}$, specified through a function $s$, entirely defined in each site by the $k$-length vector of parameters $\theta_i$.
+
+-   **Stage 2**: Derive a set of regression coefficients defining the average exposure-lag-response association across all studies.
+
+## Stage 1: Fit the general model
+
+The general model is defined as:
+
+$$ g(\mu_{ti}) \;=\; \alpha + s(x_{ti}; \theta_i) + \sum_{j=1}^J h_{ji}(c_{tji}; \gamma_k) \tag{1}$$
+
+where $g$ is a link function of $\mu_{ti} = E(Y_{ti})$ and confounders $c_{tji}$ are time variables (e.g. day of week and elapsed time) modeled through functions $h_{ij}$ and related parameters $\gamma_{ji}$.
+
+The $s$ function defines a non-linear exposure cross-basis, i.e. the bi-dimensional space of functions simultaneously describing the shape of the predictor relationship along $x$ and its distributed lag effects $\ell$.
+
+## Stage 2: Pooling results
+
+::::: columns
+::: column
+#### Meta-analysis
+
+The random-effects multivariate meta-analysis assumes a two-level structure to represent within-study variation, $\hat{\boldsymbol{\theta}}_i \sim N_k(\boldsymbol{\theta}_i, S_i)$, and between study variation $\boldsymbol{\theta}_i \sim N_k(\boldsymbol{\theta}, \Psi)$. The marginal distribution of the meta-analysis therefore follows:
+
+$$ \hat{\theta}_i \sim N_k (\theta, S_i + \Psi) \tag{2} $$
+
+where $S_i + \Psi = \Sigma_i$.
+:::
+
+::: column
+#### Meta-regression
+
+This formulation can be extended to a multivariate meta-regression by introducing study-level covariates, where $k$ outcomes are modeled in terms of study-level variables defining a set of $p$ meta-predictors $x_i={[x_{1i}, x_{2i}, ...x_{pi}]}^\top$ associated with the $i^{th}$ study, where $x_{1i}$ specifies the intercept terms. As a conventional linear mixed model, the model can be specified as:
+
+$$ \hat{\theta}_i |\mu_i \sim N_k ( X_i \boldsymbol{\beta}+\mu_i, S_i) \cdot \tag{3} $$
+
+where $X_i = I_k \otimes \boldsymbol{x}_i$ is the design matrix formed by the Kronecker product of the identity matrix $I_k$ and the covariate vector $\boldsymbol{x}_i$. The vector $\boldsymbol{\beta}$ contains the fixed effects describing associations between outcomes and predictors, $\boldsymbol{u}_i$ are random study effects distributed as $N_k(0, \Psi)$.
+:::
+:::::
+
+## Stage 2: Pooling results
+
+-   The `mvmeta` package was used to estimate pooled effects via maximum likelihood (ML), using exposure specific coefficients and covariance matrices.
+
+-   Hypothesis testing for fixed effects is done via multivariate Wald or likelihood ratio (LR) tests and random effects is done via the Cochran $Q$ test. Residual heterogeneity can also be summarized using the $H^2$ and $I^2$ statistics.
+
+-   AIC & BIC can be used to assess and compare meta-analysis models.
+
+-   Tests alone are limited in their interpretability, so prediction is key to linking study level variables with outcomes. There are 1 types of study specific predictions: raw (straight form the model) or Best Linear Unbiased Prediction (BLUP). BLUP combines the population-average prediction with the study-specific random-effect deviations and is preferable.
+
+See Gasparrini et al, 2012 for details
+
+## R Formula
+
+``` r
+# List of site-specific subsets
+datalist <- lapply(locations, function(region) df[df$location==region,])
+
+# Create objects where outputs will be stored
+m <- length(unique(df$location))
+ymat_t2m <- matrix(...)
+Slist_t2m <- vector("list", m)
+
+# Fit model for each site
+for(i in seq(m)) {
+  
+  # Load data
+  data <- datalist[[i]]
+  
+  # Fit cross-basis
+  cb.t2m <- crossbasis(t2m, lag=c(0,14), argvar=list(fun='ns', df=3),  arglag=list(fun='ns', df=4), group=year)
+
+  # Fit model
+  model <- glm.nb(total_patients ~ + cb.t2m + season + weekday + clsoed + ns(time, df=9*9), data = df)
+  
+  # Extract coefficients and covariance 
+  predt2m <- crosspred(cb.t2m, model, cen=cen_t2m)
+  ymat_t2m[i,] <- predt2m$coef
+  Slist_t2m[[i]] <- predt2m$vcov
+  
+}
+
+mv <- mvmeta(ymat_t2m, Slist_t2m, method="ml")
+```
+
+## Sensitivity Analysis
+
+Based on previous sensitivity analysis by Xiao et al 2018, we need to assess:
+
+1.  Controlling for long-term trends and seasonality
+2.  Controlling for the measured time-varying confounders, predictor and lag effects (i.e. weather)
+3.  Controlling for outcome autocorrelation
+4.  Choice of the flexibility of the shape of exposure-response relationship (i.e. quasi poisson vs. negative binomial)
+
+## Overall
+
+![Cumulative relative risk (RR) of exposure-response for total hospital admissions across all time for each weather predictors. Temperature uses the 50th percentile as reference, all other exposures use the 0th percentile.](figures/MF_1A_total_er_overall.png){#fig-res1-overall}
+
+## Overall
+
+![Relative risk (RR) of weather exposure-response for total hospital admissions, by lag (0, 5, 10 and 14 days). Red corresponds to daily average maximum temperature (mx2t), blue corresponds to 7-day cumulative precipitation (tp), purple corresponds to daily maximum wind speed (fg10). Temperature uses the 50th percentile as reference, and rainfall uses the 20th percentile.](figures/MF_1C_total_er.png){#fig-res1-er}
+
+## Overall
+
+![Daily maximum temperature exposure-response, by city. The 50th percentile is used as reference.](figures/MF_1D_city_tmp_er.png){#fig-res1-temp}
+
+## Overall
+
+![7-day cumulative precipitation exposure-response, by city. The 0th percentile as reference.](figures/MF_1E_city_tp_er.png){#fig-res1-tp}
+
+## Season
+
+![Relative risk (RR) of weather exposure-response for total hospital admissions during winter, by lag (0, 5, 10 and 14 days). Red corresponds to daily average maximum temperature (mx2t), blue corresponds to 7-day cumulative precipitation (tp), purple corresponds to daily maximum wind speed (fg10). Temperature uses the 50th percentile as reference, all other exposures use the 0th percentile.](figures/MF_3A_seas_overall.png){#fig-res3-seas}
+
+## Season
+
+![Relative risk (RR) of weather exposure-response for total hospital admissions during summer, by lag (0, 5, 10 and 14 days). Red corresponds to daily average wet-bulb temperature (wb), blue corresponds to daily total rainfall (tp), green corresponds to daily relative humidity (rh).](figures/MF_3C_seas_er.png){#fig-res3-seas-er}
+
+## Population
+
+![Maximum temperature exposure-response relationship (Lag 0), disaggregated by population groups](figures/MF_4_disag_er0_tmp.png){#fig-res4-temp}
+
+## Population
+
+![Precipitation exposure-response relationship (Lag 10), disaggregated by population groups](figures/MF_4_disag_er10_tp.png){#fig-res4-tp}
+
+## Defining weather cut offs
+
+## Timeline
+
+-   For end of February...
+    -   Integrate data from other sites
+    -   Update code for sensitivity analysis and identify appropriate parameters to fit models
+    -   Update parameters and extract final results
+    -   Write up results for paper draft
+-   Bonus: I am writing up a multivariate meta-analysis tutorial for my own reference, but this be part of my chapter 1 supplement.
+
+## Appendix: City specific estimates not as expected when broken down.
+
+![7-day cumulative precipitation exposure-response, by city. The 0th percentile as reference.](figures/MF_1E_city_tp_er.png)
+
+## Appendix: City specific estimates not as expected when broken down.
+
+![Dharamshala exposure-response relationship, by weather percentiles, from pooled model. Temperature uses the 50th percentile as reference, all other exposures use the 0th percentile.](figures/SF_1J_dharam_er.png){#fig-res1-daram}
+
+## Appendix: No effect for emergency ward in Hamirpur
+
+![Relative risk (RR) of weather exposure-response for emergency ward hospital admissions, by lag (0, 3, 7and 10 days). Red corresponds to daily average maximum temperature (mx2t) and blue corresponds to 7-day cumulative precipitation (tp). Temperature and preciptiation use the 50th and 0th percentile as reference, respectively.](figures/MF_5C_emg_er.png){#fig-res5-er}

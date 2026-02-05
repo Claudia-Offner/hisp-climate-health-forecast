@@ -3,3 +3,5 @@
 *.RData
 .Ruserdata
 .RDataTmp
+0_Reporting/figures/
+0_Reporting/tables/

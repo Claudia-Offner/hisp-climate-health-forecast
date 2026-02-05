@@ -1,9 +1,10 @@
 "Variable","Factor","Df Between","Df Within","F","p"
-"Total patients","Season",3,7475,42.39,0
-"Total patients","Clim: Max temp. >90th",1,7477,2.662,0.103
-"Total patients","Clim: Min temp. <10th",1,7477,0.004,0.949
-"Total patients","Clim: Rainfall >90th",1,7477,34.679,0
-"Total patients","Clim: Wind speed >90th",1,7477,4.677,0.031
-"Total patients","Clim: Humidity <10th",1,7477,5.528,0.019
-"Total patients","Clim: Humidity >90th",1,7477,50.331,0
-"Total patients","Clim: PM2.5 >90th",1,7477,0.386,0.535
+"Total patients","Season",3,12199,119.319,0
+"Total patients","Season",3,12199,119.319,0
+"Total patients","Clim: Max temp. >90th",1,12147,3.379,0.066
+"Total patients","Clim: Min temp. <10th",1,12147,9.214,0.002
+"Total patients","Clim: Rainfall >90th",1,12147,11.907,0.001
+"Total patients","Clim: Wind speed >90th",1,12147,18.018,0
+"Total patients","Clim: Humidity <10th",1,12147,3.752,0.053
+"Total patients","Clim: Humidity >90th",1,12147,93.078,0
+"Total patients","Clim: PM2.5 >90th",1,12201,1.94,0.164
