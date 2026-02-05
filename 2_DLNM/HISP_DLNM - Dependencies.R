@@ -1,5 +1,5 @@
 ### ------------------------------------------------------------------------ ### 
-### HISP DLNM - Dependencies                                                 ###
+### HISP DLNM: Dependencies
 ### ------------------------------------------------------------------------ ### 
 # NB COLOURS: https://r-charts.com/colors/
 
@@ -86,7 +86,7 @@ get_meta_analysis <- function(pooled=TRUE, ymat, Slist, arg_var, arg_lag, ranges
   
   bound <- c(colMeans(ranges))
   mean <- seq(bound[1],bound[2],length=30)
-  b_mean <- crossbasis(mean, lag=c(0,14), argvar=arg_var, arglag=arg_lag)
+  b_mean <- crossbasis(mean, lag=c(0,10), argvar=arg_var, arglag=arg_lag)
   
   return(list(ymat=ymat, Slist=Slist, arg_var=arg_var, arg_lag=arg_lag, ranges=ranges, mv=mv, 
               bound=bound, b_mean=b_mean, cen=cen))
@@ -94,7 +94,7 @@ get_meta_analysis <- function(pooled=TRUE, ymat, Slist, arg_var, arg_lag, ranges
 }
 
 # Function to run model with static formula
-run_model <- function(data, locations, outcome, fam_type='quasi', reference='50%',
+run_model <- function(data, locations, outcome, fam_type='quasi',
                       pooled=TRUE, longterm_df=longterm_df, autocorr_lag=autocorr_lag, 
                       arglag_tmp=arglag_tmp, arglag_tp=arglag_tp, arglag_fg10=arglag_fg10,
                       argvar_tmp=argvar_tmp, argvar_tp=argvar_tp, argvar_fg10=argvar_fg10){
@@ -135,15 +135,15 @@ run_model <- function(data, locations, outcome, fam_type='quasi', reference='50%
   argvar_tp <- if (argvar_tp == 1) list(fun="lin") else list(fun="ns", df=argvar_tp)
   df_tp <- prod(arglag_tp$df, argvar_tp$df)
 
-  # FG10
-  ranges_fg10 <- t(sapply(datalist,function(x) range(x$fg10,na.rm=T)))
-  cen_fg10 <- sapply(datalist,function(x) {
-    quantile(x$fg10,c(0:100)/100,na.rm=T)
-  })
-  arglag_fg10 <- list(fun='ns', df=arglag_fg10)
-  argvar_fg10 <- if (argvar_fg10 == 1) list(fun="lin") else list(fun="ns", df=argvar_fg10)
-  df_fg10 <- prod(arglag_fg10$df, argvar_fg10$df)
-
+  # # FG10
+  # ranges_fg10 <- t(sapply(datalist,function(x) range(x$fg10,na.rm=T)))
+  # cen_fg10 <- sapply(datalist,function(x) {
+  #   quantile(x$fg10,c(0:100)/100,na.rm=T)
+  # })
+  # arglag_fg10 <- list(fun='ns', df=arglag_fg10)
+  # argvar_fg10 <- if (argvar_fg10 == 1) list(fun="lin") else list(fun="ns", df=argvar_fg10)
+  # df_fg10 <- prod(arglag_fg10$df, argvar_fg10$df)
+  #
   # # RH
   # ranges_rh <- t(sapply(datalist,function(x) range(x$rh,na.rm=T)))
   # cen_rh <- sapply(datalist,function(x) {
@@ -177,9 +177,9 @@ run_model <- function(data, locations, outcome, fam_type='quasi', reference='50%
   Slist_tp <- vector('list',m)
   names(Slist_tp) <- locs_used
   
-  ymat_fg10 <- matrix(NA,m,df_fg10,dimnames=list(locs_used,paste('spl',seq(df_fg10),sep='')))
-  Slist_fg10 <- vector('list',m)
-  names(Slist_fg10) <- locs_used
+  # ymat_fg10 <- matrix(NA,m,df_fg10,dimnames=list(locs_used,paste('spl',seq(df_fg10),sep='')))
+  # Slist_fg10 <- vector('list',m)
+  # names(Slist_fg10) <- locs_used
   
   # ymat_rh <- matrix(NA,m,df_rh,dimnames=list(locations,paste('spl',seq(df_rh),sep='')))
   # Slist_rh <- vector('list',m)
@@ -202,20 +202,25 @@ run_model <- function(data, locations, outcome, fam_type='quasi', reference='50%
       sub <- datalist[[i]]
       
       # SELECT AUTOCORR LAGS
-      lag_terms <- paste0("total_patients_lag", 1:autocorr_lag)
+      if(autocorr_lag==0){
+        lags <- ''
+      } else {
+        lag_terms <- paste0(outcome, '_lag', 1:autocorr_lag)
+        lags <- paste0('+ ', paste(lag_terms, collapse=' + '))
+      }
       
       # CREATE THE SPLINES
-      cb.tmp <- crossbasis(sub$mx2t, lag=c(0,14), argvar=argvar_tmp, arglag=arglag_tmp, group=sub$year)
-      cb.tp <- crossbasis(sub$tp, lag=c(0,14), argvar=argvar_tp, arglag=arglag_tp, group=sub$year)
-      cb.fg10 <- crossbasis(sub$fg10, lag=c(0,14),argvar=argvar_fg10, arglag=arglag_fg10, group=sub$year)
-      # cb.rh <- crossbasis(sub$rh, lag=c(0,14),argvar=list(fun='ns', df=arg_rh$argvar), arglag=list(fun='ns', df=arg_rh$arglag), group=sub$year)
-      # cb.pm25 <- crossbasis(sub$pm25, lag=c(0,14),argvar=list(fun='lin'), arglag=list(fun='ns', df=arg_pm25$arglag), group=sub$year)
+      cb.tmp <- crossbasis(sub$mx2t, lag=c(0,10), argvar=argvar_tmp, arglag=arglag_tmp, group=sub$year)
+      cb.tp <- crossbasis(sub$tp, lag=c(0,10), argvar=argvar_tp, arglag=arglag_tp, group=sub$year)
+      # cb.fg10 <- crossbasis(sub$fg10, lag=c(0,10),argvar=argvar_fg10, arglag=arglag_fg10, group=sub$year)
+      # cb.rh <- crossbasis(sub$rh, lag=c(0,10),argvar=list(fun='ns', df=arg_rh$argvar), arglag=list(fun='ns', df=arg_rh$arglag), group=sub$year)
+      # cb.pm25 <- crossbasis(sub$pm25, lag=c(0,10),argvar=list(fun='lin'), arglag=list(fun='ns', df=arg_pm25$arglag), group=sub$year)
       
       # Set formula
       form <- as.formula(
-        paste0(
-          "total_patients ~ season + weekday + ns(time, df=", longterm_df, "*", years, ") + ",
-          paste(lag_terms, collapse=" + "), '+ cb.tmp + cb.tp + cb.fg10'
+        paste0(outcome, 
+          " ~ month + weekday + ns(time, df=", longterm_df, "*", years, ') ', 
+          lags, '+ cb.tmp + cb.tp + fg10 + pm25 + rh'
         )
       )
       
@@ -231,20 +236,20 @@ run_model <- function(data, locations, outcome, fam_type='quasi', reference='50%
       # EXTRACT AND SAVE THE RELATED COEF AND VCOV
       
       # TMP
-      predwb <- crosspred(cb.tmp, model, cen=cen_tmp[reference,i])
-      ymat_tmp[i,] <- predwb$coef
-      Slist_tmp[[i]] <- predwb$vcov
+      predtmp <- crosspred(cb.tmp, model, cen=cen_tmp['50%',i])
+      ymat_tmp[i,] <- predtmp$coef
+      Slist_tmp[[i]] <- predtmp$vcov
       
       # TP
-      predtp <- crosspred(cb.tp, model, cen=cen_tp[reference,i])
+      predtp <- crosspred(cb.tp, model, cen=cen_tp['0%',i])
       ymat_tp[i,] <- predtp$coef
       Slist_tp[[i]] <- predtp$vcov   
       
-      # FG10
-      predfg10 <- crosspred(cb.fg10, model, cen=cen_fg10[reference,i])
-      ymat_fg10[i,] <- predfg10$coef
-      Slist_fg10[[i]] <- predfg10$vcov
-      
+      # # FG10
+      # predfg10 <- crosspred(cb.fg10, model, cen=cen_fg10['0%',i])
+      # ymat_fg10[i,] <- predfg10$coef
+      # Slist_fg10[[i]] <- predfg10$vcov
+      # 
       # # RH
       # predrh <- crosspred(cb.rh, model, cen=cen_rh[reference,i])
       # ymat_rh[i,] <- predrh$coef
@@ -267,7 +272,7 @@ run_model <- function(data, locations, outcome, fam_type='quasi', reference='50%
   meta_comp <- list()
   meta_comp[['avg_tmp']] <- mean(sapply(Slist_comp, function(x) x$esti_tmp))
   meta_comp[['avg_tp']] <- mean(sapply(Slist_comp, function(x) x$esti_tp))
-  meta_comp[['avg_fg10']] <- mean(sapply(Slist_comp, function(x) x$esti_fg10))
+  # meta_comp[['avg_fg10']] <- mean(sapply(Slist_comp, function(x) x$esti_fg10))
   # meta_comp[['avg_rh']] <- mean(sapply(Slist_comp, function(x) x$esti_rh))
   # meta_comp[['avg_pm25']] <- mean(sapply(Slist_comp, function(x) x$esti_pm25))
   meta_comp[['sum_aic']] <- sum(sapply(Slist_comp, function(x) x$aic))
@@ -276,15 +281,15 @@ run_model <- function(data, locations, outcome, fam_type='quasi', reference='50%
   # Meta coefs
   meta_tmp <- get_meta_analysis(pooled=pooled, ymat=ymat_tmp,  Slist=Slist_tmp, arg_var=argvar_tmp, arg_lag=arglag_tmp, ranges=ranges_tmp, cen=cen_tmp)
   meta_tp <- get_meta_analysis(pooled=pooled, ymat=ymat_tp,  Slist=Slist_tp, arg_var=argvar_tp, arg_lag=arglag_tp, ranges=ranges_tp, cen=cen_tp)
-  meta_fg10 <- get_meta_analysis(pooled=pooled, ymat=ymat_fg10,  Slist=Slist_fg10, arg_var=argvar_fg10, arg_lag=arglag_fg10, ranges=ranges_fg10, cen=cen_fg10)
+  # meta_fg10 <- get_meta_analysis(pooled=pooled, ymat=ymat_fg10,  Slist=Slist_fg10, arg_var=argvar_fg10, arg_lag=arglag_fg10, ranges=ranges_fg10, cen=cen_fg10)
   # meta_rh <- get_meta_analysis(ymat=ymat_rh,  Slist=Slist_rh, arg=arg_rh, ranges=ranges_rh, cen=cen_rh)
   # meta_pm25 <- get_meta_analysis(ymat=ymat_pm25,  Slist=Slist_pm25, arg=arg_pm25, ranges=ranges_pm25, cen=cen_pm25)
 
   # RESET WARNING
   options(warn=0)
   
-  return(list(meta_comp=meta_comp, meta_tmp=meta_tmp, meta_tp=meta_tp, meta_fg10=meta_fg10))
-              #meta_rh=meta_rh, meta_pm25=meta_pm25))
+  return(list(meta_comp=meta_comp, meta_tmp=meta_tmp, meta_tp=meta_tp))
+              # meta_fg10=meta_fg10, meta_rh=meta_rh, meta_pm25=meta_pm25))
   
 }
 
@@ -327,42 +332,42 @@ format_results <- function(output, outcome, city=NULL){
     
     meta_tmp <- output$meta_tmp
     meta_tp <- output$meta_tp
-    meta_fg10 <- output$meta_fg10
+    # meta_fg10 <- output$meta_fg10
     # meta_rh <- output$meta_rh
     # meta_pm25 <- output$meta_pm25
 
     # Model selection criteria
-    tab <- matrix(NA,3,12)
+    tab <- matrix(NA,2,12)
     colnames(tab) <- c('Q','df','p','I-square','AIC','BIC','stat','df','p','stat','df','p')
-    rownames(tab) <- c('tmp','tp', 'fg10') #, 'rh', 'fg10', 'pm25')
+    rownames(tab) <- c('tmp','tp') #, 'fg10', 'rh', 'fg10', 'pm25')
     tab[1,] <- ftab(m=meta_tmp$mv)
     tab[2,] <- ftab(m=meta_tp$mv)
-    tab[3,] <- ftab(m=meta_fg10$mv)
+    # tab[3,] <- ftab(m=meta_fg10$mv)
     # tab[4,] <- ftab(m=meta_rh$mv)
     # tab[5,] <- ftab(m=meta_pm25$mv)
     
     # Exposure response (with city specs) - Overall
-    p_er_tmp <- city_exp_res(city=city, lag=lags, meta=meta_tmp, col='#D74B3C', xlab='Temperature (%)', title=NULL)
-    p_er_tp <- city_exp_res(city=city, lag=lags, meta=meta_tp, col='#1D98EB', xlab='Precipitation (%)', title=NULL)
-    p_er_fg10 <- city_exp_res(city=city, lag=lags, meta=meta_fg10, col='#8968CD', xlab='Wind speed (%)', title=NULL)
+    p_er_tmp <- city_exp_res(city=city, lag=lags, meta=meta_tmp, col='#D74B3C', xlab='Max. Temperature (%)', title=NULL)
+    p_er_tp <- city_exp_res(city=city, lag=lags, meta=meta_tp, col='#1D98EB', xlab='Precipitation (%)', title=NULL, reference='0%')
+    # p_er_fg10 <- city_exp_res(city=city, lag=lags, meta=meta_fg10, col='#8968CD', xlab='Wind speed (%)', title=NULL)
     # p_er_rh <- city_exp_res(city=city, lag=lags, meta=meta_rh, col='#A6B727', xlab='Relative humidity (%)', title=NULL)
     # p_er_pm25 <- city_exp_res(city=city, lag=lags, meta=meta_pm25, col='#E569BF', xlab='Air pollution (%)', title=NULL)
     
     # Lag response (with city specs) by percentile
     q_tmp <- rowMeans(meta_tmp$cen)[probs]
     q_tp <- rowMeans(meta_tp$cen)[probs]
-    q_fg10 <- rowMeans(meta_fg10$cen)[probs]
+    # q_fg10 <- rowMeans(meta_fg10$cen)[probs]
     # q_rh <- rowMeans(meta_rh$cen)[probs]
     # q_pm25 <- rowMeans(meta_pm25$cen)[probs]
-    p_lr_tmp <- city_lag_res(city=city, quant_v=q_tmp, meta=meta_tmp, col='#D74B3C', xlab='Temperature (%)', title=NULL)
-    p_lr_tp <- city_lag_res(city=city, quant_v=q_tp, meta=meta_tp, col='#1D98EB', xlab='Precipitation (%)', title=NULL)
-    p_lr_fg10 <- city_lag_res(city=city, quant_v=q_fg10, meta=meta_fg10, col='#8968CD', xlab='Wind speed (%)', title=NULL)
+    p_lr_tmp <- city_lag_res(city=city, quant_v=q_tmp, meta=meta_tmp, col='#D74B3C', xlab='Max. Temperature (%)', title=NULL)
+    p_lr_tp <- city_lag_res(city=city, quant_v=q_tp, meta=meta_tp, col='#1D98EB', xlab='Precipitation (%)', title=NULL, reference='0%')
+    # p_lr_fg10 <- city_lag_res(city=city, quant_v=q_fg10, meta=meta_fg10, col='#8968CD', xlab='Wind speed (%)', title=NULL)
     # p_lr_rh <- city_lag_res(city=city, quant_v=q_rh, meta=meta_rh, col='#A6B727', xlab='Relative humidity (%)', title=NULL)
     # p_lr_pm25 <- city_lag_res(city=city, quant_v=q_pm25, meta=meta_pm25, col='#E569BF', xlab='Air pollution (%)', title=NULL)
     
     return(list(tab=tab, 
-                p_er_tmp=p_er_tmp, p_er_tp=p_er_tp, p_er_fg10=p_er_fg10, #p_er_rh=p_er_rh, p_er_pm25=p_er_pm25, 
-                p_lr_tmp=p_lr_tmp, p_lr_tp=p_lr_tp, p_lr_fg10=p_lr_fg10)) #, p_lr_rh=p_lr_rh, p_lr_pm25=p_lr_pm25)) 
+                p_er_tmp=p_er_tmp, p_er_tp=p_er_tp, #p_er_fg10=p_er_fg10, p_er_rh=p_er_rh, p_er_pm25=p_er_pm25, 
+                p_lr_tmp=p_lr_tmp, p_lr_tp=p_lr_tp)) #, p_lr_fg10=p_lr_fg10, p_lr_rh=p_lr_rh, p_lr_pm25=p_lr_pm25)) 
     
   }
   
@@ -375,7 +380,7 @@ format_results <- function(output, outcome, city=NULL){
     quant[[q]] <- get_results(output, city='ALL', lags=NULL, probs=q, outcome=outcome)
   }
   # EXPOSURE
-  lag_test <- c(0, 5, 10, 14)
+  lag_test <- c(0, 3, 7, 10)
   lags <- list()
   for (l in lag_test){
     lags[[as.character(l)]] <- get_results(output, city='ALL', lags=l, outcome=outcome)
@@ -388,23 +393,23 @@ format_results <- function(output, outcome, city=NULL){
     p_blup_all <- lapply(all, function(x) x[['p_blup']])
     p_blup_er <- p_blup_all[grepl('er', names(p_blup_all))] #|> head(-2)
     p_blup_lr <- p_blup_all[grepl('lr', names(p_blup_all))] #|> head(-2)
-    p_er_overall <- wrap_plots(p_blup_er, ncol=3)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+    p_er_overall <- wrap_plots(p_blup_er, nrow=1)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
     
     # Format lag plots
     p_lr_tmp <- wrap_plots(lapply(quant, function(x) x$p_lr_tmp$p_blup), ncol=4) & theme(legend.position='none')
     p_lr_tp <- wrap_plots(lapply(quant, function(x) x$p_lr_tp$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    p_lr_fg10 <- wrap_plots(lapply(quant, function(x) x$p_lr_fg10$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
+    # p_lr_fg10 <- wrap_plots(lapply(quant, function(x) x$p_lr_fg10$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
     # p_lr_rh <- wrap_plots(lapply(quant, function(x) x$p_lr_rh$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
     # p_lr_pm25 <- wrap_plots(lapply(quant, function(x) x$p_lr_pm25$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    p_lr <- wrap_plots(p_lr_tmp, p_lr_tp, p_lr_fg10, nrow=3)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+    p_lr <- wrap_plots(p_lr_tmp, p_lr_tp, nrow=2)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
     
     # Format exposure plots
     p_er_tmp <- wrap_plots(lapply(lags, function(x) x$p_er_tmp$p_blup), ncol=4) & theme(legend.position='none')
     p_er_tp <- wrap_plots(lapply(lags, function(x) x$p_er_tp$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    p_er_fg10 <- wrap_plots(lapply(lags, function(x) x$p_er_fg10$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
+    # p_er_fg10 <- wrap_plots(lapply(lags, function(x) x$p_er_fg10$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
     # p_er_rh <- wrap_plots(lapply(lags, function(x) x$p_er_rh$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
     # p_er_pm25 <- wrap_plots(lapply(lags, function(x) x$p_er_pm25$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    p_er <- wrap_plots(p_er_tmp, p_er_tp, p_er_fg10, nrow=3)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+    p_er <- wrap_plots(p_er_tmp, p_er_tp, nrow=2)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
     
     if(!is.null(city)){
       
@@ -428,24 +433,16 @@ format_results <- function(output, outcome, city=NULL){
           plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
         p_er_tp_city <- wrap_plots(lapply(city_er[[i]], function(x) x$p_er_tp$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
           plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-        p_er_fg10_city <- wrap_plots(lapply(city_er[[i]], function(x) x$p_er_fg10$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
-          plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-        # p_er_rh_city <- wrap_plots(lapply(city_er[[i]], function(x) x$p_er_rh$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
+        # p_er_fg10_city <- wrap_plots(lapply(city_er[[i]], function(x) x$p_er_fg10$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
         #   plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-        # p_er_pm25_city <- wrap_plots(lapply(city_er[[i]], function(x) x$p_er_pm25$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
-        #   plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-        
+ 
         p_lr_tmp_city <- wrap_plots(lapply(city_lr[[i]], function(x) x$p_lr_tmp$p_city + theme(legend.position="none")), ncol=4)+
           plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
         p_lr_tp_city <- wrap_plots(lapply(city_lr[[i]], function(x) x$p_lr_tp$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
           plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-        p_lr_fg10_city <- wrap_plots(lapply(city_lr[[i]], function(x) x$p_lr_fg10$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
-          plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-        # p_lr_rh_city <- wrap_plots(lapply(city_lr[[i]], function(x) x$p_lr_rh$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
+        # p_lr_fg10_city <- wrap_plots(lapply(city_lr[[i]], function(x) x$p_lr_fg10$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
         #   plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-        # p_lr_pm25_city <- wrap_plots(lapply(city_lr[[i]], function(x) x$p_lr_pm25$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
-        #   plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-        
+  
       }
       
     } else {
@@ -454,14 +451,14 @@ format_results <- function(output, outcome, city=NULL){
       city_er <- list()
       city_lr <- list()
       for (i in locations){
-        city[[i]] <- get_results(output, city=i, probs='50%', outcome=outcome)
+        city[[i]] <- get_results(output, city=i, lag=NULL, probs='50%', outcome=outcome)
       }
       p_er_tmp_city <- wrap_plots(lapply(city, function(x) x$p_er_tmp$p_city + theme(legend.position="none")), ncol=4)+
         plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
       p_er_tp_city  <- wrap_plots(lapply(city, function(x) x$p_er_tp$p_city + theme(legend.position="none")), ncol=4)+
         plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-      p_er_fg10_city  <- wrap_plots(lapply(city, function(x) x$p_er_fg10$p_city + theme(legend.position="none")), ncol=4)+
-        plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+      # p_er_fg10_city  <- wrap_plots(lapply(city, function(x) x$p_er_fg10$p_city + theme(legend.position="none")), ncol=4)+
+      #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
       # p_er_rh_city <- wrap_plots(lapply(city, function(x) x$p_er_rh$p_city + theme(legend.position="none")), ncol=4)+
       #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
       # p_er_pm25_city  <- wrap_plots(lapply(city, function(x) x$p_er_pm25$p_city + theme(legend.position="none")), ncol=4)+
@@ -471,8 +468,8 @@ format_results <- function(output, outcome, city=NULL){
         plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
       p_lr_tp_city <- wrap_plots(lapply(city, function(x) x$p_lr_tp$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
         plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-      p_lr_fg10_city <- wrap_plots(lapply(city, function(x) x$p_lr_fg10$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
-        plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+      # p_lr_fg10_city <- wrap_plots(lapply(city, function(x) x$p_lr_fg10$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
+      #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
       # p_lr_rh_city  <- wrap_plots(lapply(city, function(x) x$p_lr_rh$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
       #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
       # p_lr_pm25_city <- wrap_plots(lapply(city, function(x) x$p_lr_pm25$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
@@ -483,8 +480,8 @@ format_results <- function(output, outcome, city=NULL){
     return(list(overall=overall, p_er_overall=p_er_overall, 
                 quant=quant, p_lr=p_lr, lags=lags, p_er=p_er,
                 city=city, city_er=city_er, city_lr=city_lr,
-                p_er_tmp_city=p_er_tmp_city, p_er_tp_city=p_er_tp_city, p_er_fg10_city=p_er_fg10_city, #, p_er_rh_city=p_er_rh_city, p_er_pm25_city=p_er_pm25_city,
-                p_lr_tmp_city=p_lr_tmp_city, p_lr_tp_city=p_lr_tp_city, p_lr_fg10_city=p_lr_fg10_city))#, p_lr_rh_city=p_lr_rh_city, p_lr_pm25_city=p_lr_pm25_city))
+                p_er_tmp_city=p_er_tmp_city, p_er_tp_city=p_er_tp_city, #p_er_fg10_city=p_er_fg10_city, p_er_rh_city=p_er_rh_city, p_er_pm25_city=p_er_pm25_city,
+                p_lr_tmp_city=p_lr_tmp_city, p_lr_tp_city=p_lr_tp_city)) #, p_lr_fg10_city=p_lr_fg10_city, p_lr_rh_city=p_lr_rh_city, p_lr_pm25_city=p_lr_pm25_city))
   
     } else {
   
@@ -493,23 +490,23 @@ format_results <- function(output, outcome, city=NULL){
     p_raw_all <- lapply(all, function(x) x[['p_raw']])
     p_raw_er <- p_raw_all[grepl('er', names(p_raw_all))] #|> head(-2)
     p_raw_lr <- p_raw_all[grepl('lr', names(p_raw_all))] #|> head(-2)
-    p_er_overall <- wrap_plots(p_raw_er, ncol=3)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+    p_er_overall <- wrap_plots(p_raw_er, nrow=1)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
     
     # Format lag plots
-    p_lr_tmp <- wrap_plots(lapply(quant, function(x) x$p_lr_tmp$p_raw), ncol=4) & theme(legend.position='none')
-    p_lr_tp <- wrap_plots(lapply(quant, function(x) x$p_lr_tp$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    p_lr_fg10 <- wrap_plots(lapply(quant, function(x) x$p_lr_fg10$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
+    p_lr_tmp <- wrap_plots(lapply(quant, function(x) x$p_lr_tmp$p_raw), nrow=1) & theme(legend.position='none')
+    p_lr_tp <- wrap_plots(lapply(quant, function(x) x$p_lr_tp$p_raw), nrow=1) & theme(legend.position='none', plot.title=element_blank())
+    # p_lr_fg10 <- wrap_plots(lapply(quant, function(x) x$p_lr_fg10$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
     # p_lr_rh <- wrap_plots(lapply(quant, function(x) x$p_lr_rh$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
     # p_lr_pm25 <- wrap_plots(lapply(quant, function(x) x$p_lr_pm25$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    p_lr <- wrap_plots(p_lr_tmp, p_lr_tp, p_lr_fg10, nrow=3)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+    p_lr <- wrap_plots(p_lr_tmp, p_lr_tp, nrow=2)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
     
     # Format exposure plots
-    p_er_tmp <- wrap_plots(lapply(lags, function(x) x$p_er_tmp$p_raw), ncol=4) & theme(legend.position='none')
-    p_er_tp <- wrap_plots(lapply(lags, function(x) x$p_er_tp$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    p_er_fg10 <- wrap_plots(lapply(lags, function(x) x$p_er_fg10$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
+    p_er_tmp <- wrap_plots(lapply(lags, function(x) x$p_er_tmp$p_raw), nrow=1) & theme(legend.position='none')
+    p_er_tp <- wrap_plots(lapply(lags, function(x) x$p_er_tp$p_raw), nrow=1) & theme(legend.position='none', plot.title=element_blank())
+    # p_er_fg10 <- wrap_plots(lapply(lags, function(x) x$p_er_fg10$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
     # p_er_rh <- wrap_plots(lapply(lags, function(x) x$p_er_rh$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
     # p_er_pm25 <- wrap_plots(lapply(lags, function(x) x$p_er_pm25$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    p_er <- wrap_plots(p_er_tmp, p_er_tp, p_er_fg10, nrow=3)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+    p_er <- wrap_plots(p_er_tmp, p_er_tp, nrow=2)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
   
     return(list(overall=overall, quant=quant, lags=lags, 
                 p_er_overall=p_er_overall, p_lr=p_lr, p_er=p_er))
@@ -601,7 +598,7 @@ city_exp_res <- function(city='ALL', meta, col, xlab=NULL, lag=NULL, title=NULL,
           scale_color_manual(name=NULL, values=color_vals) +
           scale_linetype_manual(name=NULL, values=linetype_vals) +
           scale_size_manual(name=NULL, values=size_vals) +
-          scale_x_continuous(breaks=pretty(df_all$pred, n=6)) +
+          scale_x_continuous(breaks = scales::breaks_pretty(n = 6)) +
           scale_y_continuous(breaks=pretty(c(min(df_all$low), max(df_all$high)), n=6)) +
           labs(x=xlab, y='RR', title=title) +
           coord_cartesian(ylim=c(min(df_all$low), max(df_all$high)), xlim=range(df_overall$pred)) +
@@ -629,7 +626,7 @@ city_exp_res <- function(city='ALL', meta, col, xlab=NULL, lag=NULL, title=NULL,
     rows_with_dup <- apply(cen, 1, function(row) any(duplicated(row)))
     cen <- as.data.frame(cen[!rows_with_dup, ])
     perc <- as.numeric(sub("%", "", names(rowMeans(cen))))
-    
+    reference <- if(reference=='0%') paste0(min(perc), '%') else reference
   } else {
     city <- names(Slist)
     coef <- as.numeric(ymat[city, ])
@@ -639,6 +636,7 @@ city_exp_res <- function(city='ALL', meta, col, xlab=NULL, lag=NULL, title=NULL,
     cols_with_dup <- duplicated(cen) | duplicated(cen, fromLast=TRUE)
     cen <- cen[!cols_with_dup, , drop=FALSE]
     perc <- as.numeric(sub("%", "", names(rowMeans(cen))))
+    reference <- if(reference=='0%') paste0(min(perc), '%') else reference
   }
   
   # Get overall estimates (for specific lag, if applicable)
@@ -721,9 +719,7 @@ city_exp_res <- function(city='ALL', meta, col, xlab=NULL, lag=NULL, title=NULL,
     # Set title based on lags
     if(!is.null(lag)){
       title <- paste0('Lag=', lag)
-    } else {
-      title <- NULL
-    }
+    } 
     
     p_raw  <- plot_estimates(city=city, df_overall=df_overall, df_specific1=NULL, df_specific2=NULL, xlab=xlab, col=col, title=title, legend='City-specific (Raw)')
     
@@ -831,7 +827,7 @@ city_lag_res <- function(city='ALL', meta, col, xlab=NULL, quant_v=NULL, title=N
     rows_with_dup <- apply(cen, 1, function(row) any(duplicated(row)))
     cen <- as.data.frame(cen[!rows_with_dup, ])
     perc <- as.numeric(sub("%", "", names(rowMeans(cen))))
-    
+    reference <- if(reference=='0%') paste0(min(perc), '%') else reference
   } else {
     city <- names(Slist)
     coef <- as.numeric(ymat[city, ])
@@ -841,6 +837,7 @@ city_lag_res <- function(city='ALL', meta, col, xlab=NULL, quant_v=NULL, title=N
     cols_with_dup <- duplicated(cen) | duplicated(cen, fromLast=TRUE)
     cen <- cen[!cols_with_dup, , drop=FALSE]
     perc <- as.numeric(sub("%", "", names(rowMeans(cen))))
+    reference <- if(reference=='0%') paste0(min(perc), '%') else reference
   }
   
   # Get overall estimates (for specific lag, if applicable)
@@ -1008,212 +1005,6 @@ city_con_res <- function(meta, xlab=NULL, title=NULL, reference='50%'){
 }
 
 
-#### OTHER ####
-
-# Function to check significant increases by exp levels and get table
-meta_checks <- function(meta, threshold){
-
-  cp <- crosspred(meta$b_mean, coef=coef(meta$mv),vcov=vcov(meta$mv), model.link='log', cen=meta$cen)
-  (checks <- apply(cp$matRRlow, 2, function(x) rownames(cp$matRRlow)[x > threshold]))
-  (table <- as.data.frame(matrix(
-    paste0(
-      sprintf('%.3f', cp$matRRfit),   # RR with 3 decimals
-      ' (',
-      sprintf('%.3f', cp$matRRlow),   # lower CI with 3 decimals
-      ', ',
-      sprintf('%.3f', cp$matRRhigh),  # upper CI with 3 decimals
-      ')'
-    ),
-    nrow=nrow(cp$matRRfit),
-    ncol=ncol(cp$matRRfit),
-    dimnames=dimnames(cp$matRRfit)  # keep original row/col names
-  )))
-
-  return(list(checks=checks, table=table))
-}
-
-# Function to extract model diagnostics
-get_model_fit <- function(model,name) {
-  modelfit <- data.frame(name,
-                         summary(model)$df.null+1,
-                         summary(model)$df[1],
-                         summary(model)$dispersio,
-                         summary(model)$deviance,
-                         summary(model)$deviance + 2* summary(model)$df[1] * summary(model)$dispersion)
-  names(modelfit) <- c('model','obs','dfmodel','dispersion','deviance','AIC' )
-  return(modelfit)
-}
-
-# Function to retrieve results from each predictor, with visuals and tables
-get_results <- function(df, outcome, quant_v=0.50, lag_v=NULL){
-
-  df <- df %>%
-    # dplyr::group_by(location) %>%
-    dplyr::arrange(date, .by_group=TRUE) %>%
-    dplyr::mutate(patients_lag=lag(total_patients, 1))
-
-  # Fit cross-basis
-  cb.tmp <- crossbasis(df$wb, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=3), group=df$year)
-  cb.tp <- crossbasis(df$tp, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=3), group=df$year)
-  cb.fg10 <- crossbasis(df$fg10, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=3), group=df$year)
-  cb.rh <- crossbasis(df$rh, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=3), group=df$year)
-  cb.pm25 <- crossbasis(df$pm25, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=3), group=df$year)
-  
-  # Fit model
-  model <- glm(formula=as.formula(paste0(outcome, ' ~ ns(time, df=8*length(unique(df$year))) +
-                                         patients_lag + season + weekday + holiday + 
-                                         cb.tmp + cb.tp + cb.fg10 + cb.rh + cb.pm25')), data=df, family=quasipoisson(link='log'))
-
-  # Select quantile
-  q_tmp <- quantile(df$wb, probs=quant_v, na.rm=TRUE)
-  q_tp <- quantile(df$tp, probs=quant_v, na.rm=TRUE)
-  q_fg10 <- quantile(df$fg10, probs=quant_v, na.rm=TRUE)
-  q_rh <- quantile(df$rh, probs=quant_v, na.rm=TRUE)
-  q_pm25<- quantile(df$pm25, probs=quant_v, na.rm=TRUE)
-  
-  # DISPLAY ESTIMATE OF RR FOR BENCHMARK TP INCREMENT OF 23.4 (99th perc)
-  cp.tmp <- crosspred(cb.tmp, model, at=q_tmp)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
-  cp.tp <- crosspred(cb.tp, model, at=q_tp)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
-  cp.fg10 <- crosspred(cb.fg10, model, at=q_fg10)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
-  cp.rh <- crosspred(cb.rh, model, at=q_rh)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
-  cp.pm25<- crosspred(cb.pm25, model, at=q_pm25)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
-  cp <- data.frame(rbind(cp.tmp, cp.tp, cp.fg10, cp.rh, cp.pm25))
-  df_cp <- data.frame(variables=rownames(cp), cp, row.names=NULL)
-
-  # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK wb value
-  cp <- crosspred(cb.tmp, model, at=q_tmp)
-  p_lr_tmp <- get_visuals(cp, model, lag_rep=TRUE, col='#D74B3C', title='Lag-response of wb (at 95th percentile)')
-  # GRAPH CUMULATIVE wb-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR TP & FG10)
-  cp <- crosspred(cb.tmp, model, at=seq(-10, 35, by=1))
-  p_er_tmp <- get_visuals(cp, model, lag_rep=FALSE, lag=lag_v, col='#D74B3C', xlab='Temperature (C)', title=lag_v)
-
-  # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK TP value
-  cp <- crosspred(cb.tp, model, at=q_tp)
-  p_lr_tp <- get_visuals(cp, model, lag_rep=TRUE, col='#1D98EB', title='Lag-response of tp (at 95th percentile)')
-  # GRAPH CUMULATIVE TP-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR wb & FG10)
-  cp <- crosspred(cb.tp, model)
-  p_er_tp <- get_visuals(cp, model, lag_rep=FALSE, lag=lag_v, col='#1D98EB', xlab='Rainfall (mm)', title=lag_v)
-
-  # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK FG10 value
-  cp <- crosspred(cb.rh, model, at=q_rh)
-  p_lr_rh <- get_visuals(cp, model, lag_rep=TRUE, col='#A6B727', title='Lag-response of fh (at 95th percentile)')
-  # GRAPH CUMULATIVE FG10-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR TP & wb)
-  cp <- crosspred(cb.rh, model)
-  p_er_rh <- get_visuals(cp, model, lag_rep=FALSE, lag=lag_v, col='#A6B727', xlab='Relative humidity (%)', title=lag_v)
-
-  result <- list(model=model, overall=df_cp,
-                 exp_rep=list(wb=p_er_tmp, tp=p_er_tp, rh=p_er_rh),
-                 lag_rep=list(wb=p_lr_tmp, tp=p_lr_tp, rh=p_lr_rh))
-
-  return(result)
-
-}
-
-# Function to get cumulative exposure-response and lag-response effects
-get_visuals <- function(cp, model, xlab, title, col, lag_rep=FALSE, lag=NULL){
-
-
-  if(lag_rep==FALSE){
-    if(!is.null(lag)){
-      cum <- data.frame(x=cp$predvar, RR=cp$matRRfit[, lag + 1], lower=cp$matRRlow[, lag + 1], upper=cp$matRRhigh[, lag + 1], row.names=NULL)
-    } else {
-      cum <- data.frame(x=cp$predvar, RR=cp$allRRfit, lower=cp$allRRlow, upper=cp$allRRhigh, row.names=NULL)
-    }
-    if (grepl('Precipitation', xlab)) {
-      cum$x <- round(exp(cp$predvar)-10, 2)
-    }
-    p <- ggplot(cum, aes(x=x, y=RR)) +
-      geom_line(color=col) +
-      geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.3, fill=col) +
-      geom_hline(yintercept=1, color='gray20') +
-      scale_x_continuous(breaks=pretty(cum$x, n=6)) +
-      # scale_y_continuous(limits=c(-0.5, 2.5)) +
-      labs(x=xlab, y='RR',
-           title=title) +
-      theme_classic() +
-      theme(
-        axis.line=element_line(color='gray20'),      # pale axis lines
-        axis.text=element_text(color='gray20'),      # pale axis labels
-        axis.ticks=element_line(color='gray20'),     # pale ticks
-        plot.title=element_text(face='bold', hjust=0.5, size=12)  # center title
-      )
-  } else {
-
-    slice <- data.frame(lag=seq(cp$lag[1], cp$lag[2]), RR=t(cp$matRRfit), lower=t(cp$matRRlow), upper=t(cp$matRRhigh), row.names=NULL)
-    names(slice) <- c('lag', 'RR', 'lower','upper')
-    p <- ggplot(slice, aes(x=lag, y=RR)) +
-      geom_hline(yintercept=1, color='gray20') +
-      geom_errorbar(aes(ymin=lower, ymax=upper), width=0.2,  size=0.2) +
-      geom_point(color=col,  size=2.5) +
-      scale_x_continuous(breaks=seq(min(slice$lag), max(slice$lag), by=2)) +  # more breaks
-      labs(x='Lag (days)', y='RR',
-           title=title) +
-      theme_classic() +
-      theme(
-        axis.line=element_line(color='gray20'),      # pale axis lines
-        axis.text=element_text(color='gray20'),      # pale axis labels
-        axis.ticks=element_line(color='gray20'),     # pale ticks
-        plot.title=element_text(face='bold', hjust=0.5, size=12)  # center title
-      )
-
-  }
-
-  return(p)
-}
-
-# Function to format and organizing visuals
-get_all_plots <- function(plot_list, single_outcome=NULL, rows=3){
-
-  # Function: Format plots for visualizing (2*4 grid)
-  multi_plot_format <- function(plot_list){
-
-    p <- plot_list
-
-    # Loop to remove existing titles and replace with the list name
-    p <- lapply(names(p), function(n) {
-      p[[n]] + labs(title=n)
-    })
-
-    # Keep names after lapply
-    names(p) <- names(p)
-
-    # result <- (p[[1]] | p[[2]] | p[[3]] | p[[4]]) / (p[[5]] | p[[6]] | p[[7]] | p[[8]])
-
-    result <- wrap_plots(p, nrow=rows)
-
-    return(result)
-  }
-
-
-  # Visualise all outputs
-  if(!is.null(single_outcome)){
-
-    # Arrange your 2x3 grid
-    exp_rep <- (plots$exp_rep_tmp[[single_outcome]] | plots$exp_rep_tp[[single_outcome]] | plots$exp_rep_fg10[[single_outcome]]) + plot_annotation(title=paste0('Outcome: ', single_outcome), theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-    lag_rep <- (plots$lag_rep_tmp[[single_outcome]] | plots$lag_rep_tp[[single_outcome]] | plots$lag_rep_fg10[[single_outcome]]) + plot_annotation(title=paste0('Outcome: ', single_outcome), theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-    all <- (exp_rep / lag_rep) + plot_annotation(title=paste0('Outcome: ', single_outcome), theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-
-    # Add a main title
-    grid_plots <- list(all=all, exp_rep=exp_rep, lag_rep=lag_rep)
-
-  } else {
-
-    exp_rep_tmp <- multi_plot_format(plot_list$exp_rep_tmp) + plot_annotation(title='RR of wb exposure-response (lag=5)', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-    lag_rep_tmp <- multi_plot_format(plot_list$lag_rep_tmp) + plot_annotation(title='Lag-response of wb (at 95th percentile)', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-    exp_rep_tp <- multi_plot_format(plot_list$exp_rep_tp) + plot_annotation(title='RR of tp exposure-response (lag=6)', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-    lag_rep_tp <- multi_plot_format(plot_list$lag_rep_tp) + plot_annotation(title='Lag-response of tp (at 95th percentile)', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-    exp_rep_fg10 <- multi_plot_format(plot_list$exp_rep_fg10) + plot_annotation(title='Overall RR of fg10 exposure-response', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-    lag_rep_fg10 <- multi_plot_format(plot_list$lag_rep_fg10) + plot_annotation(title='Lag-response of fg10 (at 95th percentile)', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
-
-    grid_plots <- list(exp_rep_tmp=exp_rep_tmp, lag_rep_tmp=lag_rep_tmp, exp_rep_tp=exp_rep_tp,
-                       lag_rep_tp=lag_rep_tp, exp_rep_fg10=exp_rep_fg10, lag_rep_fg10=lag_rep_fg10)
-
-  }
-
-  return(grid_plots)
-
-}
-
 #### DEPENDENCIES ####
 
 mypalette <- c('#1D98EB','#D74B3C','#A6B727','#FEC306','#EC800A','#E569BF','#8968CD','#52C5B0FF', '#910030FF', '#127804FF',
@@ -1257,14 +1048,221 @@ nm <- c(season='Season', closed='Closed', holiday='Holiday', total_patients='Tot
         physiotherapy='Physiotherapy', 
         # CONTINUOUS WEATHER
         t2m='Mean temp. (\u00B0C)', mx2t='Max temp. (\u00B0C)', mn2t='Min temp. (\u00B0C)',
-        rh='Relative humidity (%)', tp='Rainfall (mm)', fg10='Windspeed (km/hr)', pm25='Air pollution (µg/m³)',
+        rh='Relative humidity (%)', tp='Precipitation (mm)', fg10='Windspeed (km/hr)', pm25='Air pollution (µg/m³)',
         dt="Diurnal temp. range (\u00B0C)", wb="Wet-bulb temp. (\u00B0C)",
         # IMD DEFINITIONS
         mx2t_IMD='IMD: Mx temp. >30\u00B0C', mn2t_IMD='IMD: Min temp. <0\u00B0C', 
-        tp_IMD='IMD: Rainfall >15mm', fg10_IMD='IMD: Wind speed >40km/h', pm25_IMD='IMD: PM2.5 >60 µg/m³', 
+        tp_IMD='IMD: Precipitation >15mm', fg10_IMD='IMD: Wind speed >40km/h', pm25_IMD='IMD: PM2.5 >60 µg/m³', 
         rh_low_IMD='IMD: Humidity <30%', rh_hig_IMD='IMD: Humidity >60%',
         # CLIM. DEFINITIONS
         mx2t_p90='Clim: Max temp. >90th', mn2t_p10='Clim: Min temp. <10th', 
-        tp_p90='Clim: Rainfall >90th', fg10_p90='Clim: Wind speed >90th', pm25_p90='Clim: PM2.5 >90th', 
+        tp_p90='Clim: Precipitation >90th', fg10_p90='Clim: Wind speed >90th', pm25_p90='Clim: PM2.5 >90th', 
         rh_mean_p10 ='Clim: Humidity <10th', rh_mean_p90='Clim: Humidity >90th') 
 
+
+ 
+# #### OTHER ####
+# 
+# # Function to check significant increases by exp levels and get table
+# meta_checks <- function(meta, threshold){
+#   
+#   cp <- crosspred(meta$b_mean, coef=coef(meta$mv),vcov=vcov(meta$mv), model.link='log', cen=meta$cen)
+#   (checks <- apply(cp$matRRlow, 2, function(x) rownames(cp$matRRlow)[x > threshold]))
+#   (table <- as.data.frame(matrix(
+#     paste0(
+#       sprintf('%.3f', cp$matRRfit),   # RR with 3 decimals
+#       ' (',
+#       sprintf('%.3f', cp$matRRlow),   # lower CI with 3 decimals
+#       ', ',
+#       sprintf('%.3f', cp$matRRhigh),  # upper CI with 3 decimals
+#       ')'
+#     ),
+#     nrow=nrow(cp$matRRfit),
+#     ncol=ncol(cp$matRRfit),
+#     dimnames=dimnames(cp$matRRfit)  # keep original row/col names
+#   )))
+#   
+#   return(list(checks=checks, table=table))
+# }
+# 
+# # Function to extract model diagnostics
+# get_model_fit <- function(model,name) {
+#   modelfit <- data.frame(name,
+#                          summary(model)$df.null+1,
+#                          summary(model)$df[1],
+#                          summary(model)$dispersio,
+#                          summary(model)$deviance,
+#                          summary(model)$deviance + 2* summary(model)$df[1] * summary(model)$dispersion)
+#   names(modelfit) <- c('model','obs','dfmodel','dispersion','deviance','AIC' )
+#   return(modelfit)
+# }
+# 
+# # Function to retrieve results from each predictor, with visuals and tables
+# get_results <- function(df, outcome, quant_v=0.50, lag_v=NULL){
+#   
+#   df <- df %>%
+#     # dplyr::group_by(location) %>%
+#     dplyr::arrange(date, .by_group=TRUE) %>%
+#     dplyr::mutate(patients_lag=lag(total_patients, 1))
+#   
+#   # Fit cross-basis
+#   cb.tmp <- crossbasis(df$wb, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=3), group=df$year)
+#   cb.tp <- crossbasis(df$tp, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=3), group=df$year)
+#   cb.fg10 <- crossbasis(df$fg10, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=3), group=df$year)
+#   cb.rh <- crossbasis(df$rh, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=3), group=df$year)
+#   cb.pm25 <- crossbasis(df$pm25, lag=c(0,14),argvar=list(fun='ns', df=4), arglag=list(fun='ns', df=3), group=df$year)
+#   
+#   # Fit model
+#   model <- glm(formula=as.formula(paste0(outcome, ' ~ ns(time, df=8*length(unique(df$year))) +
+#                                          patients_lag + season + weekday + holiday + 
+#                                          cb.tmp + cb.tp + cb.fg10 + cb.rh + cb.pm25')), data=df, family=quasipoisson(link='log'))
+#   
+#   # Select quantile
+#   q_tmp <- quantile(df$wb, probs=quant_v, na.rm=TRUE)
+#   q_tp <- quantile(df$tp, probs=quant_v, na.rm=TRUE)
+#   q_fg10 <- quantile(df$fg10, probs=quant_v, na.rm=TRUE)
+#   q_rh <- quantile(df$rh, probs=quant_v, na.rm=TRUE)
+#   q_pm25<- quantile(df$pm25, probs=quant_v, na.rm=TRUE)
+#   
+#   # DISPLAY ESTIMATE OF RR FOR BENCHMARK TP INCREMENT OF 23.4 (99th perc)
+#   cp.tmp <- crosspred(cb.tmp, model, at=q_tmp)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
+#   cp.tp <- crosspred(cb.tp, model, at=q_tp)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
+#   cp.fg10 <- crosspred(cb.fg10, model, at=q_fg10)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
+#   cp.rh <- crosspred(cb.rh, model, at=q_rh)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
+#   cp.pm25<- crosspred(cb.pm25, model, at=q_pm25)[c('predvar', 'allRRfit','allRRlow','allRRhigh')]
+#   cp <- data.frame(rbind(cp.tmp, cp.tp, cp.fg10, cp.rh, cp.pm25))
+#   df_cp <- data.frame(variables=rownames(cp), cp, row.names=NULL)
+#   
+#   # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK wb value
+#   cp <- crosspred(cb.tmp, model, at=q_tmp)
+#   p_lr_tmp <- get_visuals(cp, model, lag_rep=TRUE, col='#D74B3C', title='Lag-response of wb (at 95th percentile)')
+#   # GRAPH CUMULATIVE wb-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR TP & FG10)
+#   cp <- crosspred(cb.tmp, model, at=seq(-10, 35, by=1))
+#   p_er_tmp <- get_visuals(cp, model, lag_rep=FALSE, lag=lag_v, col='#D74B3C', xlab='Temperature (C)', title=lag_v)
+#   
+#   # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK TP value
+#   cp <- crosspred(cb.tp, model, at=q_tp)
+#   p_lr_tp <- get_visuals(cp, model, lag_rep=TRUE, col='#1D98EB', title='Lag-response of tp (at 95th percentile)')
+#   # GRAPH CUMULATIVE TP-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR wb & FG10)
+#   cp <- crosspred(cb.tp, model)
+#   p_er_tp <- get_visuals(cp, model, lag_rep=FALSE, lag=lag_v, col='#1D98EB', xlab='Precipitation (mm)', title=lag_v)
+#   
+#   # PLOT THE ESTIMATE LAG STRUCTURE FOR BENCHMARK FG10 value
+#   cp <- crosspred(cb.rh, model, at=q_rh)
+#   p_lr_rh <- get_visuals(cp, model, lag_rep=TRUE, col='#A6B727', title='Lag-response of fh (at 95th percentile)')
+#   # GRAPH CUMULATIVE FG10-ADMISSIONS CUMULTIVE ASSOCIATION (AFTER ADJUSTING FOR TP & wb)
+#   cp <- crosspred(cb.rh, model)
+#   p_er_rh <- get_visuals(cp, model, lag_rep=FALSE, lag=lag_v, col='#A6B727', xlab='Relative humidity (%)', title=lag_v)
+#   
+#   result <- list(model=model, overall=df_cp,
+#                  exp_rep=list(wb=p_er_tmp, tp=p_er_tp, rh=p_er_rh),
+#                  lag_rep=list(wb=p_lr_tmp, tp=p_lr_tp, rh=p_lr_rh))
+#   
+#   return(result)
+#   
+# }
+# 
+# # Function to get cumulative exposure-response and lag-response effects
+# get_visuals <- function(cp, model, xlab, title, col, lag_rep=FALSE, lag=NULL){
+#   
+#   
+#   if(lag_rep==FALSE){
+#     if(!is.null(lag)){
+#       cum <- data.frame(x=cp$predvar, RR=cp$matRRfit[, lag + 1], lower=cp$matRRlow[, lag + 1], upper=cp$matRRhigh[, lag + 1], row.names=NULL)
+#     } else {
+#       cum <- data.frame(x=cp$predvar, RR=cp$allRRfit, lower=cp$allRRlow, upper=cp$allRRhigh, row.names=NULL)
+#     }
+#     if (grepl('Precipitation', xlab)) {
+#       cum$x <- round(exp(cp$predvar)-10, 2)
+#     }
+#     p <- ggplot(cum, aes(x=x, y=RR)) +
+#       geom_line(color=col) +
+#       geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.3, fill=col) +
+#       geom_hline(yintercept=1, color='gray20') +
+#       scale_x_continuous(breaks=pretty(cum$x, n=6)) +
+#       # scale_y_continuous(limits=c(-0.5, 2.5)) +
+#       labs(x=xlab, y='RR',
+#            title=title) +
+#       theme_classic() +
+#       theme(
+#         axis.line=element_line(color='gray20'),      # pale axis lines
+#         axis.text=element_text(color='gray20'),      # pale axis labels
+#         axis.ticks=element_line(color='gray20'),     # pale ticks
+#         plot.title=element_text(face='bold', hjust=0.5, size=12)  # center title
+#       )
+#   } else {
+#     
+#     slice <- data.frame(lag=seq(cp$lag[1], cp$lag[2]), RR=t(cp$matRRfit), lower=t(cp$matRRlow), upper=t(cp$matRRhigh), row.names=NULL)
+#     names(slice) <- c('lag', 'RR', 'lower','upper')
+#     p <- ggplot(slice, aes(x=lag, y=RR)) +
+#       geom_hline(yintercept=1, color='gray20') +
+#       geom_errorbar(aes(ymin=lower, ymax=upper), width=0.2,  size=0.2) +
+#       geom_point(color=col,  size=2.5) +
+#       scale_x_continuous(breaks=seq(min(slice$lag), max(slice$lag), by=2)) +  # more breaks
+#       labs(x='Lag (days)', y='RR',
+#            title=title) +
+#       theme_classic() +
+#       theme(
+#         axis.line=element_line(color='gray20'),      # pale axis lines
+#         axis.text=element_text(color='gray20'),      # pale axis labels
+#         axis.ticks=element_line(color='gray20'),     # pale ticks
+#         plot.title=element_text(face='bold', hjust=0.5, size=12)  # center title
+#       )
+#     
+#   }
+#   
+#   return(p)
+# }
+# 
+# # Function to format and organizing visuals
+# get_all_plots <- function(plot_list, single_outcome=NULL, rows=3){
+#   
+#   # Function: Format plots for visualizing (2*4 grid)
+#   multi_plot_format <- function(plot_list){
+#     
+#     p <- plot_list
+#     
+#     # Loop to remove existing titles and replace with the list name
+#     p <- lapply(names(p), function(n) {
+#       p[[n]] + labs(title=n)
+#     })
+#     
+#     # Keep names after lapply
+#     names(p) <- names(p)
+#     
+#     # result <- (p[[1]] | p[[2]] | p[[3]] | p[[4]]) / (p[[5]] | p[[6]] | p[[7]] | p[[8]])
+#     
+#     result <- wrap_plots(p, nrow=rows)
+#     
+#     return(result)
+#   }
+#   
+#   
+#   # Visualise all outputs
+#   if(!is.null(single_outcome)){
+#     
+#     # Arrange your 2x3 grid
+#     exp_rep <- (plots$exp_rep_tmp[[single_outcome]] | plots$exp_rep_tp[[single_outcome]] | plots$exp_rep_fg10[[single_outcome]]) + plot_annotation(title=paste0('Outcome: ', single_outcome), theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
+#     lag_rep <- (plots$lag_rep_tmp[[single_outcome]] | plots$lag_rep_tp[[single_outcome]] | plots$lag_rep_fg10[[single_outcome]]) + plot_annotation(title=paste0('Outcome: ', single_outcome), theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
+#     all <- (exp_rep / lag_rep) + plot_annotation(title=paste0('Outcome: ', single_outcome), theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
+#     
+#     # Add a main title
+#     grid_plots <- list(all=all, exp_rep=exp_rep, lag_rep=lag_rep)
+#     
+#   } else {
+#     
+#     exp_rep_tmp <- multi_plot_format(plot_list$exp_rep_tmp) + plot_annotation(title='RR of wb exposure-response (lag=5)', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
+#     lag_rep_tmp <- multi_plot_format(plot_list$lag_rep_tmp) + plot_annotation(title='Lag-response of wb (at 95th percentile)', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
+#     exp_rep_tp <- multi_plot_format(plot_list$exp_rep_tp) + plot_annotation(title='RR of tp exposure-response (lag=6)', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
+#     lag_rep_tp <- multi_plot_format(plot_list$lag_rep_tp) + plot_annotation(title='Lag-response of tp (at 95th percentile)', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
+#     exp_rep_fg10 <- multi_plot_format(plot_list$exp_rep_fg10) + plot_annotation(title='Overall RR of fg10 exposure-response', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
+#     lag_rep_fg10 <- multi_plot_format(plot_list$lag_rep_fg10) + plot_annotation(title='Lag-response of fg10 (at 95th percentile)', theme=theme(plot.title=element_text(size=20, hjust=0.5, face='bold')))
+#     
+#     grid_plots <- list(exp_rep_tmp=exp_rep_tmp, lag_rep_tmp=lag_rep_tmp, exp_rep_tp=exp_rep_tp,
+#                        lag_rep_tp=lag_rep_tp, exp_rep_fg10=exp_rep_fg10, lag_rep_fg10=lag_rep_fg10)
+#     
+#   }
+#   
+#   return(grid_plots)
+#   
+# }

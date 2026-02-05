@@ -1,5 +1,5 @@
 ### ------------------------------------------------------------------------ ### 
-###  DNLM - Data cleaning and tests                                          ###
+###  DNLM: Data cleaning and tests
 ### ------------------------------------------------------------------------ ### 
 
 # Prep environment
@@ -32,7 +32,7 @@ loc_points <- data.frame(
 df <- merge(df, loc_points, by='location')
 
 # Filter out Bilaspur (incomplete series)
-df <- df %>%   filter(!location %in% c("Bilaspur"))
+df <- df %>%   filter(!location %in% c('Bilaspur')) #Nahan
 
 # Filter out COVID years
 startdate <- as.Date('2015-01-01')
@@ -81,14 +81,20 @@ p3 <- ggplot(df, aes(x = tp_roll_log)) +
   labs(title = "Rolling + 10 with log") + 
   theme_minimal()
 
-tp_dist <- wrap_plots(list(p1, p2, p3), nrow = 1) + plot_annotation(title = "Distribution of precipitation Variables")
+tp_dist <- wrap_plots(list(p1, p2, p3), nrow = 1) +
+  plot_annotation(
+    title = "Distribution of precipitation variables",
+    theme = theme(
+      plot.title = element_text(hjust = 0.5, face='bold')
+    )
+  )
 
 df$tp <- df$tp_roll_log
 df$tp_roll <- NULL
 df$tp_roll_log <- NULL
 
 # LAGS: Add lags for outcome & w_col
-lag_cols <- c('total_patients', w_cols)
+lag_cols <- c(h_cols, w_cols)
 for (col in lag_cols) {
   for (i in 1:30) {
     df <- df %>%
@@ -107,6 +113,6 @@ df <- df %>%
   ungroup()
 
 # EXPORT ####
-ggsave(paste0(path_report, '- figures/desc_tp_dist.png'), tp_dist, width=8, height=6, dpi = 300, bg='white')
+ggsave(paste0(path_report, 'figures/descriptive/desc_4_tp_dist.png'), tp_dist, width=8, height=4, dpi = 300, bg='white')
 save(df, file = paste0(path_project, 'ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide_DLNM.RData'))
 save(df, file = paste0(path_report, 'ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide_DLNM.RData'))

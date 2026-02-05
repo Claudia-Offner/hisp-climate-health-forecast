@@ -1,29 +1,39 @@
 ### ------------------------------------------------------------------------ ### 
-###  DNLM - Multi-city meta-analysis                                         ###
+###  DNLM: Multiple city meta- and uni-analysis
 ### ------------------------------------------------------------------------ ### 
-rm(list=ls())
 
-# LOAD THE PACKAGE
-library(dlnm); library(splines); library(xtable); library(mvmeta); library(MASS);
-library(ggplot2); library(dplyr); library(purrr); library(patchwork); 
-library(colorspace); library(png); library(grid); library(reshape2); library(cowplot)
-
-
+# Prep environment
+rm(list=ls()); graphics.off(); gc()
 setwd(paste0('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/'))
 source('2_DLNM/HISP_DLNM - Dependencies.R')
 
+# Load packages
+library(dlnm); library(splines); library(xtable); library(mvmeta); library(MASS);
+library(ggplot2); library(dplyr); library(purrr); library(patchwork); library(openxlsx);
+library(colorspace); library(png); library(grid); library(reshape2); library(cowplot)
+
 #### FUNCTIONS ####
+
+# Function to get empty plot with title, for nested wrap_plot work around
+get_title <- function(title){
+  
+  ggplot() +
+    labs(title = title) +
+    theme_void() + 
+    theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"))
+  
+}
 
 # Function to create city specific legend from dummy set
 get_city_legend <- function(plot, pred='ALL'){
   
   legend_df <- data.frame(x = 1, y = 1, 
-                          predictor = factor(c("wb","tp","rh", 'pm25', 'fg10', "Pooled","BLUP"), 
-                                             levels = c("wb","tp","rh",'pm25', 'fg10',"Pooled","BLUP")), 
-                          colour = c("#D74B3C","#1D98EB","#A6B727", '#E569BF', '#8968CD', "black","black"), 
+                          predictor = factor(c("mx2t","tp","fg10", 'pm25', 'rh', "Pooled","BLUP"), 
+                                             levels = c("mx2t","tp","fg10",'pm25', 'rh',"Pooled","BLUP")), 
+                          colour = c("#D74B3C","#1D98EB","#8968CD", '#E569BF', '#A6B727', "black","black"), 
                           linetype = c("solid","solid","solid","solid","solid","solid","dashed"), 
                           size = c(1.2,1.2,1.2,1.2,1.2,0.7,0.7))
-  legend_df <- legend_df %>% filter(!predictor %in% c("pm25", "fg10"))
+  legend_df <- legend_df %>% filter(!predictor %in% c('fg10', "pm25", "rh"))
   
   if(pred != 'ALL'){
     legend_df <- subset(legend_df, predictor %in% c(pred, "Pooled", "BLUP"))
@@ -63,23 +73,60 @@ get_city_legend <- function(plot, pred='ALL'){
   
 }
 
+# Function to easily assign parameters according to uni- or multi-site models
+run_bestfit <- function(df, locations, outcome, params, pooled, city){
+  
+  # Get params
+  longterm_df <- params$longterm
+  autocorr_lag <- params$autocorr
+  arglag_tmp <- params$arglag$mx2t
+  arglag_tp <- params$arglag$tp
+  arglag_fg10 <- params$arglag$fg10
+  argvar_tmp <- params$argvar$mx2t
+  argvar_tp <- params$argvar$tp
+  argvar_fg10 <- params$argvar$fg10
+  fam_type <- 'binom' #params$shape
+  
+  # Run model
+  output <- run_model(df, locations, outcome, fam_type=fam_type, pooled=pooled,
+                      longterm_df=longterm_df, autocorr_lag=autocorr_lag, 
+                      arglag_tmp=arglag_tmp, arglag_tp=arglag_tp, arglag_fg10=arglag_fg10,
+                      argvar_tmp=argvar_tmp, argvar_tp=argvar_tp, argvar_fg10=argvar_fg10)
+  results <- format_results(output, outcome, city=city)
+  
+  print(paste0('Model AIC: ', output$meta_comp$sum_aic))
+  
+  return(list(output=output, results=results))
+  
+}
+
+
 #### MAIN CODE ####
 
+# Load data and parameters
 load(paste0('2_DLNM/ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide_DLNM.RData'))
+load(paste0(path_project, '/sens_params.RData'))
 
 # Set location info
-locations <- as.character(unique(df$location))
+locations <- as.character(df %>% distinct(location, elev) %>% arrange(elev) %>% pull(location))
+# locations <- as.character(unique(df$location))
 m <- length(locations)
 
-# Run model 1 - Overall ----
+# Store results
+results <- list()
 
-# Total patients
+# Set outcome outcome and exposures
 outcome <- 'total_patients'
-output <- run_model(df, locations, outcome)
-output$meta_comp$sum_aic
+variables <- c('mx2t', 'tp')
+
+# Analysis 1 - Overall (pooled params) ----
 
 # Main results
-main_res <- format_results(output, outcome)
+res <- run_bestfit(df, locations, outcome, params=final_params$pooled, pooled=TRUE, city=NULL)
+results$overall <- res
+output   <- res$output
+main_res <- res$results
+
 # Contours
 # city_con_res(meta=output$meta_wb, xlab='Temperature (%)', title='Wet-bulb temperature')
 # city_con_res(meta=output$meta_tp, xlab='Rainfall (%)', title='5-day cummulative precipitation')
@@ -87,42 +134,41 @@ main_res <- format_results(output, outcome)
 
 # Overall
 (total_er_overall <- main_res$p_er_overall + plot_annotation(title=replace_exact_matches(outcome, nm)))
-
-(total_lr <- main_res$p_lr + plot_annotation(title=paste0('Lag-response: ', replace_exact_matches(outcome, nm))))
-(total_er <- main_res$p_er + plot_annotation(title=paste0('Exposure-response: ', replace_exact_matches(outcome, nm))))
+(total_lr <- main_res$p_lr + plot_annotation(title='Lag-response'))
+(total_er <- main_res$p_er + plot_annotation(title='Exposure-response'))
 
 # Main exposure-response, by city
-(city_wb_er <- get_city_legend(pred='wb', plot=main_res$p_er_wb_city + plot_annotation(title='Exposure-response, by city')))
-(city_tp_er <- get_city_legend(pred='tp', plot=main_res$p_er_tp_city + plot_annotation(title='Exposure-response, by city')))
+(city_tmp_er <- get_city_legend(pred='mx2t', plot=main_res$p_er_tmp_city + plot_annotation(title='Exposure-response, by city: Temperature')))
+(city_tp_er <- get_city_legend(pred='tp', plot=main_res$p_er_tp_city + plot_annotation(title='Exposure-response, by city: Precipitation')))
+# (city_fg10_er <- get_city_legend(pred='fg10', plot=main_res$p_er_fg10_city + plot_annotation(title='Exposure-response, by city: Wind speed')))
 # (city_rh_er <- get_city_legend(pred='rh', plot=main_res$p_er_rh_city + plot_annotation(title='Exposure-response, by city')))
 # (city_pm25_er <- get_city_legend(pred='pm25', plot=main_res$p_er_pm25_city + plot_annotation(title='Exposure-response, by city')))
-# (city_fg10_er <- get_city_legend(pred='fg10', plot=main_res$p_er_fg10_city + plot_annotation(title='Exposure-response, by city')))
 
 # Main lag-response, by city
-# (city_wb_lr <- main_res$p_lr_wb_city + plot_annotation(title=replace_exact_matches('wb', nm)))
+# (city_tmp_lr <- main_res$p_lr_tmp_city + plot_annotation(title=replace_exact_matches('wb', nm)))
 # (city_tp_lr <- main_res$p_lr_tp_city + plot_annotation(title=replace_exact_matches('tp', nm)))
-# (city_rh_lr <- main_res$p_lr_rh_city + plot_annotation(title=replace_exact_matches('rh', nm)))
 # (city_fg10_lr <- main_res$p_lr_fg10_city + plot_annotation(title=replace_exact_matches('fg10', nm)))
+# (city_rh_lr <- main_res$p_lr_rh_city + plot_annotation(title=replace_exact_matches('rh', nm)))
 # (city_pm25_lr <- main_res$p_lr_pm25_city + plot_annotation(title=replace_exact_matches('pm25', nm)))
 
-# City case study: Una & Recking Peo
-una_res <- format_results(output, outcome, city='Una')
-(una_lr <- get_city_legend(wrap_plots(una_res$p_lr_wb_city, una_res$p_lr_tp_city, una_res$p_lr_rh_city,
-                                       nrow=3)+plot_annotation(title='Lag-response: Una', theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))))
-(una_er <- get_city_legend(wrap_plots(una_res$p_er_wb_city, una_res$p_er_tp_city, una_res$p_er_rh_city,
-                                        nrow=3)+plot_annotation(title='Exposure-response: Una', theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))))
+# City case study: Chamba & Dharamshala
 
-solan_res <- format_results(output, outcome, city='Solan')
-(solan_lr <- get_city_legend(wrap_plots(solan_res$p_lr_wb_city, solan_res$p_lr_tp_city, solan_res$p_lr_rh_city,
-                                      nrow=3)+plot_annotation(title='Lag-response: Solan', theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))))
-(solan_er <- get_city_legend(wrap_plots(solan_res$p_er_wb_city, solan_res$p_er_tp_city, solan_res$p_er_rh_city,
-                                      nrow=3)+plot_annotation(title='Exposure-response: Solan', theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))))
+dharam_res <- format_results(output, outcome, city='Dharamshala')
+dharam_lr <- get_city_legend(wrap_plots(dharam_res$p_lr_tmp_city, dharam_res$p_lr_tp_city,
+                                        nrow=2)+plot_annotation(title='Lag-response: Dharamshala', theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold'))))
+dharam_er <- get_city_legend(wrap_plots(dharam_res$p_er_tmp_city, dharam_res$p_er_tp_city,
+                                        nrow=2)+plot_annotation(title='Exposure-response: Dharamshala', theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold'))))
+
+cham_res <- format_results(output, outcome, city='Chamba')
+cham_lr <- get_city_legend(wrap_plots(cham_res$p_lr_tmp_city, cham_res$p_lr_tp_city, 
+                                      nrow=2)+plot_annotation(title='Lag-response: Chamba', theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold'))))
+cham_er <- get_city_legend(wrap_plots(cham_res$p_er_tmp_city, cham_res$p_er_tp_city, 
+                                      nrow=2)+plot_annotation(title='Exposure-response: Chamba', theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold'))))
 
 
 # Main percentile look up
 cen_tables <- list()
 datalist <- lapply(locations, function(region) df[df$location==region,])
-variables <- c('wb', 'tp', 'rh', 'pm25', 'fg10')
 for (v in variables) {
   cen <- sapply(datalist,function(x) {
     quantile(x[[v]],c(0:100)/100,na.rm=T)
@@ -134,25 +180,24 @@ for (v in variables) {
   cen <- cbind(cen, Average = rowMeans(cen))
   cen_tables[[v]] <- round(cen, 4)
 }
-names(cen_tables) <- c('Wet bulb temp', 'Precipitation', 'Relative humidity', 'Air pollution', 'Wind speed')
+names(cen_tables) <- c('Maximum temperature', 'Precipitation') # Wind speed
 
 #### EXPORT #####
 
 # FIGURES
-exports <- list('MF_total_er_overall'=list(plot=total_er_overall, width=10, height=5),
-                'MF_total_lr'=list(plot=total_lr, width=10, height=6),
-                'MF_total_er'=list(plot=total_er, width=10, height=6),
-                'MF_city_wb_er'=list(plot=city_wb_er, width=10, height=5),
-                'MF_city_tp_er'=list(plot=city_tp_er, width=10, height=5),
-                'MF_city_rh_er'=list(plot=city_rh_er, width=10, height=5),
-                'SF_una_lr'=list(plot=una_lr, width=10, height=6),
-                'SF_una_er'=list(plot=una_er, width=10, height=6),
-                'SF_solan_lr'=list(plot=solan_lr, width=10, height=6),
-                'SF_solan_er'=list(plot=solan_er, width=10, height=6))
+exports <- list('MF_1A_total_er_overall'=list(p=total_er_overall, w=9, h=5),
+                'MF_1B_total_lr'=list(p=total_lr, w=8, h=6),
+                'MF_1C_total_er'=list(p=total_er, w=8, h=6),
+                'MF_1D_city_tmp_er'=list(p=city_tmp_er, w=9, h=5),
+                'MF_1E_city_tp_er'=list(p=city_tp_er, w=9, h=5),
+                # 'MF_1F_city_fg10_er'=list(p=city_fg10_er, w=9, h=5),
+                'SF_1G_cham_lr'=list(p=cham_lr, w=8, h=6),
+                'SF_1H_cham_er'=list(p=cham_er, w=8, h=6),
+                'SF_1I_dharam_lr'=list(p=dharam_lr, w=8, h=6),
+                'SF_1J_dharam_er'=list(p=dharam_er, w=8, h=6))
 
 for (e in names(exports)){
-  ggsave(filename=paste0(path_ch2, 'IV. Figures/', e, '.png'), plot=exports[[e]]$plot, width=exports[[e]]$width, height=exports[[e]]$height, dpi=300)
-  ggsave(filename=paste0(path_report, '- figures/', e, '.png'), plot=exports[[e]]$plot, width=exports[[e]]$width, height=exports[[e]]$height, dpi=300)
+  ggsave(filename=paste0(path_report, 'figures/', e, '.png'), plot=exports[[e]]$p, width=exports[[e]]$w, height=exports[[e]]$h, dpi=300, bg='white')
 }
 
 # TABLES
@@ -161,21 +206,47 @@ for (name in names(cen_tables)) {
   addWorksheet(wb, sheetName = name)               
   writeData(wb, sheet = name, cen_tables[[name]], rowNames=TRUE)
 }
-saveWorkbook(wb, file=paste0(path_ch2,"III. Tables/ST_main_perc.xlsx"), overwrite = TRUE)
-saveWorkbook(wb, file=paste0(path_report,"- tables/ST_main_perc.xlsx"), overwrite = TRUE)
+saveWorkbook(wb, file=paste0(path_report,"tables/ST_main_perc.xlsx"), overwrite = TRUE)
 
-# Run model 2 - Seasonal differences ####
+# Analysis 2 - City-specific models (city params) ####
 
-# Winter/pre-monsoon results (months=5)
-df_win <- df %>%
-  filter(season %in% c('Winter (Jan-Feb)', 'Pre-Monsoon (Mar-May)'))
-win <- run_model(df_win, locations, outcome)
-win$meta_comp$sum_aic
-win_res <- format_results(win, outcome)
-(win_er_overall <- win_res$p_er_overall + plot_annotation(title='Winter'))
-(win_lr <- win_res$p_lr + plot_annotation(title='Lag-response: Winter'))
-(win_er <- win_res$p_er + plot_annotation(title='Exposure-response: Winter'))
-# Winter percentile look up
+# Get city-specific results
+for (l in locations){
+  sub <- df %>% filter(location==l)
+  res <- run_bestfit(df=sub, locations, outcome, params=final_params[[l]], pooled=FALSE, city=l)
+  results[[l]] <- res
+  print(l)
+}
+
+(spec_dharam_er <- results[['Dharamshala']]$results$p_er + plot_annotation(title=paste0('Exposure-response: Dharamshala')))
+(spec_cham_er <- results[['Chamba']]$results$p_er + plot_annotation(title=paste0('Exposure-response: Chamba')))
+
+#### EXPORT #####
+
+# FIGURES
+exports <- list('SF_2A_spec_dharam_er'=list(p=spec_dharam_er, w=8, h=6),
+                'SF_2B_spec_cham_er'=list(p=spec_cham_er, w=8, h=6))
+
+for (e in names(exports)){
+  ggsave(filename=paste0(path_report, 'figures/', e, '.png'), plot=exports[[e]]$p, width=exports[[e]]$w, height=exports[[e]]$h, dpi=300, bg='white')
+}
+
+
+# Analysis 3 - Seasonal differences (pooled params) ####
+
+# Winter/pre-monsoon model (months=5)
+df_win <- df %>% filter(season %in% c('Winter (Jan-Feb)', 'Pre-Monsoon (Mar-May)'))
+win <- run_bestfit(df_win, locations, outcome, params=final_params$pooled, pooled=TRUE, city=NULL)
+results$winter <- win
+win_res <- win$results
+
+### Winter - Overall
+win_res$p_er_overall <- wrap_plots(lapply(win_res$p_er_overall, function(p) p + theme(legend.position = "none")), nrow=1)
+win_er_overall <- wrap_plots(get_title('Winter'), win_res$p_er_overall, nrow=2, heights=c(1, 40))
+win_lr <- wrap_plots(get_title('Lag-response: Winter'), win_res$p_lr, nrow=2, heights=c(1, 40))
+win_er <- wrap_plots(get_title('Exposure-response: Winter'), win_res$p_er, nrow=2, heights=c(1, 40))
+
+### Winter - Percentile look up
 cen_win_tables <- list()
 datalist <- lapply(locations, function(region) df_win[df_win$location==region,])
 for (v in variables) {
@@ -189,18 +260,21 @@ for (v in variables) {
   cen <- cbind(cen, Average = rowMeans(cen))
   cen_win_tables[[v]] <- round(cen, 4)
 }
-names(cen_win_tables) <- c('Wet bulb temp', 'Precipitation', 'Relative humidity', 'Air pollution', 'Wind speed')
+names(cen_tables) <- c('Maximum temperature', 'Precipitation') #, 'Wind speed'
 
-# Monsoon/Post-monsoon, summer filter (months=7)
-df_sum <- df %>%
-  filter(season %in% c('Monsoon (Jun-Sep)', 'Post-Monsoon (Oct-Dec)'))
-sum <- run_model(df_sum, locations, outcome)
-sum$meta_comp$sum_aic
-sum_res <- format_results(sum, outcome)
-(sum_er_overall <- sum_res$p_er_overall + plot_annotation(title='Summer'))
-(sum_lr <- sum_res$p_lr + plot_annotation(title='Lag-response: Summer'))
-(sum_er <- sum_res$p_er + plot_annotation(title='Exposure-response: Summer'))
-# Summer percentile look up
+
+# Monsoon/Post-monsoon model (months=7)
+df_sum <- df %>% filter(season %in% c('Monsoon (Jun-Sep)', 'Post-Monsoon (Oct-Dec)'))
+sum <- run_bestfit(df_sum, locations, outcome, params=final_params$pooled, pooled=TRUE, city=NULL)
+results$summer <- sum
+sum_res <- sum$results
+
+### Summer - Overall
+sum_er_overall <- wrap_plots(get_title('Summer'), sum_res$p_er_overall, nrow=2, heights=c(1, 40))
+sum_lr<- wrap_plots(get_title('Lag-response: Summer'), sum_res$p_lr, nrow=2, heights=c(1, 40))
+sum_er<- wrap_plots(get_title('Exposure-response: Summer'), sum_res$p_er, nrow=2, heights=c(1, 40))
+
+### Summer - Percentile look up
 cen_sum_tables <- list()
 datalist <- lapply(locations, function(region) df_sum[df_sum$location==region,])
 for (v in variables) {
@@ -214,19 +288,22 @@ for (v in variables) {
   cen <- cbind(cen, Average = rowMeans(cen))
   cen_sum_tables[[v]] <- round(cen, 4)
 }
-names(cen_sum_tables) <- c('Wet bulb temp', 'Precipitation', 'Relative humidity', 'Air pollution', 'Wind speed')
-  
+names(cen_tables) <- c('Maximum temperature', 'Precipitation') #, 'Wind speed'
+
+
+# MERGE PLOTS FOR COMPARISON
+(seas_overall <- wrap_plots(win_er_overall, sum_er_overall, nrow=2))
+(seas_lr <- wrap_plots(win_lr, plot_spacer(), sum_lr, nrow=1, widths = c(1, 0.08, 1)))
+(seas_er <- wrap_plots(win_er, plot_spacer(), sum_er, nrow=1, widths = c(1, 0.08, 1)))
+
+
 #### EXPORT #####
-exports <- list('MF_win_er_overall'=list(plot=win_er_overall, width=10, height=5),
-                'MF_win_lr'=list(plot=win_lr, width=10, height=6),
-                'MF_win_er'=list(plot=win_er, width=10, height=6),
-                'MF_sum_er_overall'=list(plot=sum_er_overall, width=10, height=5),
-                'MF_sum_lr'=list(plot=sum_lr, width=10, height=6),
-                'MF_sum_er'=list(plot=sum_er, width=10, height=6))
+exports <- list('MF_3A_seas_overall'=list(p=seas_overall, w=8, h=6),
+                'MF_3B_seas_lr'=list(p=seas_lr, w=15, h=6),
+                'MF_3C_seas_er'=list(p=seas_er, w=15, h=6))
 
 for (e in names(exports)){
-  ggsave(filename=paste0(path_ch2, 'IV. Figures/', e, '.png'), plot=exports[[e]]$plot, width=exports[[e]]$width, height=exports[[e]]$height, dpi=300)
-  ggsave(filename=paste0(path_report, '- figures/', e, '.png'), plot=exports[[e]]$plot, width=exports[[e]]$width, height=exports[[e]]$height, dpi=300)
+  ggsave(filename=paste0(path_report, 'figures/', e, '.png'), plot=exports[[e]]$p, width=exports[[e]]$w, height=exports[[e]]$h, dpi=300)
 }
 
 # TABLES
@@ -235,52 +312,79 @@ for (name in names(cen_win_tables)) {
   addWorksheet(wb, sheetName = name)               
   writeData(wb, sheet = name, cen_win_tables[[name]], rowNames=TRUE)
 }
-saveWorkbook(wb, file=paste0(path_ch2,"III. Tables/ST_winter_perc.xlsx"), overwrite = TRUE)
-saveWorkbook(wb, file=paste0(path_report,"- tables/ST_winter_perc.xlsx"), overwrite = TRUE)
+saveWorkbook(wb, file=paste0(path_report,"tables/ST_winter_perc.xlsx"), overwrite = TRUE)
 
 wb <- createWorkbook()
 for (name in names(cen_sum_tables)) {
   addWorksheet(wb, sheetName = name)               
   writeData(wb, sheet = name, cen_sum_tables[[name]], rowNames=TRUE)
 }
-saveWorkbook(wb, file=paste0(path_ch2,"III. Tables/ST_summer_perc.xlsx"), overwrite = TRUE)
-saveWorkbook(wb, file=paste0(path_report,"- tables/ST_summer_perc.xlsx"), overwrite = TRUE)
+saveWorkbook(wb, file=paste0(path_report,"tables/ST_summer_perc.xlsx"), overwrite = TRUE)
 
 
-# Run model 3 - Population differences ####
+# Analysis 4 - Population differences (pooled params) ####
 
 # # Get total tables and id relevant lags/exposure
-# x <- meta_checks(output$meta_wb, 1.001)
+# x <- meta_checks(output$meta_tmp, 1.001)
 # meta_checks(output$meta_tp, 1.001)
 # meta_checks(output$meta_pm25, 1.000)
 
 # Multiple outcomes
 outcomes <- h_cols[1:8]
-er14_wb <- list()
-er5_tp <- list()
-er10_rh <- list()
-
+er0_tmp <- list()
+er3_tmp <- list()
+er10_tp <- list()
 for (i in outcomes){
-  output <- run_model(df, locations, i)
-  res <- format_results(output, i)
-  er14_wb[[i]] <- res$lags$`14`$p_er_wb$p_blup + labs(title=replace_exact_matches(i, nm))
-  er5_tp[[i]] <- res$lags$`5`$p_er_tp$p_blup + labs(title=replace_exact_matches(i, nm))
-  er10_rh[[i]] <- res$lags$`10`$p_er_rh$p_blup + labs(title=replace_exact_matches(i, nm))
+  print(i)
+  res <- run_bestfit(df, locations, i, params=final_params$pooled, pooled=TRUE, city=NULL)
+  results[[i]] <- res
+  pop_res <- res$results
+  er0_tmp[[i]] <- pop_res$lags$`0`$p_er_tmp$p_blup + labs(title=replace_exact_matches(i, nm))
+  er3_tmp[[i]] <- pop_res$lags$`3`$p_er_tmp$p_blup + labs(title=replace_exact_matches(i, nm))
+  er10_tp[[i]] <- pop_res$lags$`10`$p_er_tp$p_blup + labs(title=replace_exact_matches(i, nm))
 }
 
-(er14_wb <- (wrap_plots(er14_wb, ncol=4)& theme(legend.position="none"))+plot_annotation(title='Expsoure-response (Lag=14)', theme=theme(plot.title=element_text(hjust=0.5, size=16, face="bold"))))
-(er5_tp <- (wrap_plots(er5_tp, ncol=4)& theme(legend.position="none"))+plot_annotation(title='Expsoure-response (Lag=5)', theme=theme(plot.title=element_text(hjust=0.5, size=16, face="bold"))))
-(er10_rh <- (wrap_plots(er10_rh, ncol=4)& theme(legend.position="none"))+plot_annotation(title='Expsoure-response (Lag=10)', theme=theme(plot.title=element_text(hjust=0.5, size=16, face="bold"))))
+(er0_tmp <- (wrap_plots(er0_tmp, ncol=4)& theme(legend.position="none"))+plot_annotation(title='Exposure-response (Lag=0)', theme=theme(plot.title=element_text(hjust=0.5, size=16, face="bold"))))
+(er3_tmp <- (wrap_plots(er3_tmp, ncol=4)& theme(legend.position="none"))+plot_annotation(title='Exposure-response (Lag=3)', theme=theme(plot.title=element_text(hjust=0.5, size=16, face="bold"))))
+(er10_tp <- (wrap_plots(er10_tp, ncol=4)& theme(legend.position="none"))+plot_annotation(title='Exposure-response (Lag=10)', theme=theme(plot.title=element_text(hjust=0.5, size=16, face="bold"))))
 
-all_outcomes <- list(er14_wb=er14_wb, er5_tp=er5_tp, er10_rh=er10_rh)
+all_outcomes <- list(er0_tmp=er0_tmp, er3_tmp=er3_tmp, er10_tp=er10_tp) #, er0_fg10=er0_fg10
 
 #### EXPORT ####
 
 # Population plots
 names(all_outcomes) <- paste0("disag_", names(all_outcomes))
 for (n in names(all_outcomes)) {
-  ggsave(filename=paste0(path_ch2, '/IV. Figures/MF_', n, '.png'), plot=all_outcomes[[n]], width=10, height=8, dpi=300)
-  ggsave(filename=paste0(path_report, '- figures/MF_', n, '.png'), plot=all_outcomes[[n]], width=10, height=6, dpi=300)
+  ggsave(filename=paste0(path_report, 'figures/MF_4_', n, '.png'), plot=all_outcomes[[n]], width=8, height=5, dpi=300)
+}
+
+# Analysis 5 - Hamirpur emergency ward (emergency params) ####
+
+# Set outcome and site
+outcome <- 'emergency'
+l <- 'Hamirpur'
+
+# Main results
+sub <- df %>% filter(location==l)
+res <- run_bestfit(sub, locations, outcome, params=final_params$emergency, pooled=FALSE, city=l)
+results$emergency <- res
+emg_res <- res$results
+
+# Overall
+emg_res$p_er_overall <- wrap_plots(lapply(emg_res$p_er_overall, function(p) p + theme(legend.position = "none")), nrow=1)
+(emg_er_overall <- emg_res$p_er_overall + plot_annotation(title='Overall: Hamirpur emergency ward', theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold'))))
+(emg_lr <- emg_res$p_lr + plot_annotation(title='Lag-response: Hamirpur emergency ward'))
+(emg_er <- emg_res$p_er + plot_annotation(title='Exposure-response: Hamirpur emergency ward'))
+
+
+#### EXPORT ####
+
+exports <- list('MF_5A_emg_overall'=list(p=emg_er_overall, w=9, h=5),
+                'MF_5B_emg_lr'=list(p=emg_lr, w=8, h=6),
+                'MF_5C_emg_er'=list(p=emg_er, w=8, h=6))
+
+for (e in names(exports)){
+  ggsave(filename=paste0(path_report, 'figures/', e, '.png'), plot=exports[[e]]$p, width=exports[[e]]$w, height=exports[[e]]$h, dpi=300)
 }
 
 #################################

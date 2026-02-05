@@ -311,6 +311,9 @@ plot_shp_elevation_map <- function(shp, loc_points, country_shp, zoom = 7, buffe
   arcgis_topo_colors <- c("#5A7D24","#9DBF68","#F3E99F","#D2B48C","#8B7A55","#FFFFFF")
   
   # 7. Main elevation map ----
+  
+  bbox_map <- st_bbox(shp)
+  
   main_map <- ggplot() +
     geom_raster(data = hill_df, aes(x, y, fill = hill)) +
     scale_fill_gradient(low = "grey20", high = "grey90", guide = "none") +
@@ -325,7 +328,8 @@ plot_shp_elevation_map <- function(shp, loc_points, country_shp, zoom = 7, buffe
     labs(x = "Longitude", y = "Latitude") +
     theme_minimal() +
     theme(plot.background = element_rect(fill = 'white', color = NA),
-          panel.background = element_rect(fill = 'white', color = NA))
+          panel.background = element_rect(fill = 'white', color = NA),
+          plot.margin = margin(0, 0, 0, 0))
   
   if (stats==TRUE){
     main_map <- main_map +
@@ -392,7 +396,7 @@ plot_shp_elevation_map <- function(shp, loc_points, country_shp, zoom = 7, buffe
   
   # 9. Combine main map + inset ----
   main_map +
-    inset_element(inset_map, left = 0.75, bottom = 0.75, right = 1.01, top = 1, align_to = "panel")
+    inset_element(inset_map, left = 0.75, bottom = 0.75, right = 1.015, top = 1, align_to = "panel")
   
   
 }
@@ -975,7 +979,6 @@ loc_stats <- merge(loc_points, map_stat, by = "location", all.x = TRUE)
 # Filter to exisitng locations
 loc_stats <- loc_stats %>% filter(!is.na(t2m)) %>% filter(location != 'Bilaspur')
 
-
 # New points
 new_points <- data.frame(
   lon = c(76.92898, 76.27332772176327, 76.76117),
@@ -987,6 +990,10 @@ new_points <- data.frame(
 # save_elev(hp, loc_stats, ind)
 (study_area <- plot_shp_elevation_map(hp, loc_stats, ind, stats=FALSE, new_points=new_points))
 # (study_area <- plot_shp_elevation_map(hp, loc_stats, ind, stats=TRUE))
+
+# NB: use aspect ratio of bbox to estimate white space removal
+bb <- sf::st_bbox(hp)
+asp <- (bb$ymax - bb$ymin) / (bb$xmax - bb$xmin)
 
 # Test for spatial autocorrelation ####
 
@@ -1076,35 +1083,32 @@ row.names(CLIM_interaction_tests) <- NULL
 ##### EXPORT ####
 
 # Figures
-w <- 6
-h <- 6
-figs <- list('hist_weat'=list(w=12, h=8), 
-             'hist_tota'=list(w=w, h=h), 
-             'hist_tota_loc'=list(w=12, h=8),
-             'cat_ward'=list(w=8, h=h),
-             'cat_ward_loc'=list(w=12, h=8),
+figs <- list('1_study_area'=list(p=study_area, w=8, h=7*0.8),
+             '2A_hist_tota_loc'=list(p=hist_tota_loc, w=10, h=7),
+             '2B_cat_ward_loc'=list(p=cat_ward_loc, w=10, h=7),
+             '2C_ts_heal_ward'=list(p=ts_heal_ward, w=7, h=5),
+             '2D_ts_emergency'=list(p=ts_emergency, w=7, h=5),
+             '3A_hist_weat'=list(p=hist_weat,  w=10, h=7), 
+             '3B_ts_mx2t'=list(p=ts_mx2t, w=7, h=5),
+             '3C_ts_tp'=list(p=ts_tp, w=7, h=5),
+             '3D_ts_fg10'=list(p=ts_fg10, w=7, h=5)
+             # 'hist_tota'=list(w=w, h=h), 
+             # 'cat_ward'=list(w=8, h=h),
              # 'cat_sex'=list(w=w, h=h),
              # 'cat_age'=list(w=w, h=h),
-             'ts_weat'=list(w=8, h=h),
-             'ts_tp'=list(w=8, h=h),
-             'ts_mx2t'=list(w=8, h=h),
-             'ts_fg10'=list(w=8, h=h),
+             # 'ts_weat'=list(w=8, h=h),
+             # 'ts_heal_ward'=list(pts_heal_ward, w=8, h=h)
              # 'ts_heal_pop'=list(w=12, h=8),
-             'ts_heal_ward'=list(w=8, h=h),
-             'ts_emergency'=list(w=8, h=h),
-             'cor_matrix'=list( w=9, h=h),
-             'study_area'=list(w=7, h=7))
+             # 'cor_matrix'=list( w=9, h=h)
+             )
 
 for (f in names(figs)){
-  ggsave(paste0(path_report, '- figures/desc_', f, '.png'), get(f), width = figs[[f]]$w, height = figs[[f]]$h, dpi = 300, bg='white')
-  ggsave(paste0(path_git, '2_DLNM/- Reporting/- figures/desc_', f, '.png'), get(f), width = figs[[f]]$w, height = figs[[f]]$h, dpi = 300, bg='white')
+  ggsave(paste0(path_git, '2_DLNM/- Reporting/figures/descriptive/desc_', f, '.png'), figs[[f]]$p, width = figs[[f]]$w, height = figs[[f]]$h, dpi = 300, bg='white')
 }
 
 # TABLES
 tabs <- c('base', 'weat_loc_tab', 'IMD_anova', 'IMD_interaction_tests', 'CLIM_anova', 'CLIM_interaction_tests')
 for (t in tabs){
-  
-  write.csv(get(t), paste0(path_report, '- tables/desc_', t, '.csv'), row.names = FALSE)
   write.csv(get(t), paste0(path_git, '2_DLNM/- Reporting/- tables/desc_', t, '.csv'), row.names = FALSE)
   
 }

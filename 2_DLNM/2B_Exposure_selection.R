@@ -1,5 +1,5 @@
 ### ------------------------------------------------------------------------ ### 
-###  DNLM - TEST XGBoost algorithm for variable selection                    ###
+###  DNLM: TEST XGBoost algorithm for variable selection
 ### ------------------------------------------------------------------------ ### 
 
 # Prep environment
@@ -229,7 +229,7 @@ imp_loc <- Map(function(p, nm) {
   p + base_theme + x_theme[[1]]
   
 }, map(xg_res[-1], 'plot'), names(xg_res[-1]))
-imp_loc_plot <- wrap_plots(imp_loc, ncol=2)
+imp_loc_plot <- wrap_plots(imp_loc, nrow=2)
 
 # Assessment table of feature importance consistency 
 imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
@@ -285,13 +285,12 @@ imp_rank_lag <- replace_exact_matches(imp_rank_lag, nm)
 #### EXPORT ####
 
 # # Figures
-# export <- list('SF_corr_plot'=list(p=cor_matrix, w=8, h=6),
-#                'SF_xgb_importance'=list(p=imp_plot, w=8, h=6),
-#                'SF_xgb_importance_loc'=list(p=imp_loc_plot, w=8, h=10))
+# export <- list('SF_corr_plot'=list(p=cor_matrix, w=7, h=5),
+#                'SF_xgb_importance'=list(p=imp_plot, w=7, h=5),
+#                'SF_xgb_importance_loc'=list(p=imp_loc_plot, w=7, h=5))
 # for (name in names(export)){
 #   e <- export[[name]]
-#   ggsave(paste0(path_ch2, '/IV. Figures/', name, '.png'), e$p, width = e$w, height = e$h, dpi = 300)
-#   ggsave(paste0(path_report, '- figures/', name, '.png'), e$p, width = e$w, height = e$h, dpi = 300)
+#   ggsave(paste0(path_report, 'figures/sensitivity', name, '.png'), e$p, width = e$w, height = e$h, dpi = 300, bg='white')
 # }
 # 
 # # Table
