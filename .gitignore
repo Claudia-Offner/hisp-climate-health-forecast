@@ -12,5 +12,7 @@
 .RDataTmp
 
 # Ignore specific folders
-0_Reporting/figures/
-0_Reporting/tables/
+0_Reporting/DLNM/figures/
+0_Reporting/DLNM/tables/
+0_Reporting/TSGC/figures/
+0_Reporting/TSGC/tables/

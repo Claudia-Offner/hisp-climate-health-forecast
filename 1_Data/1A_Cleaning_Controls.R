@@ -4,11 +4,11 @@
 
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
-setwd('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/')
+setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
 
 #### DEPENDENCIES ####
-source('1_Data/HISP_Himachal_Pradesh/HISP_Cleaning - Dependencies.R')
+source('1_Data/HISP_Cleaning - Dependencies.R')
 setwd(path_data)
 
 # Function to extract and save elevtaion raster according to bounding area
@@ -32,7 +32,7 @@ save_elev <- function(shp, loc_points, zoom = 7, buffer_km = 20){
 
 #### MAIN CODE ####
 
-hp <- st_read('2_Active_Data/201_admn/ind_admn_ad3_py_s1_GADM_pp_Himachal_Pradesh.shp')
+hp <- st_read('2_Active_Data/200_admn/ind_admn_ad3_py_s1_GADM_pp_Himachal_Pradesh.shp')
 loc_points <- data.frame(
   location = c("Chamba", "Dharamshala", "Solan", "Hamirpur", "Kullu",
                "Reckong Peo", "Kyelang", "Nahan", "Bilaspur", "Mandi",

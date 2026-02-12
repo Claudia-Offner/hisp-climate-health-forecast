@@ -1,25 +1,16 @@
 ### ------------------------------------------------------------------------ ### 
-###  TSGC Multivariate Model - Sensitivity analysis                          ###
+###  TSGC - Sensitivity analysis
 ### ------------------------------------------------------------------------ ### 
 
-####  DEPENDENCIES  #####
+# Prep environment
+rm(list = ls()); graphics.off(); gc()
+setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
-# Packages
-library(openxlsx)
 
-# Turn off scientific notation
-options(scipen=999)
-
-# Set data path
-user <- 'claer14'
-file_import <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp_wide'
-path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
-path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
-path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 3 - Real time forecasts/')
-setwd(path1)
-
-### Get model functions (make sure wd is in repo folder)
-source(paste0(path1, '3_TSGC/TSGC_Model - Functions.R'))
+#### DEPENDENCIES ####
+source('3_TSGC/TSGC - Dependencies.R')
+setwd(path_git)
+file_import <- 'ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide'
 
 # Function to iteratively run models and get results
 run_models <- function(Y, y, exposures, controls, new.data, estimation.date.end, 
@@ -53,9 +44,10 @@ load(paste0('3_TSGC/', file_import, '.RData'))
 
 
 # 1. Set base model parameters ####
+ df <- df %>% filter(location=='Dharamshala')
 
 # Variables
-outcome <- 'general_c' #'total_patients_c' 
+outcome <- 'total_patients_c' 
 controls <- c('closed')
 exposures <- c()
 plot_components <- c(paste(controls, collapse = ' + '), paste(exposures, collapse = ' + '))
@@ -81,6 +73,7 @@ sea.period <- 7
 name <- 'q: '
 test <- seq(0.000, 0.1, by=0.005) # 0.005 is most popular
 signal <- data.frame()
+
 for (t in test){
   
   # plot_title <- paste0(name, t, ' (', outcome ,' + ', paste(plot_components[plot_components != ''], collapse = ' + '), ')')
@@ -324,7 +317,7 @@ result_lags <- replace_exact_matches(result_lags, nm)
 names(result_lags) <- gsub(".1", "", names(result_lags))
 
 # Save tables
-write.xlsx(result_all, file = paste0(path3, "/III. Tables/ST_sens_param.xlsx"))
-write.xlsx(result_lags, file = paste0(path3, "/III. Tables/ST_sens_lag.xlsx"))
+write.xlsx(result_all, file = paste0(path_report, "/tables/ST_sens_param.xlsx"))
+write.xlsx(result_lags, file = paste0(path_report, "/tables/ST_sens_lag.xlsx"))
 
 

@@ -1,43 +1,127 @@
-### ------------------------------------- ### 
-###  TSGC Multivariate Model - Functions  ###
-### ------------------------------------- ### 
-### Multivariate model of hospital attendance 
+### ------------------------------------------------------------------------ ### 
+### TSGC: Dependencies
+### ------------------------------------------------------------------------ ### 
 
-# DEPENDENCIES ####
+# Turn off scientific notation and set seed
+options(scipen=999)
+set.seed(123)
+
+
+#### PATHS ####
+user <- 'claer14'
+path_data <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
+path_git <- paste0('C:/Users/', user, '/Documents/GitHub/hisp-climate-health-forecast/')
+path_project <- paste0(path_git, '2_DLNM/')
+path_report <- paste0(path_git, '0_Reporting/TSGC/')
+
+#### PACKAGES ####
 
 # Packages
-library(quantmod); library(KFAS); library(dplyr); library(xts); library(abind);
+library(quantmod); library(KFAS); library(xts); library(abind);
 library(ggplot2); library(ggthemes); library(zoo); library(utils); 
 library(lubridate); library(tsgc); library(gridExtra); library(patchwork);
-library(purrr); library(tidyr)
-
-# Variables
-mypalette <- c('#1D98EB','#D74B3C','#A6B727','#FEC306','#EC800A','#E569BF','#8968CD',
-               '#A1C8F2','#F1A6A6','#C2D77D','#F6D974','#F9B34D','#F1C2D1','#B8A8D9')
-
-nm <- c(total_patients='Total patients', M='Men', F='Women',
-        under_5='Under 5', age5_14='Ages 5-14', age15_24='Ages15-24', age25_64='Ages 25-64', over_65='Ages 65+', 
-        general='General medicine', emergency='Emergency', ophthalmology='Ophthalmology', 
-        pediatrics='Paediatric', orthopedics='Orthopedics', ent='ENT', 
-        gynecology='Gynecology', dermatology='Dermatology', surgery='Surgery', 
-        dentistry='Dentistry', psychiatry='Psychiatry', oncology='Oncology', 
-        mx2t_IMD='IMD: Mx2t >30\u00B0C', mn2t_IMD='IMD: Mn2t <0\u00B0C', tp_IMD='IMD: Tp >15mm', fg10_IMD='IMD: Fg10 >40km/h',
-        mx2t_p90='Clim: Mx2t >90th', mn2t_p10='Clim: Mn2t <10th', tp_p90='Clim: Tp >90th', fg10_p90='Clim: Fg10 >90th',
-        mx2t='Mx2t (\u00B0C)', mn2t='Mn2t (\u00B0C)', tp='Tp (mm)', fg10='Fg10 (km/h)', 
-        closed='Closed', holiday='Holiday') 
-
-weekday_levels <- c('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
-month_levels <- c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
-season_levels <- c('Winter (Jan-Feb)', 'Pre-Monsoon (Mar-May)', 'Monsoon (Jun-Sep)', 'Post-Monsoon (Oct-Dec)')
-h_cols <- c('total_patients', 'F', 'M', 'y1_l', 'y1_17', 'y18_60', 'y60_g', 
-            'general_medicine', 'ophthalmology', 'pediatrics', 'orthopedics', 
-            'ent', 'gynecology', 'dermatology', 'surgery', 'dentistry', 
-            'emergency', 'psychiatry', 'oncology')
-
+library(purrr); library(tidyr); library(dplyr); library(openxlsx); library(stringr)
 
 # FUNCTIONS: MODEL ####
 
-### Function estimating model noise parameters prior to kalman filter
+### Function to fit model with set parameters
+get_results <- function(Y, y, exposures, controls, y.lg, y.cum, y.eval, new.data,
+                        n.ahead, q, confidence.level, sea.period, sea.type, 
+                        plt.start.date){
+  
+  #  !!!!!!!!!!!! FIT MODEL & UPDATE PARAMETER ESTIMATES  !!!!!!!!!!!! 
+  # Format y & x variables for model (dynamic adds exposures)
+  y <- as.numeric(y.lg)
+  lapply(c(exposures, controls), function(exp) assign(exp, as.numeric(y.cum[, exp]), envir=.GlobalEnv))
+  formula <- paste('~', paste(c(exposures, controls), collapse='+'))
+  
+  # Set state-space model
+  if (is.null(c(exposures, controls))){
+    model <- SSModel(y ~ 
+                       SSMtrend(degree=2, Q=list(matrix(0), matrix(NA))) +
+                       SSMseasonal(period=sea.period, Q=NA, sea.type=sea.type), H=matrix(NA))
+  } else {
+    model <- SSModel(y ~ SSMregression(as.formula(formula), Q=diag(0,length(c(exposures, controls)))) + #Q=diag(0,length(c(exposures, controls)))
+                       SSMtrend(degree=2, Q=list(matrix(0), matrix(NA))) +
+                       SSMseasonal(period=sea.period, Q=NA, sea.type=sea.type), H=matrix(NA))
+  }
+  
+  # Partial update of known params (seasonal, observational & slope noise)
+  updatefn <- purrr::partial(update, ... =, q=q, sea.type=sea.type)
+  
+  # Full update, using MLE for unknown model params
+  model_fit <- fitSSM(model, inits=c(0,0), updatefn=updatefn, method='BFGS')
+  
+  # Kalman filter
+  (output <- KFS(model_fit$model))
+  # diff(output$model$y)
+  # mean(output$alphahat[, 1] )
+  
+  # Get truncated index from model (if using a re-initialisation, self$get_model)
+  index <- if (!is.null(model$index)) { model$index } else { index(y.lg) }
+  
+  # !!!!!!!!!!!! VISUALS !!!!!!!!!!!! 
+  # Plot growth rate forecast
+  p1 <- plot_forecast_MULTI(output=output, index=index, y.eval=y.eval, n.ahead=n.ahead,
+                            plt.start.date=plt.start.date)
+  
+  # Plot new cases forecast
+  p2 <- plot_new_cases_MULTI(output=output, index=index, Y=y.cum, n.ahead=n.ahead,
+                             confidence.level=confidence.level, date_format='%Y-%m-%d',
+                             plt.start.date=plt.start.date, og=FALSE)
+  
+  # Plot forecast accuracy (relative to forecast, not trend)
+  p3 <- plot_holdout_MULTI(output=output, index=index, Y=y.cum, Y.eval=Y[(estimation.date.end+0:n.ahead)],
+                           confidence.level=confidence.level, date_format='%Y-%m-%d',og=FALSE, MAPE=NULL)
+  mape.sea <- p3$MAPE
+  mape.trend <- p3$MAPE.TREND
+  p3 <- p3$figure
+  
+  # !!!!!!!!!!!! COEFFICIENTS !!!!!!!!!!!! 
+  n <- dim(output$alphahat)[1] # number of time points
+  estimates <- output$alphahat[n, ] # smoothed state estimates at time n
+  std_errors <- sqrt(diag(output$V[, ,n])) # get standard errors (square root of diag covariance matrix of n)
+  # Lower and upper bounds
+  z_star <- qnorm(0.95)
+  lower <- estimates - z_star * std_errors
+  upper <- estimates + z_star * std_errors
+  res <- data.frame(State = names(estimates), 
+                    Estimate = as.numeric(estimates), 
+                    CI_Lower = lower,
+                    CI_Upper = upper,
+                    Std_Error = as.numeric(std_errors))
+  rownames(res) <- NULL
+  
+  # !!!!!!!!!!!! CRITERION !!!!!!!!!!!! 
+  # NB: length(model_fit$optim.out$par) is the number of unique NAs KFAS  treats as independent hyper-parameters.
+  mod <- model_fit$model            
+  LL  <- logLik(mod) # higher is better                
+  AIC <- -2*LL + 2*length(model_fit$optim.out$par) # lower is better
+  BIC <- -2*LL + log(nrow(y.lg))*length(model_fit$optim.out$par) # lower is better
+  
+  # Create the data frame
+  comp <- data.frame(Model = plot_title, MAPE=paste0(mape.sea, '%'), LogLik = LL, AIC = AIC, BIC = BIC)
+  
+  
+  combined_plot <- (p1 | p2 | p3) +
+    plot_annotation(
+      title = plot_title,
+      subtitle = paste0('MAPE: ', mape.sea, '%', sep=''),
+      theme = theme(
+        plot.title = element_text(hjust = 0.5, size = 16, margin = margin(b = 10)),  # Adjust vertical margin to move title down
+        plot.subtitle = element_text(hjust = 0.5, size = 12, margin = margin(b = -10)) # Adjust subtitle margin
+      )) & theme(plot.margin = margin(0, 0, 0, 0))
+  
+  p3 <- plot_holdout_MULTI(output=output, index=index, Y=y.cum, Y.eval=Y[(estimation.date.end+0:n.ahead)],
+                           confidence.level=confidence.level, date_format='%Y-%m-%d',
+                           title=NULL, og=FALSE, MAPE=TRUE)
+  
+  return(list(model=output, estimates=res, criteria=comp, plots=combined_plot,
+              p1=p1, p2=p2, p3=p3))
+  
+}
+
+### Function estimating model noise parameters prior to Kalman filter
 update <- function(pars, model, q, sea.type) {
   
   # Description: 
@@ -105,185 +189,6 @@ update <- function(pars, model, q, sea.type) {
   }
   return(model)
 }
-
-# FUNCTIONS: FORMATTING ####
-
-# Function to replace variable names with set names
-replace_exact_matches <- function(df, dict) {
-  df[] <- lapply(df, function(col) {
-    if (is.factor(col)) col <- as.character(col)
-    if (is.character(col)) {
-      col <- ifelse(col %in% names(dict), dict[col], col)
-    }
-    col
-  })
-  df
-}
-
-# Function that rounds all numeric data in df
-round_numeric <- function(df, digit) {
-  df[] <- lapply(df, function(x) if(is.numeric(x)) round(x, digit) else x)
-  df
-}
-
-### Function predicting y cases, state variables & conditional state covariance matrices
-predict_all_MULTI <- function(index, output, n.ahead, new.data=NULL, sea.on=FALSE, return.all=FALSE) {
-  
-  # Description:
-  # Function returning the incidence variable y, the state variables
-  # and the conditional covariance matrix for the states.
-  
-  # Parameters:
-  # - `n.ahead`: Number of forecasts to generate from the end of the sample period.
-  # - `sea.on`: Logical; whether to include seasonal components in the state-space model (default: `TRUE`).
-  # - `return.all`: Logical; whether to return all filtered estimates and forecasts (`TRUE`) 
-  #   or only forecasts (`FALSE`, default).
-  
-  # Return Value:
-  # An 'xts' object that contains:
-  # - The forecasted (and filtered, if applicable) level of y (`y.hat`)
-  # - The level component (`level.t.t`)
-  # - The slope component (`slope.t.t`)
-  # - A vector of states, including seasonals if applicable (`a.t.t`)
-  # - The covariance matrix of all states, including seasonals if applicable (`P.t.t`)
-  
-  # Extend matrices for n.ahead KFS & SSM
-  extend.model <- output$model
-  
-  if(ncol(output$att)==8){
-    
-    # UNIVARIATE - Extend y & n
-    extend.model$y <- rbind(extend.model$y, matrix(NA, ncol=ncol(extend.model$y), nrow=n.ahead) %>% as.ts())
-    attr(extend.model, 'n') <- length(output$model$y) + n.ahead %>% as.integer()
-    # Fit KFS & SSM
-    model_output <- KFS(extend.model)
-    new <- SSModel(rep(NA, n.ahead) ~ 
-                     SSMtrend(degree=2, Q=list(matrix(0), matrix(NA))) +
-                     SSMseasonal(period=sea.period, Q=NA, sea.type=sea.type), H=matrix(NA))
-    
-  } else if (ncol(output$att) > 8) {
-    
-    # MULTIVARIATE - Extend y, z & n
-    extend.model$y <- rbind(extend.model$y, matrix(NA, ncol=ncol(extend.model$y), nrow=n.ahead) %>% as.ts())
-    new.Z <- array(NA, dim=c(1, ncol(extend.model$Z), n.ahead))
-    new.Z[, 2:ncol(extend.model$Z), ] <- extend.model$Z[, 2:ncol(extend.model$Z), 1]
-    extend.model$Z <- abind(extend.model$Z, new.Z, along=3)
-    attr(extend.model, 'n') <- length(output$model$y) + n.ahead %>% as.integer()
-    # Fit KFS & SSM
-    model_output <- KFS(extend.model)
-    new <- SSModel(rep(NA, n.ahead) ~ SSMregression(~ new.data, Q=diag(0, length(c(exposures, controls)))) + #Q=diag(0,length(c(exposures, controls)))
-                     SSMtrend(degree=2, Q=list(matrix(0), matrix(NA))) +
-                     SSMseasonal(period=sea.period, Q=NA, sea.type=sea.type), H=matrix(NA))
-    
-  }
-  # Get n.ahead forecast with new fit
-  updatefn <- purrr::partial(update, ... =, q=q, sea.type=sea.type)
-  new_fit <- fitSSM(new, inits=c(0, 0), updatefn=updatefn, method='BFGS')
-  y.hat.kfas <- if (sea.on) {
-    predict(output$model, interval='prediction', newdata=new_fit$model, level=0.68, states='all')
-  } else {
-    predict(output$model, interval='prediction', newdata=new_fit$model, level=0.68, states='level')
-  }
-  
-  # Get full dates (n + n.ahead)
-  n <- attr(output$model, 'n')
-  dates <- seq(index[1], by='day', length.out=(n + n.ahead))
-  
-  # Combine fitted values (y.t.t) with forecast (y.hat.kfas)
-  y.t.t <- output$att %*% output$model$Z[1, , 1]
-  y.hat <- xts::xts(rbind(y.t.t, y.hat.kfas[, 1] %>% as.matrix()), order.by=dates)
-  
-  # Extract level and slope components
-  i.level <- grep('level', colnames(model_output$att))
-  level.t.t <- xts::xts(model_output$att[, i.level], order.by=dates) %>% as.xts()
-  i.slope <- grep('slope', colnames(model_output$att))
-  slope.t.t <- xts::xts(model_output$att[, i.slope], order.by=dates) %>% as.xts()
-  
-  # Filter only to the forecast period (by removing sample indexed dates)
-  if (!return.all) {
-    y.hat <- y.hat %>% subset(index(.) > tail(index, 1))
-    level.t.t <- level.t.t %>% subset(index(.) > tail(index, 1))
-    slope.t.t <- slope.t.t %>% subset(index(.) > tail(index, 1))
-  }
-  
-  # Final output
-  out <- list(
-    y.hat=y.hat,
-    level.t.t=level.t.t,
-    slope.t.t=slope.t.t,
-    a.t.t=model_output$att,
-    P.t.t=model_output$Ptt
-  )
-  
-  return(out)
-}
-
-### Function predicting level of cumulative cases 
-predict_level_MULTI <- function(index, output, y.cum, n.ahead, new.data=NULL, confidence.level, sea.on=FALSE, return.diff=FALSE) {
-  
-  # Description:
-  # Function to predict the level of a cumulative variable
-  
-  # Parameters:
-  # y.cum: The cumulative variable (e.g., total cases in an epidemic)
-  # n.ahead: Number of periods ahead to forecast
-  # confidence.level: Confidence level for the forecast interval
-  # return.diff: If TRUE, returns the difference (incidence) instead of cumulative values
-  
-  # Return: xts object containing the point forecasts and upper and lower bounds of the forecast interval.
-  
-  model <- output$model
-  n <- attr(model, 'n')
-  p <- attr(model, 'p')
-  
-  # Make predication
-  freq <- unclass(periodicity(y.cum))$label
-  endtime <- end(model$y) + c(0, n.ahead)
-  filtered.out <- predict_all_MULTI(index, output, n.ahead, new.data=new.data, sea.on=sea.on, return.all=TRUE)
-  
-  # Extract parameters.
-  timespan <- n + 0:n.ahead
-  g.t <- exp(filtered.out$y.hat) # Calculate g.t as exponent of y.t
-  v_dates_end <- seq(last(index(y.cum)), last(index(filtered.out$y.hat)), by=freq) # Forecast dates
-  
-  # Construct CI
-  Ptt <- filtered.out$P.t.t
-  i.level <- grep('level', colnames(model$T))
-  ci <- qnorm((1 - confidence.level) / 2) * sqrt(Ptt[i.level, i.level, timespan]) %o% c(1, -1)
-  ci <- xts(exp(ci), order.by=v_dates_end)
-  
-  # Forecast loop (start by initializing the first cumulative value)
-  y.hat <- xts(matrix(NA, nrow=n.ahead + 1, ncol=3), order.by=v_dates_end)
-  y.hat[v_dates_end[1],] <- y.cum[v_dates_end[1],1]
-  
-  # Extract growth rate and prediction intervals (recursive build cumulative curve)
-  for (i in seq_len(length(v_dates_end[-1]))) {
-    date.forecast <- v_dates_end[i + 1]
-    date.lag <- date.forecast - 1
-    # Update level
-    y.hat[date.forecast, 1] <- as.numeric(y.hat[date.lag, 1]) * 
-      as.numeric(1 + g.t[date.forecast,])
-    # Get prediction intervals
-    y.hat[date.forecast, 2:3] <- as.numeric(y.hat[date.lag, 1]) *
-      as.numeric(1 + g.t[date.forecast,] %*% ci[date.forecast,])}
-  
-  # Difference output if requested
-  d <- if (return.diff){diff(y.hat[, 1])[-1] } else {(y.hat[, 1])[-1]}
-  ci_bounds <- if (return.diff) {
-    (y.hat[, 2:3] - as.vector(y.hat[, 1]))[-1] + as.vector(d)
-  } else { y.hat[2:dim(y.hat)[1], 2:3] }
-  # Piece components together
-  pred <- vector('list', length=p)
-  pred[[p]] <- cbind(fit=d, prediction=ci_bounds)
-  pred <- lapply(pred, ts, end=endtime, frequency=1)
-  
-  y.hat <- xts(pred[[p]], order.by=v_dates_end[-1])
-  names(y.hat)[2:3] <- list('lower', 'upper')
-  
-  return(as.xts(y.hat))
-  
-}
-
 
 # FUNCTIONS: PLOTTING ####
 
@@ -612,7 +517,7 @@ plot_holdout_MULTI <- function(index, output, Y, Y.eval, ylim=NULL, confidence.l
   }
   colnames(ci) <- c('lower', 'upper', 'date')
   ci[, 'date'] <- as.Date(ci[, 'date'], format=date_format, origin='1970-01-01')
-
+  
   p1 <- ggplot2::ggplot(data=df_plot, aes(x=Date)) +
     ggplot2::geom_line(aes(y=Data, color='Data'),lwd=0.75) +
     ggplot2::geom_line(aes(y=Forecast, color='Forecast'),lwd=0.85) +
@@ -644,110 +549,218 @@ plot_holdout_MULTI <- function(index, output, Y, Y.eval, ylim=NULL, confidence.l
   
   if (!is.null(MAPE)){
     p1 <- p1 + labs(x='Date', y='Patients', title=title, subtitle=paste('MAPE: ', mape.sea, '%')
-) 
+    ) 
     
   }
   
   return(list(figure=p1, MAPE=mape.sea, MAPE.TREND=mape.trend))
 }
 
-# FUNCTIONS: RESULTS ####
 
-get_results <- function(Y, y, exposures, controls, y.lg, y.cum, y.eval, new.data,
-                        n.ahead, q, confidence.level, sea.period, sea.type, 
-                        plt.start.date){
+# FUNCTIONS: FORMATTING ####
+
+# Function to replace variable names with set names
+replace_exact_matches <- function(df, dict) {
+  df[] <- lapply(df, function(col) {
+    if (is.factor(col)) col <- as.character(col)
+    if (is.character(col)) {
+      col <- ifelse(col %in% names(dict), dict[col], col)
+    }
+    col
+  })
+  df
+}
+
+# Function that rounds all numeric data in df
+round_numeric <- function(df, digit) {
+  df[] <- lapply(df, function(x) if(is.numeric(x)) round(x, digit) else x)
+  df
+}
+
+### Function predicting y cases, state variables & conditional state covariance matrices
+predict_all_MULTI <- function(index, output, n.ahead, new.data=NULL, sea.on=FALSE, return.all=FALSE) {
   
-  #  !!!!!!!!!!!! FIT MODEL & UPDATE PARAMETER ESTIMATES  !!!!!!!!!!!! 
-  # Format y & x variables for model (dynamic adds exposures)
-  y <- as.numeric(y.lg)
-  lapply(c(exposures, controls), function(exp) assign(exp, as.numeric(y.cum[, exp]), envir=.GlobalEnv))
-  formula <- paste('~', paste(c(exposures, controls), collapse='+'))
+  # Description:
+  # Function returning the incidence variable y, the state variables
+  # and the conditional covariance matrix for the states.
   
-  # Set state-space model
-  if (is.null(c(exposures, controls))){
-    model <- SSModel(y ~ 
-                       SSMtrend(degree=2, Q=list(matrix(0), matrix(NA))) +
-                       SSMseasonal(period=sea.period, Q=NA, sea.type=sea.type), H=matrix(NA))
+  # Parameters:
+  # - `n.ahead`: Number of forecasts to generate from the end of the sample period.
+  # - `sea.on`: Logical; whether to include seasonal components in the state-space model (default: `TRUE`).
+  # - `return.all`: Logical; whether to return all filtered estimates and forecasts (`TRUE`) 
+  #   or only forecasts (`FALSE`, default).
+  
+  # Return Value:
+  # An 'xts' object that contains:
+  # - The forecasted (and filtered, if applicable) level of y (`y.hat`)
+  # - The level component (`level.t.t`)
+  # - The slope component (`slope.t.t`)
+  # - A vector of states, including seasonals if applicable (`a.t.t`)
+  # - The covariance matrix of all states, including seasonals if applicable (`P.t.t`)
+  
+  # Extend matrices for n.ahead KFS & SSM
+  extend.model <- output$model
+  
+  if(ncol(output$att)==8){
+    
+    # UNIVARIATE - Extend y & n
+    extend.model$y <- rbind(extend.model$y, matrix(NA, ncol=ncol(extend.model$y), nrow=n.ahead) %>% as.ts())
+    attr(extend.model, 'n') <- length(output$model$y) + n.ahead %>% as.integer()
+    # Fit KFS & SSM
+    model_output <- KFS(extend.model)
+    new <- SSModel(rep(NA, n.ahead) ~ 
+                     SSMtrend(degree=2, Q=list(matrix(0), matrix(NA))) +
+                     SSMseasonal(period=sea.period, Q=NA, sea.type=sea.type), H=matrix(NA))
+    
+  } else if (ncol(output$att) > 8) {
+    
+    # MULTIVARIATE - Extend y, z & n
+    extend.model$y <- rbind(extend.model$y, matrix(NA, ncol=ncol(extend.model$y), nrow=n.ahead) %>% as.ts())
+    new.Z <- array(NA, dim=c(1, ncol(extend.model$Z), n.ahead))
+    new.Z[, 2:ncol(extend.model$Z), ] <- extend.model$Z[, 2:ncol(extend.model$Z), 1]
+    extend.model$Z <- abind(extend.model$Z, new.Z, along=3)
+    attr(extend.model, 'n') <- length(output$model$y) + n.ahead %>% as.integer()
+    # Fit KFS & SSM
+    model_output <- KFS(extend.model)
+    new <- SSModel(rep(NA, n.ahead) ~ SSMregression(~ new.data, Q=diag(0, length(c(exposures, controls)))) + #Q=diag(0,length(c(exposures, controls)))
+                     SSMtrend(degree=2, Q=list(matrix(0), matrix(NA))) +
+                     SSMseasonal(period=sea.period, Q=NA, sea.type=sea.type), H=matrix(NA))
+    
+  }
+  # Get n.ahead forecast with new fit
+  updatefn <- purrr::partial(update, ... =, q=q, sea.type=sea.type)
+  new_fit <- fitSSM(new, inits=c(0, 0), updatefn=updatefn, method='BFGS')
+  y.hat.kfas <- if (sea.on) {
+    predict(output$model, interval='prediction', newdata=new_fit$model, level=0.68, states='all')
   } else {
-    model <- SSModel(y ~ SSMregression(as.formula(formula), Q=diag(0,length(c(exposures, controls)))) + #Q=diag(0,length(c(exposures, controls)))
-                       SSMtrend(degree=2, Q=list(matrix(0), matrix(NA))) +
-                       SSMseasonal(period=sea.period, Q=NA, sea.type=sea.type), H=matrix(NA))
+    predict(output$model, interval='prediction', newdata=new_fit$model, level=0.68, states='level')
   }
   
-  # Partial update of known params (seasonal, observational & slope noise)
-  updatefn <- purrr::partial(update, ... =, q=q, sea.type=sea.type)
+  # Get full dates (n + n.ahead)
+  n <- attr(output$model, 'n')
+  dates <- seq(index[1], by='day', length.out=(n + n.ahead))
   
-  # Full update, using MLE for unknown model params
-  model_fit <- fitSSM(model, inits=c(0,0), updatefn=updatefn, method='BFGS')
+  # Combine fitted values (y.t.t) with forecast (y.hat.kfas)
+  y.t.t <- output$att %*% output$model$Z[1, , 1]
+  y.hat <- xts::xts(rbind(y.t.t, y.hat.kfas[, 1] %>% as.matrix()), order.by=dates)
   
-  # Kalman filter
-  (output <- KFS(model_fit$model))
-  # diff(output$model$y)
-  # mean(output$alphahat[, 1] )
+  # Extract level and slope components
+  i.level <- grep('level', colnames(model_output$att))
+  level.t.t <- xts::xts(model_output$att[, i.level], order.by=dates) %>% as.xts()
+  i.slope <- grep('slope', colnames(model_output$att))
+  slope.t.t <- xts::xts(model_output$att[, i.slope], order.by=dates) %>% as.xts()
   
-  # Get truncated index from model (if using a re-initialisation, self$get_model)
-  index <- if (!is.null(model$index)) { model$index } else { index(y.lg) }
+  # Filter only to the forecast period (by removing sample indexed dates)
+  if (!return.all) {
+    y.hat <- y.hat %>% subset(index(.) > tail(index, 1))
+    level.t.t <- level.t.t %>% subset(index(.) > tail(index, 1))
+    slope.t.t <- slope.t.t %>% subset(index(.) > tail(index, 1))
+  }
+  
+  # Final output
+  out <- list(
+    y.hat=y.hat,
+    level.t.t=level.t.t,
+    slope.t.t=slope.t.t,
+    a.t.t=model_output$att,
+    P.t.t=model_output$Ptt
+  )
+  
+  return(out)
+}
 
-  # !!!!!!!!!!!! VISUALS !!!!!!!!!!!! 
-  # Plot growth rate forecast
-  p1 <- plot_forecast_MULTI(output=output, index=index, y.eval=y.eval, n.ahead=n.ahead,
-                            plt.start.date=plt.start.date)
+### Function predicting level of cumulative cases 
+predict_level_MULTI <- function(index, output, y.cum, n.ahead, new.data=NULL, confidence.level, sea.on=FALSE, return.diff=FALSE) {
   
-  # Plot new cases forecast
-  p2 <- plot_new_cases_MULTI(output=output, index=index, Y=y.cum, n.ahead=n.ahead,
-                             confidence.level=confidence.level, date_format='%Y-%m-%d',
-                             plt.start.date=plt.start.date, og=FALSE)
+  # Description:
+  # Function to predict the level of a cumulative variable
   
-  # Plot forecast accuracy (relative to forecast, not trend)
-  p3 <- plot_holdout_MULTI(output=output, index=index, Y=y.cum, Y.eval=Y[(estimation.date.end+0:n.ahead)],
-                           confidence.level=confidence.level, date_format='%Y-%m-%d',og=FALSE, MAPE=NULL)
-  mape.sea <- p3$MAPE
-  mape.trend <- p3$MAPE.TREND
-  p3 <- p3$figure
+  # Parameters:
+  # y.cum: The cumulative variable (e.g., total cases in an epidemic)
+  # n.ahead: Number of periods ahead to forecast
+  # confidence.level: Confidence level for the forecast interval
+  # return.diff: If TRUE, returns the difference (incidence) instead of cumulative values
   
-  # !!!!!!!!!!!! COEFFICIENTS !!!!!!!!!!!! 
-  n <- dim(output$alphahat)[1] # number of time points
-  estimates <- output$alphahat[n, ] # smoothed state estimates at time n
-  std_errors <- sqrt(diag(output$V[, ,n])) # get standard errors (square root of diag covariance matrix of n)
-  # Lower and upper bounds
-  z_star <- qnorm(0.95)
-  lower <- estimates - z_star * std_errors
-  upper <- estimates + z_star * std_errors
-  res <- data.frame(State = names(estimates), 
-                    Estimate = as.numeric(estimates), 
-                    CI_Lower = lower,
-                    CI_Upper = upper,
-                    Std_Error = as.numeric(std_errors))
-  rownames(res) <- NULL
+  # Return: xts object containing the point forecasts and upper and lower bounds of the forecast interval.
   
-  # !!!!!!!!!!!! CRITERION !!!!!!!!!!!! 
-  # NB: length(model_fit$optim.out$par) is the number of unique NAs KFAS  treats as independent hyper-parameters.
-  mod <- model_fit$model            
-  LL  <- logLik(mod) # higher is better                
-  AIC <- -2*LL + 2*length(model_fit$optim.out$par) # lower is better
-  BIC <- -2*LL + log(nrow(y.lg))*length(model_fit$optim.out$par) # lower is better
+  model <- output$model
+  n <- attr(model, 'n')
+  p <- attr(model, 'p')
   
-  # Create the data frame
-  comp <- data.frame(Model = plot_title, MAPE=paste0(mape.sea, '%'), LogLik = LL, AIC = AIC, BIC = BIC)
+  # Make predication
+  freq <- unclass(periodicity(y.cum))$label
+  endtime <- end(model$y) + c(0, n.ahead)
+  filtered.out <- predict_all_MULTI(index, output, n.ahead, new.data=new.data, sea.on=sea.on, return.all=TRUE)
   
+  # Extract parameters.
+  timespan <- n + 0:n.ahead
+  g.t <- exp(filtered.out$y.hat) # Calculate g.t as exponent of y.t
+  v_dates_end <- seq(last(index(y.cum)), last(index(filtered.out$y.hat)), by=freq) # Forecast dates
   
-  combined_plot <- (p1 | p2 | p3) +
-    plot_annotation(
-      title = plot_title,
-      subtitle = paste0('MAPE: ', mape.sea, '%', sep=''),
-      theme = theme(
-        plot.title = element_text(hjust = 0.5, size = 16, margin = margin(b = 10)),  # Adjust vertical margin to move title down
-        plot.subtitle = element_text(hjust = 0.5, size = 12, margin = margin(b = -10)) # Adjust subtitle margin
-      )) & theme(plot.margin = margin(0, 0, 0, 0))
+  # Construct CI
+  Ptt <- filtered.out$P.t.t
+  i.level <- grep('level', colnames(model$T))
+  ci <- qnorm((1 - confidence.level) / 2) * sqrt(Ptt[i.level, i.level, timespan]) %o% c(1, -1)
+  ci <- xts(exp(ci), order.by=v_dates_end)
   
-  p3 <- plot_holdout_MULTI(output=output, index=index, Y=y.cum, Y.eval=Y[(estimation.date.end+0:n.ahead)],
-                           confidence.level=confidence.level, date_format='%Y-%m-%d',
-                           title=NULL, og=FALSE, MAPE=TRUE)
+  # Forecast loop (start by initializing the first cumulative value)
+  y.hat <- xts(matrix(NA, nrow=n.ahead + 1, ncol=3), order.by=v_dates_end)
+  y.hat[v_dates_end[1],] <- y.cum[v_dates_end[1],1]
   
-  return(list(model=output, estimates=res, criteria=comp, plots=combined_plot,
-              p1=p1, p2=p2, p3=p3))
+  # Extract growth rate and prediction intervals (recursive build cumulative curve)
+  for (i in seq_len(length(v_dates_end[-1]))) {
+    date.forecast <- v_dates_end[i + 1]
+    date.lag <- date.forecast - 1
+    # Update level
+    y.hat[date.forecast, 1] <- as.numeric(y.hat[date.lag, 1]) * 
+      as.numeric(1 + g.t[date.forecast,])
+    # Get prediction intervals
+    y.hat[date.forecast, 2:3] <- as.numeric(y.hat[date.lag, 1]) *
+      as.numeric(1 + g.t[date.forecast,] %*% ci[date.forecast,])}
+  
+  # Difference output if requested
+  d <- if (return.diff){diff(y.hat[, 1])[-1] } else {(y.hat[, 1])[-1]}
+  ci_bounds <- if (return.diff) {
+    (y.hat[, 2:3] - as.vector(y.hat[, 1]))[-1] + as.vector(d)
+  } else { y.hat[2:dim(y.hat)[1], 2:3] }
+  # Piece components together
+  pred <- vector('list', length=p)
+  pred[[p]] <- cbind(fit=d, prediction=ci_bounds)
+  pred <- lapply(pred, ts, end=endtime, frequency=1)
+  
+  y.hat <- xts(pred[[p]], order.by=v_dates_end[-1])
+  names(y.hat)[2:3] <- list('lower', 'upper')
+  
+  return(as.xts(y.hat))
   
 }
+
+
+#### DEPENDENCIES ####
+mypalette <- c('#1D98EB','#D74B3C','#A6B727','#FEC306','#EC800A','#E569BF','#8968CD',
+               '#A1C8F2','#F1A6A6','#C2D77D','#F6D974','#F9B34D','#F1C2D1','#B8A8D9')
+
+nm <- c(total_patients='Total patients', M='Men', F='Women',
+        under_5='Under 5', age5_14='Ages 5-14', age15_24='Ages15-24', age25_64='Ages 25-64', over_65='Ages 65+', 
+        general='General medicine', emergency='Emergency', ophthalmology='Ophthalmology', 
+        pediatrics='Paediatric', orthopedics='Orthopedics', ent='ENT', 
+        gynecology='Gynecology', dermatology='Dermatology', surgery='Surgery', 
+        dentistry='Dentistry', psychiatry='Psychiatry', oncology='Oncology', 
+        mx2t_IMD='IMD: Mx2t >30\u00B0C', mn2t_IMD='IMD: Mn2t <0\u00B0C', tp_IMD='IMD: Tp >15mm', fg10_IMD='IMD: Fg10 >40km/h',
+        mx2t_p90='Clim: Mx2t >90th', mn2t_p10='Clim: Mn2t <10th', tp_p90='Clim: Tp >90th', fg10_p90='Clim: Fg10 >90th',
+        mx2t='Mx2t (\u00B0C)', mn2t='Mn2t (\u00B0C)', tp='Tp (mm)', fg10='Fg10 (km/h)', 
+        closed='Closed', holiday='Holiday') 
+
+weekday_levels <- c('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
+month_levels <- c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
+season_levels <- c('Winter (Jan-Feb)', 'Pre-Monsoon (Mar-May)', 'Monsoon (Jun-Sep)', 'Post-Monsoon (Oct-Dec)')
+h_cols <- c('total_patients', 'F', 'M', 'y1_l', 'y1_17', 'y18_60', 'y60_g', 
+            'general_medicine', 'ophthalmology', 'pediatrics', 'orthopedics', 
+            'ent', 'gynecology', 'dermatology', 'surgery', 'dentistry', 
+            'emergency', 'psychiatry', 'oncology')
+
+
+
 #############################################################################
 # ### Function returning table of Kalman estimated variance parameters
 # print_estimation_results <- function(index, output) {

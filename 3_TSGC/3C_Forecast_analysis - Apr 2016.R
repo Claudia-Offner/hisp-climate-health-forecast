@@ -1,26 +1,18 @@
 ### ------------------------------------------------------------------------ ### 
-###  TSGC Multivariate Model - Results                                       ###
+###  TSGC - Forecast April 2016
 ### ------------------------------------------------------------------------ ### 
-####  DEPENDENCIES  #####
 
-# Packages
-library(openxlsx); library(stringr)
+# Prep environment
+rm(list = ls()); graphics.off(); gc()
+setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
-# Turn off scientific notation
-options(scipen=999)
 
-# Set data path
-user <- 'claer14'
+#### DEPENDENCIES ####
+source('3_TSGC/TSGC - Dependencies.R')
+setwd(path_git)
 file_import <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp_wide'
-path1 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
-path2 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/2_Active_Data/')
-path3 <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Chapter 3 - Real time forecasts/')
-path4 <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/3_TSGC/- Reporting/- figures/')
-setwd(path1)
 
 ### Get model functions (make sure wd is in repo folder)
-source(paste0(path1, '3_TSGC/TSGC_Model - Functions.R'))
-
 run_models <- function(Y, y, exposures, controls, new.data,
                        estimation.date.end, estimation.window, 
                        n.ahead, q, confidence.level){
@@ -209,13 +201,11 @@ esti_df <- esti_df %>% select(matches("Outcome|Mn2t|Fg10|MAPE"))
 esti_df <- esti_df[-1, ]
 
 # Save tables
-write.xlsx(esti_df, file = paste0(path3, "/III. Tables/MT_weat_coefs_Apr16_ALL.xlsx"))
-write.xlsx(comp_df, file = paste0(path3, "/III. Tables/ST_comp_model_Apr16_ALL.xlsx"))
+write.xlsx(esti_df, file = paste0(path_report, "tables/MT_weat_coefs_Apr16_ALL.xlsx"))
+write.xlsx(comp_df, file = paste0(path_report, "tables/ST_comp_model_Apr16_ALL.xlsx"))
 
 # Save figures
-ggsave(paste0(path3, '/IV. Figures/MF_forecast_Apr16_ALL.png'), forecast_plots, width = 10, height = 6, dpi = 300)
-ggsave(paste0(path4, '/MF_forecast_Apr16_ALL.png'), forecast_plots, width = 10, height = 6, dpi = 300)
-# ggsave(paste0(path3, '/IV. Figures/MF_log_Apr16_ALL.png'), log_growth_plot, width = 7, height = 5, dpi = 300)
+ggsave(paste0(path_report, 'figures/MF_forecast_Apr16_ALL.png'), forecast_plots, width = 10, height = 6, dpi = 300)
 
 
 # 3. Model Results (no exposures): Coefficients ####
@@ -371,9 +361,8 @@ names(esti_df)[ncol(esti_df)] <- "MAPE"
 esti_df <- esti_df[-1,]
 
 # Save tables
-write.xlsx(comp_df, file = paste0(path3, "/III. Tables/ST_comp_model_Apr16_noExp.xlsx"))
+write.xlsx(comp_df, file = paste0(path_report, "tables/ST_comp_model_Apr16_noExp.xlsx"))
 # Save figures
-ggsave(paste0(path3, '/IV. Figures/SF_forecast_Apr16_noExp.png'), forecast_plots, width = 10, height = 6, dpi = 300)
-ggsave(paste0(path4, 'SF_forecast_Apr16_noExp.png'), forecast_plots, width = 10, height = 6, dpi = 300)
+ggsave(paste0(path_report, 'figures/SF_forecast_Apr16_noExp.png'), forecast_plots, width = 10, height = 6, dpi = 300)
 
 

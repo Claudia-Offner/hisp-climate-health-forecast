@@ -11,15 +11,15 @@ set.seed(123)
 #### PATHS ####
 user <- 'claer14'
 path_data <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
-path_git <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
-path_project <- paste0(path_git, '/1_Data/HISP_Himachal_Pradesh/')
-path_report <- paste0(path_project, '- Reporting/')
+path_git <- paste0('C:/Users/', user, '/Documents/GitHub/hisp-climate-health-forecast/')
+path_project <- paste0(path_git, '/1_Data/')
+path_report <- paste0(path_git, '/0_Reporting/DLNM/')
 
 
 #### PACKAGES ####
 
 # List packages
-packages <- c('tidyverse', 'terra', 'duckdb', 'tidyselect', 'sf',
+packages <- c('tidyverse', 'terra', 'duckdb', 'tidyselect', 'sf', 'psychrolib',
               'ggplot2', 'data.table', 'tools', 'moments', 'grid',
               'patchwork', 'RColorBrewer', 'reshape2', 'zoo', 'ggnewscale',
               'skimr', 'DT', 'forecast', 'purrr', 'scales', 'xts', 'ggthemes',

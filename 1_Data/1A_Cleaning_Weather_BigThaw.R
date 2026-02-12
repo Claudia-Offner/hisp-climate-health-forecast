@@ -4,13 +4,13 @@
 
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
-setwd('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/')
+setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
 
 ####  DEPENDENCIES  #####
 
 # Set data paths
-source('1_Data/HISP_Himachal_Pradesh/HISP_Cleaning - Dependencies.R')
+source('1_Data/HISP_Cleaning - Dependencies.R')
 setwd(path_data)
 pm25_import <- 'ind_adm4_LongPMInd_PM25_2000-2022'
 elev_import <- 'ind_misc_cont_adm4_elev'
@@ -355,6 +355,6 @@ for (i in 1:14) {
 
 
 #### EXPORT ####
-# write.csv(result, file=paste0('2_Active_Data/202_weat/', weat_export, '.csv'), row.names = FALSE)
+
 save(df_weat, file=paste0('2_Active_Data/202_weat/', weat_export, '.RData'))
 

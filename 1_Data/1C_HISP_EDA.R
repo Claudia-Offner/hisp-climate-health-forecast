@@ -4,12 +4,11 @@
 
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
-setwd('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts')
+setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
 
-####  DEPENDENCIES ####
-
-source('1_Data/HISP_Himachal_Pradesh/HISP_Cleaning - Dependencies.R')
+####  DEPENDENCIES  #####
+source('1_Data/HISP_Cleaning - Dependencies.R')
 setwd(path_data)
 
 # Function to create a histogram for a column
@@ -450,8 +449,8 @@ anova_interaction_summary <- function(dep_var, factor1, factor2, data){
 ####  MAIN CODE ####
 
 # Load spatial data
-ind <- st_read('2_Active_Data/201_admn/ind_admn_ad0_py_s1_GADM_pp_india.shp')
-hp <- st_read('2_Active_Data/201_admn/ind_admn_ad3_py_s1_GADM_pp_Himachal_Pradesh.shp')
+ind <- st_read('2_Active_Data/200_admn/ind_admn_ad0_py_s1_GADM_pp_india.shp')
+hp <- st_read('2_Active_Data/200_admn/ind_admn_ad3_py_s1_GADM_pp_Himachal_Pradesh.shp')
 loc_points <- data.frame(
   location = c("Chamba", "Dharamshala", "Solan", "Hamirpur", "Kullu",
                "Reckong Peo", "Kyelang", "Nahan", "Bilaspur", "Mandi",
@@ -1103,12 +1102,12 @@ figs <- list('1_study_area'=list(p=study_area, w=8, h=7*0.8),
              )
 
 for (f in names(figs)){
-  ggsave(paste0(path_git, '2_DLNM/- Reporting/figures/descriptive/desc_', f, '.png'), figs[[f]]$p, width = figs[[f]]$w, height = figs[[f]]$h, dpi = 300, bg='white')
+  ggsave(paste0(path_git, '0_Reporting/figures/descriptive/desc_', f, '.png'), figs[[f]]$p, width = figs[[f]]$w, height = figs[[f]]$h, dpi = 300, bg='white')
 }
 
 # TABLES
 tabs <- c('base', 'weat_loc_tab', 'IMD_anova', 'IMD_interaction_tests', 'CLIM_anova', 'CLIM_interaction_tests')
 for (t in tabs){
-  write.csv(get(t), paste0(path_git, '2_DLNM/- Reporting/- tables/desc_', t, '.csv'), row.names = FALSE)
+  write.csv(get(t), paste0(path_git, '0_Reporting/tables/desc_', t, '.csv'), row.names = FALSE)
   
 }

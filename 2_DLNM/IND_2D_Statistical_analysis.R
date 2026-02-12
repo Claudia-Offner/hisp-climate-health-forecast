@@ -4,7 +4,7 @@
 
 # Prep environment
 rm(list=ls()); graphics.off(); gc()
-setwd(paste0('C:/Users/claer14/Documents/GitHub/PhD-Climate-Health-Forecasts/'))
+setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 source('2_DLNM/DLNM - Dependencies.R')
 
 # Load packages

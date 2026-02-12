@@ -9,12 +9,10 @@ set.seed(123)
 
 #### PATHS ####
 user <- 'claer14'
-### Project
 path_data <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
-### Git
-path_git <- paste0('C:/Users/', user, '/Documents/GitHub/PhD-Climate-Health-Forecasts/')
+path_git <- paste0('C:/Users/', user, '/Documents/GitHub/hisp-climate-health-forecast/')
 path_project <- paste0(path_git, '2_DLNM/')
-path_report <- paste0(path_git, '0_Reporting/')
+path_report <- paste0(path_git, '0_Reporting/DLNM/')
 
 #### PACKAGES ####
 
