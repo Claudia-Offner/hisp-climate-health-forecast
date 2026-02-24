@@ -62,8 +62,8 @@ h_cols <- c('total_patients',
             'psychiatry', 'pulmonary', 'disability', 'dentistry', 'oncology',
             'ncd', 'antiretroviral', 'substance_counselling', 'physiotherapy')
 
-location_levels <- c('Bilaspur','Chamba', 'Dharamshala', 'Hamirpur', 'Kullu', 'Kyelang', 
-                     'Mandi', 'Nahan', 'Reckong Peo', 'Shimla', 'Solan', 'Una')
+# location_levels <- as.character(df_wide %>% distinct(location, elev) %>% arrange(elev) %>% pull(location))
+location_levels <- c("Una", "Hamirpur", "Nahan", "Chamba", "Kullu", "Dharamshala", "Solan", "Reckong Peo")
 season_levels   <- c('Winter (Jan-Feb)', 'Pre-Monsoon (Mar-May)', 'Monsoon (Jun-Sep)', 'Post-Monsoon (Oct-Dec)')
 month_levels    <- c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
 weekday_levels  <- c('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')

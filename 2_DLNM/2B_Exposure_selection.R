@@ -164,26 +164,7 @@ melted_corr <- reshape2::melt(cor_matrix)
       plot.title = ggplot2::element_text(hjust = 0.5)
       ))
 
-# 2A. No Lags: XG Boost feature importance test ####
-
-# # Select parameters
-# var_list <- paste(c(control_cols, w_cols), collapse = "|")
-# 
-# # Get best parameters & results
-# start_time <- Sys.time()
-# xg_res <- list()
-# xg_res[['all']] <- xgboost(df, "XGBoost Feature Importance", var_list, params=NULL)
-# for (l in locations){
-#   sub <- df %>% filter(location==l)
-#   xg_res[[l]] <- xgboost(sub, l, var_list, params=NULL)
-# }
-# end_time <- Sys.time()
-# # Print time & save (~35min)
-# print(difftime(end_time, start_time, units = "mins"))
-# save(xg_res, file = paste0(path_project, 'ind_xgboost_params.RData'))
-
-
-# 2B. Lags: XG Boost feature importance test ####
+# 2A. Lags: XG Boost feature importance test ####
 
 # # Select parameters
 # control_cols <- c('location', 'time', 'season', 'weekday', 'elev', 'popu')
@@ -204,7 +185,54 @@ melted_corr <- reshape2::melt(cor_matrix)
 # save(xg_res, file = paste0(path_project, 'ind_xgboost_params_lags.RData'))
 # 
 
-# 3A. No Lags: Format results ####
+# 2B. No Lags: XG Boost feature importance test ####
+
+# # Select parameters
+# var_list <- paste(c(control_cols, w_cols), collapse = "|")
+# 
+# # Get best parameters & results
+# start_time <- Sys.time()
+# xg_res <- list()
+# xg_res[['all']] <- xgboost(df, "XGBoost Feature Importance", var_list, params=NULL)
+# for (l in locations){
+#   sub <- df %>% filter(location==l)
+#   xg_res[[l]] <- xgboost(sub, l, var_list, params=NULL)
+# }
+# end_time <- Sys.time()
+# # Print time & save (~35min)
+# print(difftime(end_time, start_time, units = "mins"))
+# save(xg_res, file = paste0(path_project, 'ind_xgboost_params.RData'))
+
+
+# 3A. Lags: Format results ####
+# Get results
+load('2_DLNM/ind_xgboost_params_lags.RData')
+
+# Assessment table of feature importance consistency 
+imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
+# Assessment table of feature importance consistency 
+imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
+(imp_rank_lag <- imp %>%
+    group_by(subpop) %>%
+    arrange(desc(Gain)) %>%
+    mutate(
+      top    = row_number() <= 20,
+      bottom = row_number() > (n() - 120)
+    ) %>%
+    ungroup() %>%
+    group_by(Feature) %>%
+    summarise(
+      `Top 20`    = sum(top),
+      `Bottom 120` = sum(bottom),
+      `Mean Gain`     = mean(Gain),
+      .groups = "drop"
+    ) %>% 
+    mutate(Important= `Bottom 120` < `Top 20`) %>%
+    filter(Important==TRUE) %>%
+    arrange(desc(Important), desc(`Mean Gain`))) 
+imp_rank_lag <- replace_exact_matches(imp_rank_lag, nm)
+
+# 3B. No Lags: Format results ####
 # Get results
 load('2_DLNM/ind_xgboost_params.RData')
 
@@ -253,34 +281,6 @@ imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
     mutate(Important= `Bottom Half` < `Top Half`) %>%
     arrange(desc(Important), desc(`Mean Gain`))) 
 imp_rank <- replace_exact_matches(imp_rank, nm)
-
-# 3B. Lags: Format results ####
-# Get results
-load('2_DLNM/ind_xgboost_params_lags.RData')
-
-# Assessment table of feature importance consistency 
-imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
-# Assessment table of feature importance consistency 
-imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
-(imp_rank_lag <- imp %>%
-    group_by(subpop) %>%
-    arrange(desc(Gain)) %>%
-    mutate(
-      top    = row_number() <= 20,
-      bottom = row_number() > (n() - 120)
-    ) %>%
-    ungroup() %>%
-    group_by(Feature) %>%
-    summarise(
-      `Top 20`    = sum(top),
-      `Bottom 120` = sum(bottom),
-      `Mean Gain`     = mean(Gain),
-      .groups = "drop"
-    ) %>% 
-    mutate(Important= `Bottom 120` < `Top 20`) %>%
-    filter(Important==TRUE) %>%
-    arrange(desc(Important), desc(`Mean Gain`))) 
-imp_rank_lag <- replace_exact_matches(imp_rank_lag, nm)
 
 #### EXPORT ####
 

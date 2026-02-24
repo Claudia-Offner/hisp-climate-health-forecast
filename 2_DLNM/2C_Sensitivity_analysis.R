@@ -197,7 +197,6 @@ plot_AIC_res <- function(modelfitstats, best_fit, main_title){
 
 # Load data
 load(paste0('2_DLNM/ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide_DLNM.RData'))
-data <- df
 
 # Set location info
 locations <- as.character(unique(df$location))

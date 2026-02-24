@@ -11,7 +11,7 @@ set.seed(123)
 user <- 'claer14'
 path_data <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
 path_git <- paste0('C:/Users/', user, '/Documents/GitHub/hisp-climate-health-forecast/')
-path_project <- paste0(path_git, '2_DLNM/')
+path_project <- paste0(path_git, '3_TSGC/')
 path_report <- paste0(path_git, '0_Reporting/TSGC/')
 
 #### PACKAGES ####
@@ -215,7 +215,7 @@ plot_moving_avg <- function(variable, MA=7, y.lab='', colour='red', plt.start.da
   p1 <- ggplot(df.f, aes(x = Date)) +
     geom_line(aes(y = New.Cases, color = 'Real data'), linewidth = 0.1) +
     geom_line(aes(y = Centered.7.day.MA, color = 'Centered 7 day MA'), linewidth = 1) +
-    scale_color_manual(name = '', values = c('Real data' = 'black', 'Centered 7 day MA' = colour)) +
+    scale_color_manual(name = '', values = c('Real data' = 'grey', 'Centered 7 day MA' = colour)) +
     scale_y_continuous(n.breaks = 6) +
     scale_x_date(labels = scales::date_format('%d %b %y'), 
                  breaks = seq(min(df.f$Date), max(df.f$Date), by = '3 months')) +
@@ -743,7 +743,7 @@ mypalette <- c('#1D98EB','#D74B3C','#A6B727','#FEC306','#EC800A','#E569BF','#896
 nm <- c(total_patients='Total patients', M='Men', F='Women',
         under_5='Under 5', age5_14='Ages 5-14', age15_24='Ages15-24', age25_64='Ages 25-64', over_65='Ages 65+', 
         general='General medicine', emergency='Emergency', ophthalmology='Ophthalmology', 
-        pediatrics='Paediatric', orthopedics='Orthopedics', ent='ENT', 
+        paediatrics='Paediatric', orthopedics='Orthopedics', ent='ENT', 
         gynecology='Gynecology', dermatology='Dermatology', surgery='Surgery', 
         dentistry='Dentistry', psychiatry='Psychiatry', oncology='Oncology', 
         mx2t_IMD='IMD: Mx2t >30\u00B0C', mn2t_IMD='IMD: Mn2t <0\u00B0C', tp_IMD='IMD: Tp >15mm', fg10_IMD='IMD: Fg10 >40km/h',

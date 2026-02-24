@@ -44,7 +44,8 @@ load(paste0('3_TSGC/', file_import, '.RData'))
 
 
 # 1. Set base model parameters ####
- df <- df %>% filter(location=='Dharamshala')
+
+df <- df %>% filter(location=='Chamba')
 
 # Variables
 outcome <- 'total_patients_c' 
@@ -92,7 +93,6 @@ for (t in test){
   signal <- rbind(signal, results$criteria)
   
 }
-
 
 # SET Q
 q <- 0.005

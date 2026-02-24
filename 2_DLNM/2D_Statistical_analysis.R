@@ -107,9 +107,8 @@ run_bestfit <- function(df, locations, outcome, params, pooled, city){
 load(paste0('2_DLNM/ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide_DLNM.RData'))
 load(paste0(path_project, '/ind_sens_params.RData'))
 
-# Set location info
+# Set location info by elev
 locations <- as.character(df %>% distinct(location, elev) %>% arrange(elev) %>% pull(location))
-# locations <- as.character(unique(df$location))
 m <- length(locations)
 
 # Store results
@@ -169,12 +168,13 @@ cham_er <- get_city_legend(wrap_plots(cham_res$p_er_tmp_city, cham_res$p_er_tp_c
 # Main percentile look up
 cen_tables <- list()
 datalist <- lapply(locations, function(region) df[df$location==region,])
+
 for (v in variables) {
   cen <- sapply(datalist,function(x) {
     quantile(x[[v]],c(0:100)/100,na.rm=T)
   })
   if (v=='tp'){
-    cen <- exp(cen)
+    cen <- exp(cen)-10
   }
   colnames(cen) <- locations
   cen <- cbind(cen, Average = rowMeans(cen))

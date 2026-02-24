@@ -10,7 +10,8 @@ setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 #### DEPENDENCIES ####
 source('3_TSGC/TSGC - Dependencies.R')
 setwd(path_git)
-file_import <- 'ind_5km_BigThaw-HISP-chamba_2015-2023_hosp_wide'
+file_import <- 'ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide'
+file_export <- 'chamb-2016-08'
 
 run_models <- function(Y, y, exposures, controls, new.data,
                        estimation.date.end, estimation.window, 
@@ -51,14 +52,16 @@ confidence.level <- 0.68
 sea.type <- 'trigonometric'
 sea.period <- 7
 
+df <- df %>% filter(location == 'Chamba')
 
 # 1. Model Results (exposures): Coefficients ####
 
 outcomes <- c('total_patients_c', 
               'F_c','M_c','under_5_c','age5_14_c','age15_24_c','age25_64_c','over_65_c',
-              'general_c','ophthalmology_c','pediatrics_c','ent_c')
+              'general_c','ophthalmology_c','paediatrics_c','ent_c')
 controls <- c('closed')
-exposures <- c('mx2t_IMD_b_lag1', 'tp_IMD_b_lag1', 'fg10_IMD_b_lag1')
+# exposures <- c('mx2t_IMD_b_lag1', 'tp_IMD_b_lag1', 'fg10_IMD_b_lag1')
+exposures <- c('cold20_lag0', 'cold20_lag3', 'prec80_lag0', 'prec80_lag10')
 
 # Outputs
 esti_df <- data.frame()
@@ -111,10 +114,10 @@ for (i in outcomes) {
       CI_Lower = ifelse(abs(CI_Lower) < 1e-6, 0, CI_Lower),
       CI_Upper = ifelse(abs(CI_Upper) < 1e-6, 0, CI_Upper),
       Lag = str_extract(State, 'lag\\d+'),
-      State = str_replace(State, "_lag\\d+", ""),           # Remove lag part from State column
+      State = str_replace(State, '_lag\\d+', ''),           # Remove lag part from State column
       Value = sprintf('%.2f (%.2f, %.2f)', Estimate, CI_Lower, CI_Upper)
     ) %>%
-    select(State, Lag, Value) %>%
+    dplyr::select(State, Lag, Value) %>%
     pivot_wider(names_from = c(State, Lag), values_from = Value) %>%
     rename_with(~ gsub('_lag', ' Lag ', .x)) %>%
     mutate(
@@ -128,7 +131,7 @@ for (i in outcomes) {
 
 
 # Reset names
-nm_m <- nm[!(names(nm) == "M")]
+nm_m <- nm[!(names(nm) == 'M')]
 names(esti_df) <- sub('_b', '', names(esti_df))
 colnames(esti_df) <- names(esti_df) %>%
   sapply(function(x) {
@@ -141,9 +144,9 @@ colnames(esti_df) <- names(esti_df) %>%
   })
 
 # Update header
-lag_row <- str_extract(colnames(esti_df), "\\Lag \\d+")
-lag_row[is.na(lag_row)] <- " "
-new_colnames <- str_trim(str_remove(colnames(esti_df), "Lag \\d+"))
+lag_row <- str_extract(colnames(esti_df), '\\Lag \\d+')
+lag_row[is.na(lag_row)] <- ' '
+new_colnames <- str_trim(str_remove(colnames(esti_df), 'Lag \\d+'))
 colnames(esti_df) <- new_colnames
 esti_df <- rbind(as.list(lag_row), esti_df)
 
@@ -184,11 +187,11 @@ plot_list <- lapply(seq_along(plot_list), function(i) {
 })
 
 # Add legend back
-plot_list[[1]] <- plot_list[[1]] + theme(legend.position = "bottom")
+plot_list[[1]] <- plot_list[[1]] + theme(legend.position = 'bottom')
 
 # Arrange plots
 forecast_plots <- wrap_plots(plot_list, ncol = ncol) + 
-  plot_layout(guides = "collect") & theme(legend.position = "bottom")  
+  plot_layout(guides = 'collect') & theme(legend.position = 'bottom')  
 
 #### EXPORT RESULTS (exposures) ####
 
@@ -196,23 +199,23 @@ forecast_plots <- wrap_plots(plot_list, ncol = ncol) +
 comp_df <- round_numeric(comp_df, 2)
 # Remove irrelevant cols
 names(esti_df) <- make.unique(names(esti_df))
-esti_df <- esti_df %>% select(matches("Outcome|Mx2t|Tp|Fg10|MAPE"))
+esti_df <- esti_df %>% dplyr::select(matches('Outcome|cold20|prec80|MAPE'))
 # Drop header
 esti_df <- esti_df[-1, ]
 
 # Save tables
-write.xlsx(esti_df, file = paste0(path_report, "tables/MT_weat_coefs_Aug16_ALL.xlsx"))
-write.xlsx(comp_df, file = paste0(path_report, "tables/ST_comp_model_Aug16_ALL.xlsx"))
+write.xlsx(esti_df, file = paste0(path_report, 'tables/MT_weat_coefs_', file_export, '_ALL.xlsx'))
+write.xlsx(comp_df, file = paste0(path_report, 'tables/ST_comp_model_', file_export, '_ALL.xlsx'))
 
 # Save figures
-ggsave(paste0(path_report, 'figures/MF_forecast_Aug16_ALL.png'), forecast_plots, width = 10, height = 6, dpi = 300)
+ggsave(paste0(path_report, 'figures/MF_forecast_', file_export, '_ALL.png'), forecast_plots, width = 10, height = 6, dpi = 300)
 
 
 # 3. Model Results (no exposures): Coefficients ####
 
 outcomes <- c('total_patients_c', 
               'F_c','M_c','under_5_c','age5_14_c','age15_24_c','age25_64_c','over_65_c',
-              'general_c','ophthalmology_c','pediatrics_c','ent_c') # 'orthopedics_c','gynecology_c'
+              'general_c','ophthalmology_c','paediatrics_c','ent_c') # 'orthopedics_c','gynecology_c'
 controls <- c('closed')
 exposures <- c()
 
@@ -267,10 +270,10 @@ for (i in outcomes) {
       CI_Lower = ifelse(abs(CI_Lower) < 1e-6, 0, CI_Lower),
       CI_Upper = ifelse(abs(CI_Upper) < 1e-6, 0, CI_Upper),
       Lag = str_extract(State, 'lag\\d+'),
-      State = str_replace(State, "_lag\\d+", ""),           # Remove lag part from State column
+      State = str_replace(State, '_lag\\d+', ''),           # Remove lag part from State column
       Value = sprintf('%.2f (%.2f, %.2f)', Estimate, CI_Lower, CI_Upper)
     ) %>%
-    select(State, Lag, Value) %>%
+    dplyr::select(State, Lag, Value) %>%
     pivot_wider(names_from = c(State, Lag), values_from = Value) %>%
     rename_with(~ gsub('_lag', ' Lag ', .x)) %>%
     mutate(
@@ -284,7 +287,7 @@ for (i in outcomes) {
 
 
 # Reset names
-nm_m <- nm[!(names(nm) == "M")]
+nm_m <- nm[!(names(nm) == 'M')]
 names(esti_df) <- sub('_b', '', names(esti_df))
 colnames(esti_df) <- names(esti_df) %>%
   sapply(function(x) {
@@ -297,9 +300,9 @@ colnames(esti_df) <- names(esti_df) %>%
   })
 
 # Update header
-lag_row <- str_extract(colnames(esti_df), "\\Lag \\d+")
-lag_row[is.na(lag_row)] <- " "
-new_colnames <- str_trim(str_remove(colnames(esti_df), "Lag \\d+"))
+lag_row <- str_extract(colnames(esti_df), '\\Lag \\d+')
+lag_row[is.na(lag_row)] <- ' '
+new_colnames <- str_trim(str_remove(colnames(esti_df), 'Lag \\d+'))
 colnames(esti_df) <- new_colnames
 esti_df <- rbind(as.list(lag_row), esti_df)
 
@@ -340,11 +343,11 @@ plot_list <- lapply(seq_along(plot_list), function(i) {
 })
 
 # Add legend back
-plot_list[[1]] <- plot_list[[1]] + theme(legend.position = "bottom")
+plot_list[[1]] <- plot_list[[1]] + theme(legend.position = 'bottom')
 
 # Arrange plots
 forecast_plots <- wrap_plots(plot_list, ncol = ncol) + 
-  plot_layout(guides = "collect") & theme(legend.position = "bottom")  
+  plot_layout(guides = 'collect') & theme(legend.position = 'bottom')  
 
 #### EXPORT RESULTS (no exposures) ####
 
@@ -352,18 +355,17 @@ forecast_plots <- wrap_plots(plot_list, ncol = ncol) +
 comp_df <- round_numeric(comp_df, 2)
 # Remove irrelevant cols
 names(esti_df) <- make.unique(names(esti_df))
-# esti_df <- esti_df %>% select(-matches("Mx2t|Tp"))
-names(esti_df) <- gsub(".1", "", names(esti_df))
-esti_df[is.na(esti_df)] <- ""
+names(esti_df) <- gsub('.1', '', names(esti_df))
+esti_df[is.na(esti_df)] <- ''
 # Drop header
 names(esti_df) <- esti_df[1,]
-names(esti_df)[1] <- "Outcome"
-names(esti_df)[ncol(esti_df)] <- "MAPE"
+names(esti_df)[1] <- 'Outcome'
+names(esti_df)[ncol(esti_df)] <- 'MAPE'
 esti_df <- esti_df[-1,]
 
 # Save tables
-write.xlsx(comp_df, file = paste0(path_report, "tables/ST_comp_model_Aug16_noExp.xlsx"))
+write.xlsx(comp_df, file = paste0(path_report, 'tables/ST_comp_model_', file_export, '_noExp.xlsx'))
 # Save figures
-ggsave(paste0(path_report, 'figures/SF_forecast_Aug16_noExp.png'), forecast_plots, width = 10, height = 6, dpi = 300)
+ggsave(paste0(path_report, 'figures/SF_forecast_', file_export, '_noExp.png'), forecast_plots, width = 10, height = 6, dpi = 300)
 
 

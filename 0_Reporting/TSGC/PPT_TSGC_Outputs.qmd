@@ -161,11 +161,12 @@ ft
 ![](-%20figures/MF_ts.png)
 
 ## Forecasting April: Accuracy, across groups
+
 ![10-day forecast of hospital registrations across groups **with** weather exposures, commencing on 01 April 2016.](-%20figures/MF_forecast_Apr16_ALL.png)
 
 ## Forecasting April: Accuracy, across groups
-![10-day forecast of hospital registrations across groups **without** weather exposures, commencing on 01 April 2016.](-%20figures/SF_forecast_Apr16_noExp.png)
 
+![10-day forecast of hospital registrations across groups **without** weather exposures, commencing on 01 April 2016.](-%20figures/SF_forecast_Apr16_noExp.png)
 
 ## Forecasting April: Weather predictors, across groups
 
@@ -185,11 +186,12 @@ ft
 ```
 
 ## Forecasting August: Accuracy, across groups
+
 ![10-day forecast of hospital registrations across groups **with** weather exposures, commencing on 14 August 2016.](-%20figures/MF_forecast_Aug16_ALL.png)
 
 ## Forecasting August: Accuracy, across groups
-![10-day forecast of hospital registrations across groups **without** weather exposures, commencing on 14 August 2016.](-%20figures/SF_forecast_Aug16_noExp.png)
 
+![10-day forecast of hospital registrations across groups **without** weather exposures, commencing on 14 August 2016.](-%20figures/SF_forecast_Aug16_noExp.png)
 
 ## Forecasting August: Weather predictors, across groups
 

@@ -10,7 +10,7 @@ setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 ####  DEPENDENCIES  #####
 
 # Set data paths
-source('1_Data/HISP_Cleaning - Dependencies.R')
+source('1_Data/DATA - Dependencies.R')
 setwd(path_data)
 pm25_import <- 'ind_adm4_LongPMInd_PM25_2000-2022'
 elev_import <- 'ind_misc_cont_adm4_elev'
