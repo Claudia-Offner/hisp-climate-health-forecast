@@ -1,5 +1,5 @@
 ### ------------------------------------------------------------------------ ### 
-### HISP Exploratory Data Analysis                                           ###
+### Exploratory Data Analysis (HISP)
 ### ------------------------------------------------------------------------ ### 
 
 # Prep environment
@@ -8,11 +8,11 @@ setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
 
 ####  DEPENDENCIES  #####
-source('1_Data/DATA - Dependencies.R')
+source('1_Data/Data - Dependencies.R')
 setwd(path_data)
 
 # Function to create a histogram for a column
-create_histogram <- function(df_all, column_name, stat=NULL, color=mypalette[3]) {
+create_histogram <- function(df_all, column_name, stat=NULL, color='gray50') {
   # df_all <- sub
   # stat <- skm
   # column_name <- 'fg10'
@@ -81,7 +81,7 @@ get_desc <- function(df, h_cols, w_cols) {
     check <- c('F', 'under_5', 'general', 't2m')
     labels <- c('Gender', 'Age', 'Ward', 'Weather Characteristics')
     } else{
-    check <- c(sort(unique(as.character(df$location)))[1], 'F', 'under_5', 'general', 't2m')
+    check <- c(as.character(location_levels[1]), 'F', 'under_5', 'general', 't2m')
     labels <- c('Location', 'Gender', 'Age', 'Ward', 'Weather Characteristics')
   }
   
@@ -555,7 +555,7 @@ skm1 <- as.data.frame(skm1)
 
 # HISTOGRAMS
 # Total patients only (individual)
-hist_tota <- create_histogram(sub1, 'total_patients', skm1, color=mypalette[7])
+hist_tota <- create_histogram(sub1, 'total_patients', skm1, color='gray50')
 (hist_tota <- hist_tota +
   ggtitle('All total patient distribution') +
   xlab('Total patients') +           # Change Y-axis label
@@ -578,7 +578,7 @@ plots_by_location <- lapply(location_levels, function(loc) {
   skm_loc <- as.data.frame(skm_loc)
   
   
-  p <- create_histogram(sub_loc, 'total_patients', skm_loc, color=mypalette[7])
+  p <- create_histogram(sub_loc, 'total_patients', skm_loc, color='gray50')
   p <- p +
     ggtitle(loc) +
     xlab('Total patients') +
@@ -782,7 +782,7 @@ clean <- df_wide[!is.na(df_wide$total_patients), ]
 w_vars <- w_cols[1:(which(w_cols == "pm25"))]
 plots <- list()
 plots_loc <- list()
-colors <- list('mx2t'=mypalette[2], 'tp'=mypalette[1])
+colors <- list('mx2t'=mypalette[2], 'tp'=mypalette[1], 'fg10'=mypalette[3])
 
 for (v in w_vars){
   
@@ -841,6 +841,7 @@ for (v in w_vars){
 }
 ts_tp <- ts_loc_weat$tp
 ts_mx2t <- ts_loc_weat$mx2t
+ts_fg10 <- ts_loc_weat$fg10
 
 # FIG: 2-month moving average of  POPULATION HEALTH across locations (ts_heal_pop, ts_pop_loc, ts_pop_loc_heal) #####
 clean <- df_wide[!is.na(df_wide$total_patients), ]
@@ -855,13 +856,13 @@ for (v in pop_vars){
   
   variable <- xts(clean[[v]],  order.by=clean$date)
   y_label <- nm[v]
-  ts_plot <- plot_moving_avg(variable, all.cases=FALSE, MA=60, y.lab=y_label, colour=mypalette[7],
+  ts_plot <- plot_moving_avg(variable, all.cases=FALSE, MA=60, y.lab=y_label, colour='gray30',
                             plt.start.date=startdate, est.date.index=index, estimation.date.end=enddate)
   plots[[v]] <- ts_plot
   plots_by_location <- lapply(location_levels, function(loc) {
     df_loc <- subset(clean, location == loc)
     variable <- xts(df_loc[[v]],  order.by=df_loc$date)
-    p <- plot_moving_avg(variable, all.cases=FALSE, MA=60, y.lab=y_label, colour=mypalette[7],
+    p <- plot_moving_avg(variable, all.cases=FALSE, MA=60, y.lab=y_label, colour='gray30',
                          plt.start.date=startdate, est.date.index=index, estimation.date.end=enddate)
     
     return(p)
@@ -912,13 +913,13 @@ for (v in ward_var){
   
   variable <- xts(clean[[v]],  order.by=clean$date)
   y_label <- nm[v]
-  ts_plot <- plot_moving_avg(variable, all.cases=FALSE, MA=60, y.lab=y_label, colour=mypalette[7],
+  ts_plot <- plot_moving_avg(variable, all.cases=FALSE, MA=60, y.lab=y_label, colour='gray30',
                              plt.start.date=startdate, est.date.index=index, estimation.date.end=enddate)
   plots[[v]] <- ts_plot
   plots_by_location <- lapply(location_levels, function(loc) {
     df_loc <- subset(clean, location == loc)
     variable <- xts(df_loc[[v]],  order.by=df_loc$date)
-    p <- plot_moving_avg(variable, all.cases=FALSE, MA=60, y.lab=y_label, colour=mypalette[7],
+    p <- plot_moving_avg(variable, all.cases=FALSE, MA=60, y.lab=y_label, colour='gray30',
                          plt.start.date=startdate, est.date.index=index, estimation.date.end=enddate)
     
     return(p)
@@ -1099,23 +1100,18 @@ figs <- list('1_study_area'=list(p=study_area, w=8, h=7*0.8),
              '2E_ts_emergency'=list(p=ts_emergency, w=8, h=5),
              '3A_hist_weat'=list(p=hist_weat,  w=10, h=7), 
              '3B_ts_mx2t'=list(p=ts_mx2t, w=8, h=5),
-             '3C_ts_tp'=list(p=ts_tp, w=8, h=5)
+             '3C_ts_tp'=list(p=ts_tp, w=8, h=5),
+             '3C_ts_fg10'=list(p=ts_fg10, w=8, h=5)
              )
 
 for (f in names(figs)){
-  ggsave(paste0(path_git, '0_Reporting/DLNM/figures/descriptive/desc_', f, '.png'), figs[[f]]$p, width = figs[[f]]$w, height = figs[[f]]$h, dpi = 300, bg='white')
+  ggsave(paste0(path_git, '0_Reporting/I. desc/fig_', f, '.png'), figs[[f]]$p, width = figs[[f]]$w, height = figs[[f]]$h, dpi = 300, bg='white')
 }
 
 # TABLES
-tabs <- c('base', 'weat_loc_tab', 'IMD_anova', 'IMD_interaction_tests', 'CLIM_anova', 'CLIM_interaction_tests')
+tabs <- c('base', 'base_loc', 'weat_loc_tab', 'IMD_anova', 'IMD_interaction_tests', 'CLIM_anova', 'CLIM_interaction_tests')
 for (t in tabs){
-  write.csv(get(t), paste0(path_git, '0_Reporting/DLNM/tables/desc_', t, '.csv'), row.names = FALSE)
+  write.csv(get(t), paste0(path_git, '0_Reporting/I. desc/tab_', t, '.csv'), row.names = FALSE)
   
 }
 
-# Save plots relvent to TSGC
-figs <- list('1_study_area'=list(p=study_area, w=8, h=7*0.8),
-             '2A_ts_heal_all_loc'=list(p=ts_heal_all_loc, w=8, h=5))
-for (f in names(figs)){
-  ggsave(paste0(path_git, '0_Reporting/TSGC/figures/desc_', f, '.png'), figs[[f]]$p, width = figs[[f]]$w, height = figs[[f]]$h, dpi = 300, bg='white')
-}

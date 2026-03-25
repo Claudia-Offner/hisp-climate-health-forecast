@@ -1,11 +1,12 @@
 ### ------------------------------------------------------------------------ ### 
-###  TSGC - Time series selection
+###  TSGC - Time series selection (HISP)
 ### ------------------------------------------------------------------------ ### 
 
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
-setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
+# Set data path
+setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
 #### DEPENDENCIES ####
 source('3_TSGC/TSGC - Dependencies.R')
@@ -98,13 +99,13 @@ get_ts_loc <- function (loc, df) {
   clean_2017 <- clean[clean$date >= startdate & clean$date <= enddate,]
   (ts_stack_2017 <- get_ts_stack(data=clean_2017, startdate=startdate, enddate=enddate, plot_specs=plot_specs,
                                  title=paste0(loc, ' (Feb 2015 to Feb 2017)')))
-  
+
   # Get param select TS (2017-2019)
-  startdate <- as.Date('2017-02-14')
+  startdate <- as.Date('2015-02-14')
   enddate <- as.Date('2019-02-13')
   clean_2019 <- clean[clean$date >= startdate & clean$date <= enddate,]
   (ts_stack_2019 <- get_ts_stack(data=clean_2019, startdate=startdate, enddate=enddate, plot_specs=plot_specs,
-                                 title=paste0(loc, ' (Feb 2017 to Feb 2019)')))
+                                 title=paste0(loc, ' (Feb 2015 to Feb 2019)')))
   
   return(list(ts_plot=ts_plot, ts_stack_2017=ts_stack_2017, ts_stack_2019=ts_stack_2019))
   
@@ -125,25 +126,25 @@ plot_specs <- list(
   list(col = "tp", label = "Total precipitaiton (mm)", ylab = "Millimeters",  color = "#1D98EB")
 )
 
-# Time series visuals ####
+# 1. Time series visuals ####
 
 
-ts_dharam <- get_ts_loc('Dharamshala', df)
 ts_chamb <- get_ts_loc('Chamba', df)
+ts_dharam <- get_ts_loc('Dharamshala', df)
 
 
 #### EXPORT ####
 
 # Figures
 figs <- list('2B_ts_cham'=list(p=ts_chamb$ts_plot, w=8, h=5),
-             '2B_ts_cham_2017'=list(p=ts_chamb$ts_stack_2017, w=6, h=7),
+             # '2B_ts_cham_2017'=list(p=ts_chamb$ts_stack_2017, w=6, h=7),
              '2B_ts_cham_2019'=list(p=ts_chamb$ts_stack_2019, w=6, h=7),
              '2C_ts_dharam'=list(p=ts_dharam$ts_plot, w=8, h=5),
-             '2C_ts_dharam_2017'=list(p=ts_dharam$ts_stack_2017, w=6, h=7),
+             # '2C_ts_dharam_2017'=list(p=ts_dharam$ts_stack_2017, w=6, h=7),
              '2C_ts_dharam_2019'=list(p=ts_dharam$ts_stack_2019, w=6, h=7)
              )
 
 for (f in names(figs)){
-  ggsave(paste0(path_git, '0_Reporting/TSGC/figures/desc_', f, '.png'), figs[[f]]$p, width = figs[[f]]$w, height = figs[[f]]$h, dpi = 300, bg='white')
+  ggsave(paste0(path_report, 'III. tsgc/fig_desc_', f, '.png'), figs[[f]]$p, width = figs[[f]]$w, height = figs[[f]]$h, dpi = 300, bg='white')
 }
 

@@ -10,7 +10,7 @@ setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 ####  DEPENDENCIES  #####
 
 # Set data paths
-source('1_Data/DATA - Dependencies.R')
+source('1_Data/Data - Dependencies.R')
 setwd(path_data)
 pm25_import <- 'ind_adm4_LongPMInd_PM25_2000-2022'
 elev_import <- 'ind_misc_cont_adm4_elev'
@@ -94,6 +94,7 @@ df_w <- read.csv(paste0('1_Original_Data/118_BigThaw/', weat_import, '.csv'))
 df_p <- get(load(paste0('2_Active_Data/204_misc/', pm25_import, '.RData')))
 df_e <- get(load(paste0('2_Active_Data/204_misc/', elev_import, '.RData')))
 
+unique(df_w$location)
 # Remove duplicates
 df_w <- df_w %>% distinct()
 

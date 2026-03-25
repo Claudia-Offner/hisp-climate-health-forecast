@@ -1,11 +1,12 @@
 ### ------------------------------------------------------------------------ ### 
-###  TSGC - Data Cleaning
+###  TSGC - Data Cleaning (HISP)
 ### ------------------------------------------------------------------------ ### 
 
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
-setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
+# Set data path
+setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
 #### DEPENDENCIES ####
 source('3_TSGC/TSGC - Dependencies.R')
@@ -78,9 +79,10 @@ df <- df %>%
   dplyr::select(-c(tp_roll, thresh_tp, thresh_mx2t), -matches("lag(2|[4-9]|1[1-4])"))
 
 names(df)
-
 table(df$cold20_lag0)
 table(df$prec80_lag0)
 
 #### EXPORT ####
+
+save(df, file = paste0(path_git, '3_TSGC/', file_export, '.RData'))
 

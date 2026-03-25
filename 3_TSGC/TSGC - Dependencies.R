@@ -1,5 +1,5 @@
 ### ------------------------------------------------------------------------ ### 
-### TSGC: Dependencies
+### TSGC - Dependencies
 ### ------------------------------------------------------------------------ ### 
 
 # Turn off scientific notation and set seed
@@ -12,7 +12,7 @@ user <- 'claer14'
 path_data <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
 path_git <- paste0('C:/Users/', user, '/Documents/GitHub/hisp-climate-health-forecast/')
 path_project <- paste0(path_git, '3_TSGC/')
-path_report <- paste0(path_git, '0_Reporting/TSGC/')
+path_report <- paste0(path_git, '0_Reporting/')
 
 #### PACKAGES ####
 
@@ -737,8 +737,8 @@ predict_level_MULTI <- function(index, output, y.cum, n.ahead, new.data=NULL, co
 
 
 #### DEPENDENCIES ####
-mypalette <- c('#1D98EB','#D74B3C','#A6B727','#FEC306','#EC800A','#E569BF','#8968CD',
-               '#A1C8F2','#F1A6A6','#C2D77D','#F6D974','#F9B34D','#F1C2D1','#B8A8D9')
+mypalette <- c('#1D98EB','#D74B3C','#A6B727','#FEC306','#EC800A','#E569BF','#8968CD', '#0D2C6E', '#910030FF', '#127804FF', '#52C5B0FF',
+               '#A1C8F2','#F1A6A6','#C2D77D','#F6D974','#F9B34D','#F1C2D1','#B8A8D9', '#4462A2', '#91003080', '#12780480', '#52C5B080') 
 
 nm <- c(total_patients='Total patients', M='Men', F='Women',
         under_5='Under 5', age5_14='Ages 5-14', age15_24='Ages15-24', age25_64='Ages 25-64', over_65='Ages 65+', 

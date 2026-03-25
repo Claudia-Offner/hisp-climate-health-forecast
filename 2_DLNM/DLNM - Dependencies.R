@@ -1,5 +1,5 @@
 ### ------------------------------------------------------------------------ ### 
-### DLNM: Dependencies
+### DLNM - Dependencies
 ### ------------------------------------------------------------------------ ### 
 # NB COLOURS: https://r-charts.com/colors/
 
@@ -12,7 +12,7 @@ user <- 'claer14'
 path_data <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
 path_git <- paste0('C:/Users/', user, '/Documents/GitHub/hisp-climate-health-forecast/')
 path_project <- paste0(path_git, '2_DLNM/')
-path_report <- paste0(path_git, '0_Reporting/DLNM/')
+path_report <- paste0(path_git, '0_Reporting/')
 
 #### PACKAGES ####
 
@@ -890,12 +890,12 @@ city_lag_res <- function(city='ALL', meta, col, xlab=NULL, quant_v=NULL, title=N
 }
 
 # Function to extract and plot overall & city specific 2D contour plots
-city_con_res <- function(meta, xlab=NULL, title=NULL, reference='50%'){
+city_con_res <- function(meta, xlab=NULL, title=NULL, reference='50%', sig=F){
 
    make_dlnm_plot <- function(df, xlab="", title="",
                              ncol=300,   # resolution of color ramp
                              nbreaks=15, # number of breaks for contour lines / ticks
-                             contour_size=0.35) {
+                             contour_size=0.35, sig=F) {
 
     # Colour palette
     pal <- colorRampPalette(c('#1D98EB', 'white', '#D74B3C'))(ncol)
@@ -903,6 +903,17 @@ city_con_res <- function(meta, xlab=NULL, title=NULL, reference='50%'){
     # Breaks for contour lines
     brks <- pretty(range(df$z, na.rm=TRUE), n=nbreaks)
 
+    # Highlight significance for modelling
+    if (sig==T){
+      df$z <- ifelse(df$z_low <= 1 & df$z_high >= 1,
+                         NA,   # not significant → will be grey
+                         df$z)
+    }
+    
+    max_dev <- max(abs(brks - 1))
+    lims <- c(1 - max_dev, 1 + max_dev)
+    brks <- pretty(lims, n = nbreaks)
+    
     # Base ggplot
     p <- ggplot(df, aes(x=x, y=y, fill=z)) +
 
@@ -916,17 +927,21 @@ city_con_res <- function(meta, xlab=NULL, title=NULL, reference='50%'){
                    show.legend=FALSE) +
 
       # Fill gradient + legend
-      scale_fill_gradientn(
-        colours=pal,
-        limits =range(brks),
-        breaks =brks,
-        name   ="RR",
-        guide =guide_colorbar(
-          barwidth =unit(0.6, "lines"),
-          barheight=unit(12, "lines"),
-          ticks    =TRUE,
-          frame.colour="black",
-          ticks.colour="black"
+      scale_fill_gradient2(
+        low = '#1D98EB',
+        mid = 'white',
+        high = '#D74B3C',
+        midpoint = 1,
+        limits = lims,
+        breaks = brks,
+        name = "RR",
+        na.value = "grey85", # 👈 THIS makes non-significant grey
+        guide = guide_colorbar(
+          barwidth = unit(0.6, "lines"),
+          barheight = unit(12, "lines"),
+          ticks = TRUE,
+          frame.colour = "black",
+          ticks.colour = "black"
         )
       ) +
 
@@ -969,8 +984,6 @@ city_con_res <- function(meta, xlab=NULL, title=NULL, reference='50%'){
     return(p)
   }
 
-
-
   # Unlist meta-analysis w/ prediction basis
   list2env(meta, envir=environment())
 
@@ -983,16 +996,18 @@ city_con_res <- function(meta, xlab=NULL, title=NULL, reference='50%'){
   cp <- crosspred(b_mean, coef=coef(mv),vcov=vcov(mv), model.link='log', at=rowMeans(cen), cen=rowMeans(cen)[reference])
   df_overall <- expand.grid(x=perc, y=seq(cp$lag[1], cp$lag[2]))
   df_overall$z <- as.vector(cp$matRRfit)
-
-  p <- make_dlnm_plot(df_overall, xlab=xlab, title=paste0("Exposure-lag-response: ", title))
+  df_overall$z_low <- as.vector(cp$matRRlow)
+  df_overall$z_high <- as.vector(cp$matRRhigh)
+  
+  p <- make_dlnm_plot(df=df_overall, xlab=xlab, title=paste0(title), sig=sig)
 
   return(p)
 }
 
 #### DEPENDENCIES ####
 
-mypalette <- c('#1D98EB','#D74B3C','#A6B727','#FEC306','#EC800A','#E569BF','#8968CD','#52C5B0FF', '#910030FF', '#127804FF',
-               '#A1C8F2','#F1A6A6','#C2D77D','#F6D974','#F9B34D','#F1C2D1','#B8A8D9','#52C5B080', '#91003080', '#12780480') 
+mypalette <- c('#1D98EB','#D74B3C','#A6B727','#FEC306','#EC800A','#E569BF','#8968CD', '#0D2C6E', '#910030FF', '#127804FF', '#52C5B0FF',
+               '#A1C8F2','#F1A6A6','#C2D77D','#F6D974','#F9B34D','#F1C2D1','#B8A8D9', '#4462A2', '#91003080', '#12780480', '#52C5B080') 
 
 w_cols <- c('t2m', 'mn2t','mx2t', 'dt', 'wb', 'tp', 'fg10', 'rh', 'pm25')
 h_cols <- c('total_patients',

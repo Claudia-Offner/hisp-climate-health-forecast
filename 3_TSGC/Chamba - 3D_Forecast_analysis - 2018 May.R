@@ -1,11 +1,12 @@
 ### ------------------------------------------------------------------------ ### 
-###  TSGC - Chamba Forecast May 2018
+###  TSGC - Forecast May 2018 (HISP: Chamba)
 ### ------------------------------------------------------------------------ ### 
 
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
-setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
+# Set data path
+setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
 #### DEPENDENCIES ####
 source('3_TSGC/TSGC - Dependencies.R')
@@ -212,11 +213,11 @@ esti_df <- esti_df %>% dplyr::select(matches('Outcome|cold20|prec80|MAPE'))
 esti_df <- esti_df[-1, ]
 
 # Save tables
-write.xlsx(esti_df, file = paste0(path_report, 'tables/MT_weat_coefs_', file_export, '_ALL.xlsx'))
-write.xlsx(comp_df, file = paste0(path_report, 'tables/ST_comp_model_', file_export, '_ALL.xlsx'))
+write.xlsx(esti_df, file = paste0(path_report, 'III. tsgc/tab_weat_coefs_', file_export, '_ALL.xlsx'))
+write.xlsx(comp_df, file = paste0(path_report, 'III. tsgc/tab_comp_model_', file_export, '_ALL.xlsx'))
 
 # Save figures
-ggsave(paste0(path_report, 'figures/MF_forecast_', file_export, '_ALL.png'), forecast_plots, width = 10, height = 6, dpi = 300)
+ggsave(paste0(path_report, 'III. tsgc/fig_forecast_', file_export, '_ALL.png'), forecast_plots, width = 10, height = 6, dpi = 300)
 
 
 # 3. Model Results (no exposures): Coefficients ####
@@ -377,8 +378,8 @@ names(esti_df)[ncol(esti_df)] <- 'MAPE'
 esti_df <- esti_df[-1,]
 
 # Save tables
-write.xlsx(comp_df, file = paste0(path_report, 'tables/ST_comp_model_', file_export, '_noExp.xlsx'))
+write.xlsx(comp_df, file = paste0(path_report, 'III. tsgc/tab_comp_model_', file_export, '_noExp.xlsx'))
 # Save figures
-ggsave(paste0(path_report, 'figures/SF_forecast_', file_export, '_noExp.png'), forecast_plots, width = 10, height = 6, dpi = 300)
+ggsave(paste0(path_report, 'III. tsgc/fig_forecast_', file_export, '_noExp.png'), forecast_plots, width = 10, height = 6, dpi = 300)
 
 

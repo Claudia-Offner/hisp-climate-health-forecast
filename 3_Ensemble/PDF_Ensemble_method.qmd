@@ -1,0 +1,65 @@
+---
+title: "Progress Report: Ensemble model forecasting of weather-driven healthccare demand in Himachal Pradesh"
+author: "Claudia Offner"
+date: today
+date-format: "D MMMM YYYY"
+# format: html
+format:
+  pdf:
+    # toc: true
+    number-sections: true
+    fig-number-by-section: true
+    fig-cap-location: bottom
+    geometry: margin=1in
+    fig-pos: H
+header-includes:
+# Number the figures/tables by sections
+- \usepackage{chngcntr}
+- \counterwithin{figure}{section}
+- \counterwithin{table}{section}
+# Set figure order
+- \usepackage{float}
+editor: visual
+bibliography: Other/references.bib
+csl: Other/vancouver.csl
+execute:
+  fig-path: "figures/"
+  tab-path: "tables/"
+  echo: true
+  warning: false
+  message: false
+---
+
+# Summary
+
+This document summarises methods adapted from Paireau and colleagues (2022) paper, "An ensemble model based on early predictors to forecast COVID-19 health care demand in France" (link).
+
+# Data processing
+
+Hospital data
+
+Weather data
+
+Smoothing technique
+
+## Predictor selection
+
+Predictors were selected from the training period using a forward stepwise selection method. First, all covariates were included (n=X) in univariate models, each run over the training period using a rolling forecast origin approach (cross-validation): for each day *t* of the training period, forecasts for period *t-1* up to day *t+14* were made using only past data up to day *t-2* as a training set and computing evaluation metrics using the smoothed observed data in *t-1* ad *t+14*.
+
+# Modelling approach
+
+We aim to forecast 6 targets at the regional and hospital (n=10) levels up to 14 days ahead: total daily hospital admissions and admissions disaggregated by gender and age. First, we develop a suite of individual forecasting models for total hospital admissions. Individual predictions are then combine into an ensemble from which population-specific estimates are derived. Model development uses two periods: a training period to select predictors, evaluate individual models, and determine ensemble composition; and a test period to evaluate ensemble performance on unseen data.
+
+## Individual models
+
+To start, we fit 5 individual models, including autoregressive integrated moving average models (ARIMA), generalized additive models (GAM), Multiple linear regression (MLR) and time series growth curves (TSGC). The details of each model are provided below. Please note that the first 3 models directly predict hospital admissions, whereas the otherspredict growth rate via exponential growth models.
+
+1.  **Baseline**: The baseline model assumes the number of hospital admissions stays at its current value indefinitely into the future, with uncertainty levels given by discretised truncated normal distribution with a lower bound of 0 and a standard deviation given by past one-day ahead deviations from the value of the metric.
+
+2.  **ARIMA1**: We fit a simple ARIMA model of hospital admissions, where the parameters are estimated at each time step using the auto.arima function of the R package *forecast*, independently for each hospital.
+
+3.  **GAM1**: We fit a GAM model of hospital admissions with a single smooth term for time, using the *mgcv* package in R. The model is calibrated independently for each hospital.
+
+4.  **MLR**: A multiple linear regression model of the growth rate r was fit with covariates selected by forward stepwise selection. The model is fir on all hospitals together. Covariates Xk are introduced in the model as lagged variables with lag lk. The best lag for each covariate is estimated at each time step using Pearson correlation coefficient between growth rate and the covariate. The growth rate is then predicted for all prediction horizons by assuming that all covariates will remain constant in the future (i.e. equal to their last observation). We then recursively derive forecasts of admissions.
+
+5.  **TSGC**: \[TBD\]

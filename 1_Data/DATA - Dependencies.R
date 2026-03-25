@@ -12,8 +12,8 @@ set.seed(123)
 user <- 'claer14'
 path_data <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
 path_git <- paste0('C:/Users/', user, '/Documents/GitHub/hisp-climate-health-forecast/')
-path_project <- paste0(path_git, '/1_Data/')
-path_report <- paste0(path_git, '/0_Reporting/DLNM/')
+path_project <- paste0(path_git, '1_Data/')
+path_report <- paste0(path_git, '0_Reporting/')
 
 
 #### PACKAGES ####
@@ -51,8 +51,8 @@ replace_exact_matches <- function(df, dict) {
 
 #### DEPENDENCIES ####
 
-mypalette <- c('#1D98EB','#D74B3C','#A6B727','#FEC306','#EC800A','#E569BF','#8968CD','#52C5B0FF', '#910030FF', '#127804FF',
-               '#A1C8F2','#F1A6A6','#C2D77D','#F6D974','#F9B34D','#F1C2D1','#B8A8D9','#52C5B080', '#91003080', '#12780480') 
+mypalette <- c('#1D98EB','#D74B3C','#A6B727','#FEC306','#EC800A','#E569BF','#8968CD', '#0D2C6E', '#910030FF', '#127804FF', '#52C5B0FF',
+               '#A1C8F2','#F1A6A6','#C2D77D','#F6D974','#F9B34D','#F1C2D1','#B8A8D9', '#4462A2', '#91003080', '#12780480', '#52C5B080') 
 
 w_cols <- c('t2m', 'mn2t','mx2t', 'wb', 'dt','tp','fg10', 'rh_mean', 'sh_mean', 'pm25')
 h_cols <- c('total_patients',
@@ -63,7 +63,7 @@ h_cols <- c('total_patients',
             'ncd', 'antiretroviral', 'substance_counselling', 'physiotherapy')
 
 # location_levels <- as.character(df_wide %>% distinct(location, elev) %>% arrange(elev) %>% pull(location))
-location_levels <- c("Una", "Hamirpur", "Nahan", "Chamba", "Kullu", "Dharamshala", "Solan", "Reckong Peo")
+location_levels <- c('Mandi', 'Kangra', "Una", "Hamirpur", "Nahan", "Chamba", "Kullu", "Dharamshala", "Solan", "Reckong Peo")
 season_levels   <- c('Winter (Jan-Feb)', 'Pre-Monsoon (Mar-May)', 'Monsoon (Jun-Sep)', 'Post-Monsoon (Oct-Dec)')
 month_levels    <- c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
 weekday_levels  <- c('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')

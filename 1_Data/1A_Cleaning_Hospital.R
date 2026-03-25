@@ -8,7 +8,7 @@ setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
 
 ####  DEPENDENCIES  ####
-source('1_Data/DATA - Dependencies.R')
+source('1_Data/Data - Dependencies.R')
 setwd(path_data)
 heal_export <- 'ind_adm4_HISP-HP_2015-2023_patient_visits_ALL_clean'
 
@@ -49,7 +49,7 @@ unpack_HISP <- function(file_path, hospital, download_path){
 
 # # Unpack HISP datasets
 # # !! NB: Remove outdated files or sites will be appended multiple times !!
-# datasets <- list.files('1_Original_Data/108_HISP/')
+# datasets <- list.files('1_Original_Data/108_HISP/', pattern='csv')
 # for (s in location_levels){
 #   file <- datasets[grepl(s, datasets)]
 #   if (length(file) == 0) {
@@ -122,10 +122,10 @@ ward_patterns <- c(
   'medicine|medical' = 'general',
   'general|genral' = 'general',
   'new building' = 'general',
-  'gynae' = 'gynaecology',
+  'gynae|gyne' = 'gynaecology',
   'mch' = 'mch',
   'NAI DISHA KENDRA' = 'substance_counselling',
-  'ncd' = 'ncd',
+  'ncd|nirog' = 'ncd',
   'ortho' = 'orthopaedics',
   'cancer' = 'oncology',
   'radio|oncolo' = 'oncology',
@@ -138,16 +138,20 @@ ward_patterns <- c(
   'dental' = 'dentistry',
   'FEMALE|MALE' = 'general',
   'birth and death' = 'remove',
-  'anaesthetist' = 'remove'
+  'anaesthetist' = 'remove',
+  'patholo' = 'removed',
+  'nlep' = 'remove',
+  'tb-dot' = 'pulmonary',
+  'ecg|blood'= 'general'
   )
 
 df_heal$ward_group <- df_heal$ward_name
 for (pattern in names(ward_patterns)) {
   df_heal$ward_group[grepl(pattern, df_heal$ward_name, ignore.case = TRUE)] <- ward_patterns[pattern]
 }
-
 sort(unique(df_heal$ward_group))
 sort(table(df_heal$ward_group))
+
 df_heal$ward_name <- df_heal$ward_group
 df_heal$ward_group <- NULL
 
@@ -290,7 +294,7 @@ df_heal_l <- bind_rows(age_gender_long, ward_long, age_long, gender_long, total_
 # 4. Near zero values and missing dates ####
 # 4. A: Checks on total_patients ####
 
-# 4259 days missing between '2015-02-14' and '2023-01-19'
+# 4928 days missing between '2015-02-14' and '2023-01-19'
 (missing <- df_heal_w %>%
   group_by(location) %>%
   summarise(
@@ -310,7 +314,7 @@ sum(missing$n_missing)
 missing_days <- missing$missing_days
 missing_weekday <- missing$missing_weekday
 
-# 1350 days with total_patient values < 100
+# 1338 days with total_patient values < 100
 (zero <- df_heal_w %>%
   group_by(location) %>%
   summarise(
@@ -327,7 +331,7 @@ sum(zero$n_zero_days)
 zero_days <- zero$zero_days
 zero_weekday <- zero$zero_weekday
 
-# 5609 days were low or missing in total
+# 6266 days were low or missing in total
 (all <- missing %>%
   inner_join(zero, by = 'location') %>%
   mutate(
@@ -366,10 +370,9 @@ hols_f <- hols %>% dplyr::filter(ADM_name == 'India' & (holiday == 1 | weekday =
 hols_s <- data.frame(date = date_range) %>% dplyr::filter(weekdays(date) == 'Sunday') 
 all_hols <- unique(c(hols_f$Date, hols_hp$Date, hols_s$date))
 
-# 2156 accounted for by holidays (87%) and 316 not (13%)
+# 4861 accounted for by holidays (78%) and 1405 not (22%)
 account_hols_list <- lapply(all_days, function(d) {intersect(d, all_hols)})
 account_not_list <- lapply(all_days, function(d) {setdiff(d, all_hols)})
-
 # Counts per location
 (account_summary <- data.frame(
   location = all$location,
@@ -382,7 +385,7 @@ account_not_list <- lapply(all_days, function(d) {setdiff(d, all_hols)})
 sum(account_summary$n_account_hols)/(sum(account_summary$n_account_hols)+sum(account_summary$n_account_not))*100
 sum(account_summary$n_account_not)/(sum(account_summary$n_account_hols)+sum(account_summary$n_account_not))*100
 
-# Check unaccounted dates (mostly in 2020, which can be due to COVID, but some random weird years)
+# Check unaccounted dates (mostly in 2020/2021, which can be due to COVID, but some random weird years)
 account_not_tables <- lapply(account_not_list, function(d) {
   table(factor(format(d, "%a"), levels = weekday_levels),format(d, '%Y'))
 })

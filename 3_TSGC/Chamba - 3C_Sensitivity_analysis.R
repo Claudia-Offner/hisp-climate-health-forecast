@@ -1,9 +1,11 @@
 ### ------------------------------------------------------------------------ ### 
-###  TSGC - Sensitivity analysis
+###  TSGC - Sensitivity analysis (HISP: Chamba)
 ### ------------------------------------------------------------------------ ### 
 
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
+
+# Set data path
 setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
 #### DEPENDENCIES ####
@@ -304,7 +306,7 @@ names(result_all) <- gsub(".1", "", names(result_all))
 result_all$Test[54:56] <- NA  # or "" if you prefer blank strings
 
 # Save tables
-write.xlsx(result_all, file = paste0(path_report, "/tables/ST_chamb_sens_param.xlsx"))
-write.xlsx(result_lags, file = paste0(path_report, "/tables/ST_chamb_sens_lag.xlsx"))
+write.xlsx(result_all, file = paste0(path_report, "III. tsgc/tab_chamb_sens_param.xlsx"))
+write.xlsx(result_lags, file = paste0(path_report, "III. tsgc/tab_chamb_sens_lag.xlsx"))
 
 

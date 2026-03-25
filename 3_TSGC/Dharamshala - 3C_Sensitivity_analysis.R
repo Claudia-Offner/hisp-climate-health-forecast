@@ -1,11 +1,12 @@
 ### ------------------------------------------------------------------------ ### 
-###  TSGC - Sensitivity analysis
+###  TSGC - Sensitivity analysis (HISP: Dharamshala)
 ### ------------------------------------------------------------------------ ### 
 
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
-setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
+# Set data path
+setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
 #### DEPENDENCIES ####
 source('3_TSGC/TSGC - Dependencies.R')
@@ -303,10 +304,10 @@ result_all$Model <- NULL
 names(result_all) <- make.unique(names(result_all))
 result_all <- result_all %>% dplyr::select(Parameter, Test, everything())
 names(result_all) <- gsub(".1", "", names(result_all))
-result_all$Test[54:56] <- NA  # or "" if you prefer blank strings
+result_all$Test[54:56] <- NA  
 
 # Save tables
-write.xlsx(result_all, file = paste0(path_report, "/tables/ST_dharam_sens_param.xlsx"))
-# write.xlsx(result_lags, file = paste0(path_report, "/tables/ST_dharam_sens_lag.xlsx"))
+write.xlsx(result_all, file = paste0(path_report, "III. tsgc/tab_dharam_sens_param.xlsx"))
+# write.xlsx(result_lags, file = paste0(path_report, "III. tsgc/tab_dharam_sens_lag.xlsx"))
 
 
