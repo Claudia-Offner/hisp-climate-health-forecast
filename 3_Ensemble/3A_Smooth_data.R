@@ -5,18 +5,22 @@
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
 
+# Unload all non-base packages
+lapply(paste0('package:', names(sessionInfo()$otherPkgs)), 
+       detach, character.only = TRUE, unload = TRUE, force = TRUE)
+
 # Set data path
 path_data <- paste0('C:/Users/claer14/OneDrive - University of Cambridge/III. Research/Data/')
 path_git <- paste0('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 setwd(path_git)
 
 #### DEPENDENCIES ####
-source('3_Ensemble/Ensemble - Utilities.R')
+source('3_Ensemble/3_Utilities.R')
 file_import <- 'ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide_ensemble'
 
 # Install packages if not already in library & load
 pkgs <- c('dplyr', 'ggplot2', 'zoo')
-install.packages(pkgs[!pkgs %in% installed.packages()[, 'Package']])
+# install.packages(pkgs[!pkgs %in% installed.packages()[, 'Package']])
 invisible(lapply(pkgs, library, character.only = TRUE))
 
 # Function applying 7-day moving average with CI's
@@ -68,19 +72,21 @@ df <- df_ensm; rm(df_ensm)
 # Subset relevant data
 cols_to_smooth <- c('total_patients', 'F', 'M', 'age25_64', 't2m', 'tp')
 sub <- df %>% 
-  dplyr::select(location, date, all_of(cols_to_smooth)) %>%
+  select(location, date, all_of(cols_to_smooth)) %>%
   filter(between(date, as.Date('2016-05-15'), as.Date('2017-12-31')))
 dates_analysis <- seq(as.Date('2017-01-01'), as.Date('2017-09-30'), by = 'day')
 
 # Create regional estimates (i.e. metropolitan as per Paireau)
 sub_regional <- sub %>%
-  dplyr::group_by(date) %>%
-  dplyr::summarise(
-    across(all_of(cols_to_smooth[1:3]), ~ sum(.x,  na.rm = TRUE)),
-    across(all_of(cols_to_smooth[4:5]), ~ mean(.x, na.rm = TRUE)),
+  group_by(date) %>%
+  summarise(
+    across(all_of(cols_to_smooth[c(1:4, 6)]), ~ sum(.x,  na.rm = TRUE)),
+    across(all_of(cols_to_smooth[5]), ~ mean(.x, na.rm = TRUE)),
     .groups = "drop"
   ) %>%
-  dplyr::mutate(location = "metropolitan")
+  mutate(location = "metropolitan") %>%
+  select(location, date, all_of(cols_to_smooth))
+
 sub <- bind_rows(sub, sub_regional)
 
 
@@ -98,7 +104,7 @@ sub <- lapply(dates_analysis, function(d) {
     mutate(date_analysis = as.Date(d, origin = '1970-01-01'))
 }) %>%
   bind_rows() %>% 
-  dplyr::select(location, date, date_analysis, everything()) %>%
+  select(location, date, date_analysis, everything()) %>%
   arrange(location, date_analysis, date)
 
 # Address NA's by assuming static position

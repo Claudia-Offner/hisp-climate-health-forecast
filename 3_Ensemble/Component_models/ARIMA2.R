@@ -84,7 +84,7 @@ for (iDate in seq_along(dates_analysis)){
     # Fit model 
     mod<-auto.arima(sub[,"iHosp_r"], xreg=as.matrix(sub[,c(2:ncol(sub))]),method="ML",allowdrift = F)
     
-    # build new data to predict
+    # Build new data to predict
     newdata<-data.frame(seq.Date(dates_analysis[iDate]-remove_last_n+1,dates_analysis[iDate]+14,by="day"),NA)
     names(newdata)<-c("date","iHosp_r")
     
@@ -97,7 +97,7 @@ for (iDate in seq_along(dates_analysis)){
       
       newdata<-left_join(newdata,sub2[,c("date",list_col[i])],by=c("date"="date"))
       
-      # fill NA by last available value
+      # Fill NA by last available value
       newdata[is.na( newdata[,ncol(newdata)]),ncol(newdata)]<- last(newdata[!is.na( newdata[,ncol(newdata)]),ncol(newdata)])
       
     }

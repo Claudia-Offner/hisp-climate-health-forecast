@@ -3,9 +3,12 @@
 ### ------------------------------------------------------------------------ ### 
 
 
-# Prepare data  ------------------------------------------------
+# 1. Prepare data ####
 
+# Set forecast horizon
 date_max<-max(dates_analysis)+max_prediction_horizon-remove_last_n
+
+# Format data for plotting
 dat2<-data_rt %>%
   filter(date_analysis==max(data_rt$date_analysis)) %>%
   filter(date>=min(dates_analysis)-remove_last_n & date<=date_max) %>%
@@ -16,8 +19,7 @@ dat2<-data_rt %>%
   filter(!is.element(region,c("COR","national")))
 
 
-
-# Load projections from components models -----------------------
+# 2. Load projections from components models ####
 
 proj<-tibble()
 for (model in models){
@@ -32,103 +34,41 @@ proj<- proj %>%
   filter(date<=max(dates_analysis)) %>%
   mutate(date_proj=date+prediction_horizon) 
 
-# exclusion of lockdown
-proj$inclusion<-1
-proj$inclusion[which(proj$date>=as.Date("2020-10-20") & proj$date<=as.Date("2020-11-04") & 
-                       proj$date_proj>=as.Date("2020-11-03"))]<-0
+# 3. Compute evaluation metrics ####
 
-# Compute evaluation metrics  ------------------------------------
-
+# Error
 res<-proj %>%
   left_join(dat2,by=c("date_proj"="date","region"="region","var"="var")) %>%
   mutate(in_interval95 = smooth_value >= lower_5 & smooth_value <= upper_5) %>%
   mutate(abs_error = point - smooth_value) 
 
 # WIS 
-res$IS_2<-scoringutils:::interval_score(observed = res$smooth_value,
-                                        lower=res$lower_2,
-                                        upper=res$upper_2,
-                                        interval_range=98,
-                                        weigh = TRUE,
-                                        separate_results = FALSE)
-
-res$IS_5<-scoringutils:::interval_score(observed = res$smooth_value,
-                                        lower=res$lower_5,
-                                        upper=res$upper_5,
-                                        interval_range=95,
-                                        weigh = TRUE,
-                                        separate_results = FALSE)
-
-res$IS_10<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_10,
-                                         upper=res$upper_10,
-                                         interval_range=90,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_20<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_20,
-                                         upper=res$upper_20,
-                                         interval_range=80,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_30<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_30,
-                                         upper=res$upper_30,
-                                         interval_range=70,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_40<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_40,
-                                         upper=res$upper_40,
-                                         interval_range=60,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_50<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_50,
-                                         upper=res$upper_50,
-                                         interval_range=50,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_60<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_60,
-                                         upper=res$upper_60,
-                                         interval_range=40,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_70<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_70,
-                                         upper=res$upper_70,
-                                         interval_range=30,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_80<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_80,
-                                         upper=res$upper_80,
-                                         interval_range=20,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_90<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_90,
-                                         upper=res$upper_90,
-                                         interval_range=10,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_100<-abs(res$point-res$smooth_value)
-
-res <- res %>%
-  mutate(wis = (IS_2+IS_5+IS_10+IS_20+IS_30+IS_40+IS_50+
-                  IS_60+IS_70+IS_80+IS_90+0.5*IS_100)/11.5)  
 # from https://github.com/reichlab/covid19-forecast-evals/blob/main/code/process-zoltar-scores.R
 
+intervals <- list(
+  list(suffix="2",   range=98), list(suffix="5",   range=95),
+  list(suffix="10",  range=90), list(suffix="20",  range=80),
+  list(suffix="30",  range=70), list(suffix="40",  range=60),
+  list(suffix="50",  range=50), list(suffix="60",  range=40),
+  list(suffix="70",  range=30), list(suffix="80",  range=20),
+  list(suffix="90",  range=10)
+)
+
+for (iv in intervals) {
+  res[[paste0("IS_", iv$suffix)]] <- scoringutils:::interval_score(
+    observed       = res$smooth_value,
+    lower          = res[[paste0("lower_", iv$suffix)]],
+    upper          = res[[paste0("upper_", iv$suffix)]],
+    interval_range = iv$range,
+    weigh          = TRUE,
+    separate_results = FALSE
+  )
+}
+
+res <- res %>%
+  mutate(IS_100 = abs(point-smooth_value)) %>%
+  mutate(wis = (IS_2+IS_5+IS_10+IS_20+IS_30+IS_40+IS_50+
+                  IS_60+IS_70+IS_80+IS_90+0.5*IS_100)/11.5)  
 
 # Plot settings ####
 
@@ -147,7 +87,7 @@ p1<-res %>%
   filter(date_proj<=date_max) %>% 
   ggplot() +
   annotate(geom="rect",xmin=as.Date("2017-03-03"),xmax=as.Date("2017-03-18"),ymin=-Inf,ymax=Inf,fill="grey90",alpha=0.5)+
-  geom_line(aes(x = date_proj, y = point, color = as.factor(prediction_horizon), alpha=inclusion,group=date),size=0.8) +
+  geom_line(aes(x = date_proj, y = point, color = as.factor(prediction_horizon), group=date),size=0.8) +
   geom_line(data = dat2[dat2$region=="metropolitan" & dat2$var==myvar & dat2$date>=min(dates_analysis),], 
             aes(x = date, y = smooth_value), size = 0.8) +
   xlab("") +
@@ -168,15 +108,13 @@ ggsave(filename=paste0(path_figures, 'FigureS4.png'), plot=p1,
 
 # RMSE national 
 p2<-res %>%
-  filter(inclusion==1) %>% 
   filter(region == "metropolitan") %>% 
   filter(var=="iHosp") %>% 
   group_by(model,var,prediction_horizon) %>%
   dplyr::summarize(average_bias = sqrt(mean(abs_error^2,na.rm=T))) %>%
   ungroup() %>%
   ggplot() +
-  geom_line(aes(x = prediction_horizon, y = average_bias, color = model , 
-                size=model,linetype=model)) +
+  geom_line(aes(x = prediction_horizon, y = average_bias, color = model, size=model,linetype=model)) +
   geom_hline(yintercept = 0, linetype = "dashed") +
   scale_y_continuous("RMSE") +
   scale_x_continuous("Days ahead", breaks = unique(res$prediction_horizon)) + 
@@ -193,7 +131,6 @@ p2<-res %>%
 
 # WIS national
 p3<-res %>%
-  filter(inclusion==1) %>% 
   filter(region == "metropolitan") %>% 
   filter(var=="iHosp") %>% 
   group_by(model,var,prediction_horizon) %>%
@@ -220,7 +157,6 @@ p3<-res %>%
 
 # RMSE regional
 p2_reg<-res %>%
-  filter(inclusion==1) %>% 
   filter(region %in% regions_metro) %>% 
   filter(region != "COR") %>%
   filter(var=="iHosp") %>% 
@@ -247,7 +183,6 @@ p2_reg<-res %>%
 
 # WIS regional
 p3_reg<-res %>%
-  filter(inclusion==1) %>% 
   filter(region %in% regions_metro) %>% 
   filter(var=="iHosp") %>% 
   group_by(model,var,prediction_horizon) %>%

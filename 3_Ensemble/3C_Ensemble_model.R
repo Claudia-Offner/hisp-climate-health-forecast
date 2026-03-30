@@ -1,13 +1,13 @@
 # Compute the ensemble forecasts for hospital admissions and project ICU and beds  
 
 
-# Set path and parameters ---- 
+# Set path and parameters ####
 
 # size of the window (in days) on which the paramaters for beds are estimated
 length_calib<-5
 
 
-# Load and combine projections from component models ----
+# Load and combine projections from component models ####
 
 proj_components<-tibble()
 for (model in models){
@@ -19,7 +19,7 @@ proj_components <- proj_components %>%
   mutate(date=as.Date(date)) 
 
 
-# Compute ensemble average ---- 
+# Compute ensemble average ####
 
 ens<-proj_components %>%
   filter(model %in% models_ensemble) %>%
@@ -60,210 +60,215 @@ proj<-bind_rows(proj_components,ens) %>%
 
 # Project ICU and beds from iHosp Ensemble --------------------------------------------------------------------------------
 
-simulbeds<-NULL
+# simulbeds<-NULL
+# 
+# 
+# for (iRegion in seq_along(regions)){
+#   
+#   myregion<-regions[iRegion]
+#   
+#   
+#   for (iDate in seq_along(dates_analysis)) {
+#     
+#     # Point estimate ---------
+#     
+#     obs<- data_rt %>%
+#       filter(region==myregion) %>%
+#       dplyr::select(date,date_analysis,iHosp_smooth,iICU_smooth,inHosp_smooth,inICU_smooth,iHosp_smooth_lwr,iHosp_smooth_upr)%>%
+#       dplyr::rename("iHosp"="iHosp_smooth","iICU"="iICU_smooth","inHosp"="inHosp_smooth","inICU"="inICU_smooth") %>%
+#       filter(date_analysis==dates_analysis[iDate]) %>%
+#       filter(date<=dates_analysis[iDate]-remove_last_n) %>%
+#       drop_na(iHosp)
+#     
+#     model_sims<-obs %>%
+#       dplyr::select(date,iHosp)
+#     
+#     ens_tmp<-ens %>%
+#       ungroup() %>%
+#       filter(region==myregion & var=="iHosp" & date==dates_analysis[iDate]) %>%
+#       mutate(date=date+prediction_horizon) %>%
+#       dplyr::select(date,point,lower,upper) %>%
+#       pivot_longer(cols=c(point,lower,upper),names_to="type",values_to="iHosp")
+#     
+#     model_sims_proj<-model_sims %>%
+#       bind_rows(ens_tmp[ens_tmp$type=="point",c("date","iHosp")])
+#     
+#     # Calibration 
+#     start_fit_at <- max(obs$date)-length_calib+1
+#     n_to_forecast <- max_prediction_horizon
+#     # If < 0 coefficient of variations will be estimated
+#     fixed_cv_hosp <- 0.9
+#     fixed_cv_ICU <- 0.8
+#     estimates <- calibrateV2(obs, model_sims, start_fit_at,
+#                              fixed_cv_hosp = fixed_cv_hosp,
+#                              fixed_cv_ICU = fixed_cv_ICU,
+#                              n_to_forecast = n_to_forecast,
+#                              project_pICU = "const") # const
+#     estimates
+#     
+#     # Projections
+#     proj_point <- project(model_sims_proj, estimates$pICUs, estimates$mu_tauHosp_R,
+#                           estimates$cv_tauHosp_R, estimates$mu_tauICU_R,
+#                           estimates$cv_tauICU_R) %>%
+#       mutate(type="point")
+#     
+#     projections_point <- proj_point %>%
+#       gather(-date, -type, key = "var", value = "value") %>%
+#       pivot_wider(id_cols=c(date,var),names_from = "type",values_from="value") %>%
+#       filter(date > (dates_analysis[iDate]-remove_last_n) ) %>%
+#       mutate(date_proj=date) %>%
+#       mutate(date=dates_analysis[iDate]) %>%
+#       mutate(prediction_horizon=as.numeric(date_proj-date)) 
+#     
+#     
+#     # Confidence interval (bootstrap) ------------------
+#     
+#     res.boot<-NULL
+#     
+#     date.first= NULL # beginning of smoothing - if null the smallest date in data
+#     date.last=NULL   # end of smoothng - if null the largest date in data
+#     #parameter for the smoother
+#     bwd=8 # initial bandwidth to compute daily pattern; the data should have at least 2*bwd+4*7 days
+#     weekday=T # correct for weekly pattern 
+#     d=3 # local polynomial of degree 3
+#     dZ=3 # make quadratic for the last segment (linear=2, constant=1)
+#     # grid.bw=NULL ## bandwidth fof final smoothing, if a list then CV is computed for each value and the best is used
+#     # grid.d.sig=NULL ## parameter for least revision, value 0 is often best for Cubic/Quadratic, but otherwise choose best CV from list
+#     grid.bw=15
+#     grid.d.sig=0
+#     area<-1
+#     name<-myregion
+#     nSim<-100
+#     
+#     obs<- data_rt %>%
+#       filter(region==myregion) %>%
+#       dplyr::select(date,date_analysis,iHosp,iICU,inHosp,inICU)%>%
+#       filter(date_analysis==dates_analysis[iDate]) %>%
+#       filter(date<=dates_analysis[iDate]-remove_last_n) %>%
+#       drop_na(iHosp) %>%
+#       mutate(inICU = ifelse(is.na(inICU), 0, inICU))
+#     
+#     dat_train<-obs %>%
+#       mutate(day=date, name=name,area=area) %>%
+#       as.data.frame() 
+#     
+#     # bootstrapped smoothed trajectories 
+#     for (myvar in c("iHosp","iICU","inHosp","inICU")) {
+#       
+#       log.incid<-paste0("log.",myvar)
+#       dat_train[,paste0("log.",myvar)]<-log(dat_train[,myvar]+1)
+#       
+#       first.date = min(dat_train$day)
+#       last.date = max(dat_train$day)
+#       n.weeks = floor(as.numeric(last.date-first.date)/7)
+#       
+#       smoothed.data = real.time.smoother(data=dat_train,log.incid= paste0("log.",myvar), n.weeks=n.weeks,
+#                                          weekday=weekday,bwd=bwd, d=d, dZ=dZ,
+#                                          grid.bw=grid.bw, grid.d.sig=grid.d.sig)
+#       res.boot_tmp=boot.traj.LPR(smoothed.data,d=3,dZ=3,R=nSim)
+#       res.boot_tmp$y<-exp(res.boot_tmp$y)-1
+#       res.boot_tmp$var<-myvar
+#       res.boot<-bind_rows(res.boot,res.boot_tmp)
+#       
+#     }
+#     
+#     projections_boot<-NULL
+#     
+#     for (k in 1:nSim){
+#       
+#       obs<-res.boot %>%
+#         filter(i==k) %>% 
+#         dplyr::select(y,day,var) %>%
+#         pivot_wider(id_cols=day,names_from=var,values_from=y)%>%
+#         dplyr::rename(date=day) %>%
+#         drop_na()
+#       
+#       model_sims<-obs %>%
+#         dplyr::select(date,iHosp)
+#       
+#       ens_tmp<-ens %>%
+#         ungroup() %>%
+#         filter(region==myregion & var=="iHosp" & date==dates_analysis[iDate]) %>%
+#         mutate(date=date+prediction_horizon) %>%
+#         dplyr::select(date,point,lower,upper) %>%
+#         pivot_longer(cols=c(point,lower,upper),names_to="type",values_to="iHosp")
+#       
+#       model_sims_proj<-model_sims %>%
+#         bind_rows(ens_tmp[ens_tmp$type=="point",c("date","iHosp")])
+#       
+#       model_sims_proj_lwr<-model_sims %>% 
+#         bind_rows(ens_tmp[ens_tmp$type=="lower",c("date","iHosp")])
+#       
+#       model_sims_proj_upr<-model_sims %>% 
+#         bind_rows(ens_tmp[ens_tmp$type=="upper",c("date","iHosp")])
+#       
+#       # Calibration
+#       start_fit_at <- max(obs$date)-length_calib+1
+#       n_to_forecast <- max_prediction_horizon
+#       # If < 0 coefficient of variations will be estimated
+#       fixed_cv_hosp <- 0.9
+#       fixed_cv_ICU <- 0.8
+#       nrow(obs)
+#       nrow(model_sims)
+#       
+# 
+#       estimates <- calibrateV2(obs, model_sims, start_fit_at,
+#                                fixed_cv_hosp = fixed_cv_hosp,
+#                                fixed_cv_ICU = fixed_cv_ICU,
+#                                n_to_forecast = n_to_forecast,
+#                                project_pICU = "const") # const
+#       estimates
+#       
+#       # Projections
+#       proj_point <- project(model_sims_proj, estimates$pICUs, estimates$mu_tauHosp_R,
+#                             estimates$cv_tauHosp_R, estimates$mu_tauICU_R,
+#                             estimates$cv_tauICU_R) %>%
+#         mutate(type="point")
+#       proj_lwr <- project(model_sims_proj_lwr, estimates$pICUs, estimates$mu_tauHosp_R,
+#                           estimates$cv_tauHosp_R, estimates$mu_tauICU_R,
+#                           estimates$cv_tauICU_R) %>%
+#         mutate(type="lower")
+#       proj_upr <- project(model_sims_proj_upr, estimates$pICUs, estimates$mu_tauHosp_R,
+#                           estimates$cv_tauHosp_R, estimates$mu_tauICU_R,
+#                           estimates$cv_tauICU_R) %>%
+#         mutate(type="upper")
+#       
+#       projections_tmp <- proj_point %>%
+#         bind_rows(proj_lwr) %>%
+#         bind_rows(proj_upr) %>%
+#         gather(-date, -type, key = "var", value = "value") %>%
+#         pivot_wider(id_cols=c(date,var),names_from = "type",values_from="value") %>%
+#         filter(date > (dates_analysis[iDate]-remove_last_n) ) %>%
+#         mutate(date_proj=date) %>%
+#         mutate(date=dates_analysis[iDate]) %>%
+#         mutate(prediction_horizon=as.numeric(date_proj-date)) %>%
+#         mutate(i=k)
+#       
+#       projections_boot<-bind_rows(projections_boot,projections_tmp)
+#       
+#     }
+#     
+#     projections<-projections_boot %>%
+#       group_by(date,date_proj,prediction_horizon,var) %>%
+#       dplyr::summarise(
+#         lower=min(lower),
+#         upper=max(upper)) %>%
+#       left_join(projections_point) %>%
+#       mutate(region=myregion,model="Ensemble")
+#     
+#     simulbeds<-bind_rows(simulbeds,projections)
+#     
+#   }
+# }
+# 
+# 
+# 
+# proj<-bind_rows(proj,simulbeds)
+#
+# saveRDS(proj,file=paste0(path_results,"Ensemble.rds"))
 
 
-for (iRegion in seq_along(regions)){
-  
-  myregion<-regions[iRegion]
-  
-  
-  for (iDate in seq_along(dates_analysis)) {
-    
-    # Point estimate ---------
-    
-    obs<- data_rt %>%
-      filter(region==myregion) %>%
-      dplyr::select(date,date_analysis,iHosp_smooth,iICU_smooth,inHosp_smooth,inICU_smooth,iHosp_smooth_lwr,iHosp_smooth_upr)%>%
-      dplyr::rename("iHosp"="iHosp_smooth","iICU"="iICU_smooth","inHosp"="inHosp_smooth","inICU"="inICU_smooth") %>%
-      filter(date_analysis==dates_analysis[iDate]) %>%
-      filter(date<=dates_analysis[iDate]-remove_last_n) %>%
-      drop_na(iHosp)
-    
-    model_sims<-obs %>%
-      dplyr::select(date,iHosp)
-    
-    ens_tmp<-ens %>%
-      ungroup() %>%
-      filter(region==myregion & var=="iHosp" & date==dates_analysis[iDate]) %>%
-      mutate(date=date+prediction_horizon) %>%
-      dplyr::select(date,point,lower,upper) %>%
-      pivot_longer(cols=c(point,lower,upper),names_to="type",values_to="iHosp")
-    
-    model_sims_proj<-model_sims %>%
-      bind_rows(ens_tmp[ens_tmp$type=="point",c("date","iHosp")])
-    
-    # Calibration 
-    start_fit_at <- max(obs$date)-length_calib+1
-    n_to_forecast <- max_prediction_horizon
-    # If < 0 coefficient of variations will be estimated
-    fixed_cv_hosp <- 0.9
-    fixed_cv_ICU <- 0.8
-    estimates <- calibrateV2(obs, model_sims, start_fit_at,
-                             fixed_cv_hosp = fixed_cv_hosp,
-                             fixed_cv_ICU = fixed_cv_ICU,
-                             n_to_forecast = n_to_forecast,
-                             project_pICU = "const") # const
-    estimates
-    
-    # Projections
-    proj_point <- project(model_sims_proj, estimates$pICUs, estimates$mu_tauHosp_R,
-                          estimates$cv_tauHosp_R, estimates$mu_tauICU_R,
-                          estimates$cv_tauICU_R) %>%
-      mutate(type="point")
-    
-    projections_point <- proj_point %>%
-      gather(-date, -type, key = "var", value = "value") %>%
-      pivot_wider(id_cols=c(date,var),names_from = "type",values_from="value") %>%
-      filter(date > (dates_analysis[iDate]-remove_last_n) ) %>%
-      mutate(date_proj=date) %>%
-      mutate(date=dates_analysis[iDate]) %>%
-      mutate(prediction_horizon=as.numeric(date_proj-date)) 
-    
-    
-    # Confidence interval (bootstrap) ------------------
-    
-    res.boot<-NULL
-    
-    date.first= NULL # beginning of smoothing - if null the smallest date in data
-    date.last=NULL   # end of smoothng - if null the largest date in data
-    #parameter for the smoother
-    bwd=8 # initial bandwidth to compute daily pattern; the data should have at least 2*bwd+4*7 days
-    weekday=T # correct for weekly pattern 
-    d=3 # local polynomial of degree 3
-    dZ=3 # make quadratic for the last segment (linear=2, constant=1)
-    # grid.bw=NULL ## bandwidth fof final smoothing, if a list then CV is computed for each value and the best is used
-    # grid.d.sig=NULL ## parameter for least revision, value 0 is often best for Cubic/Quadratic, but otherwise choose best CV from list
-    grid.bw=15
-    grid.d.sig=0
-    area<-1
-    name<-myregion
-    nSim<-100
-    
-    obs<- data_rt %>%
-      filter(region==myregion) %>%
-      dplyr::select(date,date_analysis,iHosp,iICU,inHosp,inICU)%>%
-      filter(date_analysis==dates_analysis[iDate]) %>%
-      filter(date<=dates_analysis[iDate]-remove_last_n) %>%
-      drop_na(iHosp) %>%
-      mutate(inICU = ifelse(is.na(inICU), 0, inICU))
-    
-    dat_train<-obs %>%
-      mutate(day=date, name=name,area=area) %>%
-      as.data.frame() 
-    
-    # bootstrapped smoothed trajectories 
-    for (myvar in c("iHosp","iICU","inHosp","inICU")) {
-      
-      log.incid<-paste0("log.",myvar)
-      dat_train[,paste0("log.",myvar)]<-log(dat_train[,myvar]+1)
-      
-      first.date = min(dat_train$day)
-      last.date = max(dat_train$day)
-      n.weeks = floor(as.numeric(last.date-first.date)/7)
-      
-      smoothed.data = real.time.smoother(data=dat_train,log.incid= paste0("log.",myvar), n.weeks=n.weeks,
-                                         weekday=weekday,bwd=bwd, d=d, dZ=dZ,
-                                         grid.bw=grid.bw, grid.d.sig=grid.d.sig)
-      res.boot_tmp=boot.traj.LPR(smoothed.data,d=3,dZ=3,R=nSim)
-      res.boot_tmp$y<-exp(res.boot_tmp$y)-1
-      res.boot_tmp$var<-myvar
-      res.boot<-bind_rows(res.boot,res.boot_tmp)
-      
-    }
-    
-    projections_boot<-NULL
-    
-    for (k in 1:nSim){
-      
-      obs<-res.boot %>%
-        filter(i==k) %>% 
-        dplyr::select(y,day,var) %>%
-        pivot_wider(id_cols=day,names_from=var,values_from=y)%>%
-        dplyr::rename(date=day) %>%
-        drop_na()
-      
-      model_sims<-obs %>%
-        dplyr::select(date,iHosp)
-      
-      ens_tmp<-ens %>%
-        ungroup() %>%
-        filter(region==myregion & var=="iHosp" & date==dates_analysis[iDate]) %>%
-        mutate(date=date+prediction_horizon) %>%
-        dplyr::select(date,point,lower,upper) %>%
-        pivot_longer(cols=c(point,lower,upper),names_to="type",values_to="iHosp")
-      
-      model_sims_proj<-model_sims %>%
-        bind_rows(ens_tmp[ens_tmp$type=="point",c("date","iHosp")])
-      
-      model_sims_proj_lwr<-model_sims %>% 
-        bind_rows(ens_tmp[ens_tmp$type=="lower",c("date","iHosp")])
-      
-      model_sims_proj_upr<-model_sims %>% 
-        bind_rows(ens_tmp[ens_tmp$type=="upper",c("date","iHosp")])
-      
-      # Calibration
-      start_fit_at <- max(obs$date)-length_calib+1
-      n_to_forecast <- max_prediction_horizon
-      # If < 0 coefficient of variations will be estimated
-      fixed_cv_hosp <- 0.9
-      fixed_cv_ICU <- 0.8
-      nrow(obs)
-      nrow(model_sims)
-      
+#### EXPORT ####
 
-      estimates <- calibrateV2(obs, model_sims, start_fit_at,
-                               fixed_cv_hosp = fixed_cv_hosp,
-                               fixed_cv_ICU = fixed_cv_ICU,
-                               n_to_forecast = n_to_forecast,
-                               project_pICU = "const") # const
-      estimates
-      
-      # Projections
-      proj_point <- project(model_sims_proj, estimates$pICUs, estimates$mu_tauHosp_R,
-                            estimates$cv_tauHosp_R, estimates$mu_tauICU_R,
-                            estimates$cv_tauICU_R) %>%
-        mutate(type="point")
-      proj_lwr <- project(model_sims_proj_lwr, estimates$pICUs, estimates$mu_tauHosp_R,
-                          estimates$cv_tauHosp_R, estimates$mu_tauICU_R,
-                          estimates$cv_tauICU_R) %>%
-        mutate(type="lower")
-      proj_upr <- project(model_sims_proj_upr, estimates$pICUs, estimates$mu_tauHosp_R,
-                          estimates$cv_tauHosp_R, estimates$mu_tauICU_R,
-                          estimates$cv_tauICU_R) %>%
-        mutate(type="upper")
-      
-      projections_tmp <- proj_point %>%
-        bind_rows(proj_lwr) %>%
-        bind_rows(proj_upr) %>%
-        gather(-date, -type, key = "var", value = "value") %>%
-        pivot_wider(id_cols=c(date,var),names_from = "type",values_from="value") %>%
-        filter(date > (dates_analysis[iDate]-remove_last_n) ) %>%
-        mutate(date_proj=date) %>%
-        mutate(date=dates_analysis[iDate]) %>%
-        mutate(prediction_horizon=as.numeric(date_proj-date)) %>%
-        mutate(i=k)
-      
-      projections_boot<-bind_rows(projections_boot,projections_tmp)
-      
-    }
-    
-    projections<-projections_boot %>%
-      group_by(date,date_proj,prediction_horizon,var) %>%
-      dplyr::summarise(
-        lower=min(lower),
-        upper=max(upper)) %>%
-      left_join(projections_point) %>%
-      mutate(region=myregion,model="Ensemble")
-    
-    simulbeds<-bind_rows(simulbeds,projections)
-    
-  }
-}
-
-
-
-proj<-bind_rows(proj,simulbeds)
-
-saveRDS(proj,file=paste0(path_results,"Ensemble.rds"))
+saveRDS(proj,file=paste0(path_results,"Ensemble_ONLY.rds"))
 

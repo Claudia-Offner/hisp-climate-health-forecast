@@ -1,8 +1,7 @@
 ### ------------------------------------------------------------------------ ### 
 ### GAM2: Multivariate Generalized additive model
 ### ------------------------------------------------------------------------ ### 
-
-library(mgcv)
+# NB: Package loading important....
 
 if (period==1) {
   covar_all<-c('t2m_smooth', 'tp_smooth')

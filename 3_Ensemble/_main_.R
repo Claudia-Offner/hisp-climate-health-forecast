@@ -15,7 +15,7 @@ setwd(path_git)
 # Install packages if not already in library & load
 pkgs <- c("tidyverse", 'plyr', "dplyr", "ggplot2", "zoo", 'Rcpp', 'dfoptim', 'forecast', 'MASS',
           'msm', 'mgcv', 'RColorBrewer', 'gridExtra', 'cowplot')
-install.packages(pkgs[!pkgs %in% installed.packages()[, "Package"]])
+# install.packages(pkgs[!pkgs %in% installed.packages()[, "Package"]])
 invisible(lapply(pkgs, library, character.only = TRUE))
 
 # Load utilities and set output paths
@@ -118,10 +118,10 @@ dates_analysis<-seq(as.Date("2017-06-02"),as.Date("2017-09-30"),by="day")
 # Compute ensemble forecasts 
 # for hospital admissions and project the 3 other targets (ICU admissions, general ward beds and ICU beds) 
 
-# source("3_Ensemble/3C_Ensemble_model.R", echo=TRUE)
+source("3_Ensemble/3C_Ensemble_model.R", echo=TRUE)
 
 
-# Plots  results  ----------------------------------------
+# Plots  results
 
 source("3_Ensemble/3D_Figures_period2.R")
 

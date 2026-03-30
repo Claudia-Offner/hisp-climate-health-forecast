@@ -15,8 +15,8 @@ date_max<-max(dates_analysis)
 dat2<-data_rt %>%
   filter(date_analysis==max(data_rt$date_analysis)) %>%
   filter(date>=min(dates_analysis)-remove_last_n & date<=date_max) %>%
-  dplyr::select(date,region,iHosp_smooth,iICU_smooth,inHosp_smooth,inICU_smooth) %>%
-  pivot_longer(cols=c("iHosp_smooth","iICU_smooth","inHosp_smooth","inICU_smooth"),
+  dplyr::select(date,region,iHosp_smooth) %>% #,iICU_smooth,inHosp_smooth,inICU_smooth
+  pivot_longer(cols=c("iHosp_smooth"), #"iICU_smooth","inHosp_smooth","inICU_smooth"
                names_to="var",values_to="smooth_value") %>%
   mutate(var=gsub("_smooth","",var)) %>%
   filter(!is.element(region,c("COR","national")))
@@ -25,96 +25,41 @@ dat2<-data_rt %>%
 
 # Load projections from components and ensemble models -----------------------
 
-proj<-readRDS(file=paste0(path_results,"Ensemble.rds"))
-
+proj<-readRDS(file=paste0(path_results,"Ensemble_ONLY.rds"))
 proj$model<-factor(proj$model,levels=c(models,"Ensemble"), ordered=T)
 
 
 # Compute evaluation metrics  ------------------------------------
 
+# Error
 res<-proj %>%
   left_join(dat2,by=c("date_proj"="date","region"="region","var"="var")) %>%
   mutate(in_interval95 = smooth_value >= lower_5 & smooth_value <= upper_5) %>%
   mutate(abs_error = point - smooth_value) %>%
   mutate(bias = (point - smooth_value) / pmax(smooth_value, 1))
 
-# wIS
-res$IS_2<-scoringutils:::interval_score(observed = res$smooth_value,
-                                        lower=res$lower_2,
-                                        upper=res$upper_2,
-                                        interval_range=98,
-                                        weigh = TRUE,
-                                        separate_results = FALSE)
+# WIS
+# from https://github.com/reichlab/covid19-forecast-evals/blob/main/code/process-zoltar-scores.R
 
-res$IS_5<-scoringutils:::interval_score(observed = res$smooth_value,
-                                        lower=res$lower_5,
-                                        upper=res$upper_5,
-                                        interval_range=95,
-                                        weigh = TRUE,
-                                        separate_results = FALSE)
+intervals <- list(
+  list(suffix="2",   range=98), list(suffix="5",   range=95),
+  list(suffix="10",  range=90), list(suffix="20",  range=80),
+  list(suffix="30",  range=70), list(suffix="40",  range=60),
+  list(suffix="50",  range=50), list(suffix="60",  range=40),
+  list(suffix="70",  range=30), list(suffix="80",  range=20),
+  list(suffix="90",  range=10)
+)
 
-res$IS_10<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_10,
-                                         upper=res$upper_10,
-                                         interval_range=90,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_20<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_20,
-                                         upper=res$upper_20,
-                                         interval_range=80,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_30<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_30,
-                                         upper=res$upper_30,
-                                         interval_range=70,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_40<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_40,
-                                         upper=res$upper_40,
-                                         interval_range=60,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_50<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_50,
-                                         upper=res$upper_50,
-                                         interval_range=50,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_60<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_60,
-                                         upper=res$upper_60,
-                                         interval_range=40,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_70<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_70,
-                                         upper=res$upper_70,
-                                         interval_range=30,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_80<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_80,
-                                         upper=res$upper_80,
-                                         interval_range=20,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
-
-res$IS_90<-scoringutils:::interval_score(observed = res$smooth_value,
-                                         lower=res$lower_90,
-                                         upper=res$upper_90,
-                                         interval_range=10,
-                                         weigh = TRUE,
-                                         separate_results = FALSE)
+for (iv in intervals) {
+  res[[paste0("IS_", iv$suffix)]] <- scoringutils:::interval_score(
+    observed       = res$smooth_value,
+    lower          = res[[paste0("lower_", iv$suffix)]],
+    upper          = res[[paste0("upper_", iv$suffix)]],
+    interval_range = iv$range,
+    weigh          = TRUE,
+    separate_results = FALSE
+  )
+}
 
 res <- res %>%
   mutate(IS_100 = abs(point-smooth_value)) %>%
@@ -159,7 +104,11 @@ p1 <- proj %>%
   theme_bw() +
   labs(tag = "A")
 
-
+x <- proj %>%
+  filter(var == myvar) %>%
+  filter(region == "metropolitan") %>%
+  filter(model != "baseline") %>%
+  filter(date_proj <= date_max)
 
 # Regional level, ensemble model
 lab_p <- c("3", "7", "14")
