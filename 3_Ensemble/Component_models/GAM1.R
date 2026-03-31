@@ -57,4 +57,4 @@ for (iRegion in seq_along(regions)) {
 
 res <- res %>% mutate(model=model)
 
-write.csv2(res,file=paste0(path_results,model,"_period",period,".csv"),row.names=F)
+write.csv(res,file=paste0(path_results,model,"_period",period,".csv"),row.names=F)

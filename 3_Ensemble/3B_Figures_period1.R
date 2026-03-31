@@ -18,7 +18,6 @@ dat2<-data_rt %>%
   mutate(var=gsub("_smooth","",var)) %>%
   filter(!is.element(region,c("COR","national")))
 
-
 # 2. Load projections from components models ####
 
 proj<-tibble()
@@ -81,7 +80,8 @@ lab_mod<-levels(droplevels(proj$model))
 
 
 myvar<-"iHosp"
-p1<-res %>%
+(p1<-res %>%
+  # filter(model=='TSGC') %>%
   filter(var==myvar) %>%
   filter(region=="metropolitan") %>% 
   filter(date_proj<=date_max) %>% 
@@ -97,7 +97,7 @@ p1<-res %>%
   scale_alpha(range=c(0.1,1)) +
   coord_cartesian(xlim=c(min(dates_analysis),max(dates_analysis)+14)) +
   theme_bw() + 
-  guides(alpha = FALSE)    
+  guides(alpha = FALSE)) 
 
 
 ggsave(filename=paste0(path_figures, 'FigureS4.png'), plot=p1, 

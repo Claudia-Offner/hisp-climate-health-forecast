@@ -198,33 +198,36 @@ predict_level_MULTI <- function(index, output, y.level.est, n.ahead, new.data=NU
   
   # Forecast loop (start by initializing the first cumulative value)
   y.hat <- xts(matrix(NA, nrow=n.ahead + 1, ncol=3), order.by=v_dates_end)
-  y.hat[v_dates_end[1],] <- y.level.est[v_dates_end[1],1]
   
+  # !!!!! IMPORTANT !!!!!
+  y.hat[v_dates_end[1],] <- dat_train_reg$iHosp_smooth[nrow(dat_train_reg)] 
+
   # Extract growth rate and prediction intervals (recursive build cumulative curve)
   for (i in seq_len(length(v_dates_end[-1]))) {
     date.forecast <- v_dates_end[i + 1]
     date.lag <- date.forecast - 1
     # Update level
-    y.hat[date.forecast, 1] <- as.numeric(y.hat[date.lag, 1]) * 
-      as.numeric(1 + g.t[date.forecast,])
+    y.hat[date.forecast, 1] <- as.numeric(y.hat[date.lag, 1]) * as.numeric(1 + g.t[date.forecast,])
     # Get prediction intervals
-    y.hat[date.forecast, 2:3] <- as.numeric(y.hat[date.lag, 1]) *
-      as.numeric(1 + g.t[date.forecast,] %*% ci[date.forecast,])}
+    y.hat[date.forecast, 2:3] <- as.numeric(y.hat[date.lag, 1]) * as.numeric(1 + g.t[date.forecast,] %*% ci[date.forecast,])
+  }
   
-  # Difference y.level.est if requested
-  d <- if (return.diff){diff(y.hat[, 1])[-1] } else {(y.hat[, 1])[-1]}
-  ci_bounds <- if (return.diff) {
-    (y.hat[, 2:3] - as.vector(y.hat[, 1]))[-1] + as.vector(d)
-  } else { y.hat[2:dim(y.hat)[1], 2:3] }
-  # Piece components together
-  pred <- vector('list', length=p)
-  pred[[p]] <- cbind(fit=d, prediction=ci_bounds)
-  pred <- lapply(pred, ts, end=endtime, frequency=1)
+  # Remove initial value
+  y.hat  <- y.hat[-1,]
+  names(y.hat) <- list('fit', 'lower', 'upper')
   
-  y.hat <- xts(pred[[p]], order.by=v_dates_end[-1])
-  names(y.hat)[2:3] <- list('lower', 'upper')
+  # # Difference y.level.est if requested
+  # d <- if (return.diff){diff(y.hat[, 1])[-1] } else {(y.hat[, 1])[-1]}
+  # ci_bounds <- if (return.diff) {
+  #   (y.hat[, 2:3] - as.vector(y.hat[, 1]))[-1] + as.vector(d)
+  # } else { y.hat[2:dim(y.hat)[1], 2:3] }
+  # # Piece components together
+  # pred <- vector('list', length=p)
+  # pred[[p]] <- cbind(fit=d, prediction=ci_bounds)
+  # pred <- lapply(pred, ts, end=endtime, frequency=1)
   
-  return(as.xts(y.hat))
+
+  return(y.hat)
   
 }
 
@@ -244,13 +247,13 @@ sea.type <- 'trigonometric'
 sea.period <- 7
 sea.on <- FALSE
 
-
+# Create cumulative variable
 data_rt <- data_rt %>%
   dplyr::group_by(date_analysis, region) %>%
   dplyr::mutate(across(iHosp_smooth, ~ cumsum(replace_na(., 1)), .names = '{.col}_c'))
 
 
-# FILTER TO ANALYSIS DATE ----
+# FILTER TO ANALYSIS DATE
 res<-tibble()
 for (iDate in seq_along(dates_analysis)){
   
@@ -259,7 +262,7 @@ for (iDate in seq_along(dates_analysis)){
     filter(date_analysis==dates_analysis[iDate]) %>%
     mutate(iHosp_smooth_c_covar=iHosp_smooth_c)
   
-  # IDENTIFY COVARIATE LAGS -----
+  # IDENTIFY COVARIATE LAGS
   res_lag<-tibble()
   list_col<-sort(covar_all)
   for (iCol in seq_along(list_col)){
@@ -294,7 +297,7 @@ for (iDate in seq_along(dates_analysis)){
   
   list_lag<-best_lag$lag
 
-  # FIT MODEL FOR EACH REGION -----
+  # FIT MODEL FOR EACH REGION
   for (iRegion in seq_along(regions)) {
     
     myreg<-regions[iRegion]
@@ -318,25 +321,25 @@ for (iDate in seq_along(dates_analysis)){
     
     sub<-sub %>% drop_na(iHosp_smooth_c,all_of(list_col))
     
-    #  ----- SET PARAMETERS
+    #SET PARAMETERS
     
     # Create xts object and subset relevant variables as numeric
     Y <- xts(subset(sub, select=c('iHosp_smooth_c', covar_all)),  order.by=sub$date)
     # Get growth rate
     y.lg <- tsgc::df2ldl(Y[,'iHosp_smooth_c'])
     
-    #  ----- FIT INITIAL MODEL & UPDATE PARAMETER ESTIMATES -----
+    #  ----- FIT INITIAL MODEL & UPDATE PARAMETER ESTIMATES
     
     # Set state-space model
     y <- as.numeric(y.lg)
     lapply(covar_all, function(exp) assign(exp, as.numeric(Y[, exp]), envir=.GlobalEnv))
     formula <- paste('~', paste(covar_all, collapse='+'))
     if (is.null(covar_all)){
-      model <- SSModel(y ~ 
+      mod <- SSModel(y ~ 
                          SSMtrend(degree=2, Q=list(matrix(0), matrix(NA))) +
                          SSMseasonal(period=sea.period, Q=NA, sea.type=sea.type), H=matrix(NA))
     } else {
-      model <- SSModel(y ~ SSMregression(as.formula(formula), Q=diag(0,length(covar_all))) + #Q=diag(0,length(c(exposures, controls)))
+      mod <- SSModel(y ~ SSMregression(as.formula(formula), Q=diag(0,length(covar_all))) + #Q=diag(0,length(c(exposures, controls)))
                          SSMtrend(degree=2, Q=list(matrix(0), matrix(NA))) +
                          SSMseasonal(period=sea.period, Q=NA, sea.type=sea.type), H=matrix(NA))
     }
@@ -345,15 +348,15 @@ for (iDate in seq_along(dates_analysis)){
     updatefn <- purrr::partial(update, ... =, q=q, sea.type=sea.type)
     
     # Full update, using MLE for unknown model params
-    model_fit <- fitSSM(model, inits=c(0,0), updatefn=updatefn, method='BFGS')
+    model_fit <- fitSSM(mod, inits=c(0,0), updatefn=updatefn, method='BFGS')
     
     # Kalman filter
     output <- KFS(model_fit$model)
     
     # Get truncated index from model (if using a re-initialisation, self$get_model)
-    index <- if (!is.null(model$index)) { model$index } else { index(y.lg) }
+    index <- if (!is.null(mod$index)) { mod$index } else { index(y.lg) }
     
-    #  ----- BULD NEW DATA FOR PREDICTIONS -----
+    #  ----- BULD NEW DATA FOR PREDICTIONS
     newdata<-data.frame(seq.Date(dates_analysis[iDate]-remove_last_n+1,dates_analysis[iDate]+14,by="day"),NA)
     names(newdata)<-c("date","iHosp_smooth_c")
     
@@ -373,7 +376,6 @@ for (iDate in seq_along(dates_analysis)){
     new.data <- xts(subset(newdata, select=covar_all),  order.by=newdata$date)
     
     
-    # ----- PERCENTILE-BASED PREDICTIONS -----
     alpha <- c(2, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90)
     
     est.date.index <- index %>% as.Date()
@@ -423,7 +425,7 @@ for (iDate in seq_along(dates_analysis)){
   
 }
 
-res<-res %>% mutate(model=model) 
-
+model <- 'TSGC'
+res<-res %>% dplyr::mutate(model=model) 
 
 write.csv2(res,file=paste0(path_results,model,"_period",period,".csv"),row.names=F)
