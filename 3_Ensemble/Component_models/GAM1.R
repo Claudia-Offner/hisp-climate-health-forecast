@@ -5,24 +5,23 @@
 res<-tibble()
 
 
-for (iRegion in seq_along(regions)) {
+for (iLocation in seq_along(locations)) {
   
-  myreg<-regions[iRegion]
-  print(myreg)
-  
-  for (iDate in seq_along(dates_analysis)){
+  myloc<-locations[iLocation]
+
+    for (iDate in seq_along(dates_analysis)){
     
-    print(dates_analysis[iDate]) 
+    print(paste(model, myloc, dates_analysis[iDate]))
     
     dat_train<-data_rt %>%
       filter(date_analysis==dates_analysis[iDate],
-             region==myreg) 
+             location==myloc) 
     dat_train$time<-1:nrow(dat_train)
     
     # FIT MODEL
-    mod<-gam(iHosp_smooth~s(time,bs="ps",k=round(nrow(dat_train)/10)),data=dat_train)
+    mod<-gam(outcome~s(time,bs="ps",k=round(nrow(dat_train)/10)),data=dat_train)
     proj<-predict(mod,data.frame(time=seq(nrow(dat_train)+1,nrow(dat_train)+max_prediction_horizon)),se.fit=T)
-    
+  
     # FORMAT DATA
     alpha<-c(2,5,10,20,30,40,50,60,70,80,90)/100
     
@@ -37,13 +36,12 @@ for (iRegion in seq_along(regions)) {
       
     }
     
-    
     out<-sapply(out,FUN=function(x){pmax(0,round(x))})
     colnames(out)<-c("point",paste0(c("lower_","upper_"),rep(alpha*100,each=2)))
     
     
-    res_tmp<- data.frame(var="iHosp",
-                         region=myreg,
+    res_tmp<- data.frame(var="outcome",
+                         location=myloc,
                          date=dates_analysis[iDate],
                          prediction_horizon=seq(1,max_prediction_horizon)-remove_last_n,
                          out)

@@ -45,30 +45,29 @@ null_model_forecast_quantiles <- function(values, horizon, truncation = 0)
 
 res <- tibble()
 
-for (iRegion in seq_along(regions)) {
+for (iLocation in seq_along(locations)) {
   
-  myreg<-regions[iRegion]
-  print(myreg)
-  
+  myloc<-locations[iLocation]
+
   for (iDate in seq_along(dates_analysis)) {
     
-    print(dates_analysis[iDate])
+    print(paste(model, myloc, dates_analysis[iDate]))
     
     dat_train<-data_rt %>%
       filter(date_analysis==dates_analysis[iDate],
-             region==myreg)  %>%
+             location==myloc)  %>%
       as.data.frame()
     
     # FIT MODEL
     quant <-
-      null_model_forecast_quantiles(dat_train$iHosp_smooth, horizon = 14 +remove_last_n,
+      null_model_forecast_quantiles(dat_train$outcome, horizon = 14 +remove_last_n,
                                     truncation = 0)
     
     # FORMAT DATA
     names(quant)<-c(paste0("lower_",c(2,5,seq(10,90,by=10))),"point",paste0("upper_",rev(c(2,5,seq(10,90,by=10)))))
     res_tmp <- data.frame(
-      var = "iHosp",
-      region = myreg, 
+      var = "outcome",
+      location = myloc, 
       date = dates_analysis[iDate],
       prediction_horizon = seq(1,max_prediction_horizon)-remove_last_n,
       t(quant)

@@ -6,8 +6,10 @@
 rm(list = ls()); graphics.off(); gc()
 
 # Unload all non-base packages
-lapply(paste0('package:', names(sessionInfo()$otherPkgs)), 
-       detach, character.only = TRUE, unload = TRUE, force = TRUE)
+if (!is.null(sessionInfo()$otherPkgs)) {
+  lapply(paste0('package:', names(sessionInfo()$otherPkgs)),
+         detach, character.only = TRUE, unload = TRUE, force = TRUE)
+}
 
 # Set data path
 path_data <- paste0('C:/Users/claer14/OneDrive - University of Cambridge/III. Research/Data/')
@@ -69,12 +71,24 @@ plot_smoothing <- function(data, location_name, col) {
 load(paste0('3_Ensemble/', file_import, '.RData'))
 df <- df_ensm; rm(df_ensm)
 
+
+# Create date analysis df, address NA's and smooth selected variables ####
+
+# NB: For any given 'date_analysis' date, the dataset contains all the data 
+# available at this date (the smoothing is done without using future data).
+
 # Subset relevant data
 cols_to_smooth <- c('total_patients', 'F', 'M', 'age25_64', 't2m', 'tp')
 sub <- df %>% 
   select(location, date, all_of(cols_to_smooth)) %>%
   filter(between(date, as.Date('2016-05-15'), as.Date('2017-12-31')))
 dates_analysis <- seq(as.Date('2017-01-01'), as.Date('2017-09-30'), by = 'day')
+
+# Address NA's by assuming static position
+sub <- sub %>%
+  group_by(location) %>%
+  tidyr::fill(where(is.numeric), .direction = "down") %>%
+  ungroup()
 
 # Create regional estimates (i.e. metropolitan as per Paireau)
 sub_regional <- sub %>%
@@ -86,19 +100,12 @@ sub_regional <- sub %>%
   ) %>%
   mutate(location = "metropolitan") %>%
   select(location, date, all_of(cols_to_smooth))
-
 sub <- bind_rows(sub, sub_regional)
-
-
-# Create date analysis df, address NA's and smooth selected variables ####
-
-# NB: For any given 'date_analysis' date, the dataset contains all the data 
-# available at this date (the smoothing is done without using future data).
 
 # Data analysis df
 sub <- lapply(dates_analysis, function(d) {
   sub %>%
-    filter(date <= d-2) %>%
+    filter(date <= d+14) %>%
     group_by(location) %>%
     arrange(date) %>%
     mutate(date_analysis = as.Date(d, origin = '1970-01-01'))
@@ -107,40 +114,34 @@ sub <- lapply(dates_analysis, function(d) {
   select(location, date, date_analysis, everything()) %>%
   arrange(location, date_analysis, date)
 
-# Address NA's by assuming static position
-sub <- sub %>%
-  group_by(location, date_analysis) %>%
-  tidyr::fill(where(is.numeric), .direction = "down") %>%
-  ungroup()
-
 # Calculate smoothed variables with growth rate
 result <- sub %>%
   group_by(location, date_analysis) %>%
-  mutate(across(
-    all_of(cols_to_smooth),
-    list(
-      smooth     = ~ smooth_with_bounds(.x)$smooth,
-      smooth_lwr = ~ smooth_with_bounds(.x)$smooth_lwr,
-      smooth_upr = ~ smooth_with_bounds(.x)$smooth_upr
-    ),
-    .names = '{.col}_{.fn}'
-  )) %>%
-  mutate(total_patients_r = log(total_patients_smooth / lag(total_patients_smooth))) %>%
+  # mutate(across(
+  #   all_of(cols_to_smooth),
+  #   list(
+  #     smooth     = ~ smooth_with_bounds(.x)$smooth,
+  #     smooth_lwr = ~ smooth_with_bounds(.x)$smooth_lwr,
+  #     smooth_upr = ~ smooth_with_bounds(.x)$smooth_upr
+  #   ),
+  #   .names = '{.col}_{.fn}'
+  # )) %>%
+  mutate(total_patients_r = log(total_patients / lag(total_patients))) %>%
   ungroup() %>%
   filter(between(date, as.Date('2016-06-01'), as.Date('2017-12-31')))
 
 # Single location / column
-plot_smoothing(result, 'Una', 'total_patients')
+# plot_smoothing(result, 'Una', 'total_patients')
 
 # All locations at once with facets
 result %>%
   filter(date_analysis == max(date_analysis),
          between(date, as.Date('2017-01-01'), as.Date('2027-12-31'))) %>%
   ggplot(aes(x = date)) +
-  geom_ribbon(aes(ymin = total_patients_smooth_lwr, ymax = total_patients_smooth_upr),
-              fill = '#378ADD', alpha = 0.2) +
+  # geom_ribbon(aes(ymin = total_patients_smooth_lwr, ymax = total_patients_smooth_upr),
+  #             fill = '#378ADD', alpha = 0.2) +
   geom_line(aes(y = total_patients),    colour = '#888780', linewidth = 0.4, na.rm = TRUE) +
-  geom_line(aes(y = total_patients_smooth), colour = '#378ADD', linewidth = 0.8, na.rm = TRUE) +
+  geom_line(aes(y = total_patients), colour = '#378ADD', linewidth = 0.8, na.rm = TRUE) +
   facet_wrap(~ location, scales = 'free_y') +
   labs(
     title    = 'Total patients — raw vs 7-day MA by location',

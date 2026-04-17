@@ -1,0 +1,143 @@
+---
+title: "Progress Report: Ensemble model forecasting of weather-driven healthccare demand in Himachal Pradesh"
+author: "Claudia Offner"
+date: today
+date-format: "D MMMM YYYY"
+# format: html
+format:
+  pdf:
+    # toc: true
+    number-sections: true
+    fig-number-by-section: true
+    fig-cap-location: bottom
+    geometry: margin=1in
+    fig-pos: H
+header-includes:
+# Number the figures/tables by sections
+- \usepackage{chngcntr}
+- \counterwithin{figure}{section}
+- \counterwithin{table}{section}
+# Set figure order
+- \usepackage{float}
+editor: visual
+bibliography: Other/references.bib
+csl: Other/vancouver.csl
+execute:
+  fig-path: "figures/"
+  tab-path: "tables/"
+  echo: true
+  warning: false
+  message: false
+---
+
+# Summary
+
+This document summarises methods adapted from Paireau and colleagues (2022) paper, "An ensemble model based on early predictors to forecast COVID-19 health care demand in France" (link). This document is only illustrative, and intends to familiarise team members with Paireau et al ensemble approach and how we are adapting it.
+
+# Pre-processing
+
+## Data
+
+This example aims to forecast daily total hospital admissions with models fit with meteorological predictors, namely daily mean surface temperature and daily total precipitation (computed as a 7-day rolling sum). To match Paireau and colleague's coding structure, I aggregated data from available hospital facilities to represent the Himachal Pradesh region. For this, I took the sum of hospital admissions and total precipitations and the average of temperature.
+
+## Smoothing technique
+
+The original paper adopts a two stage approach to smoothing both its hospital and predictors. First, it removes day-of-the-week patterns up to current time *T* using a local polynomial regression fit with a biweight kernel. Then it smooths admission incidence up to time *T*, accounting for real time via a framework for implementing the least revision principle using low-order reproducing kernels (Proietti et al 2008). **NB: These values are not yet applied since code for this is opaque.**
+
+This project is primarily interested in forecasting real-time admissions without smoothing outcomes or exposures. However, for model development purposes, I applied a simple smoothing technique – i.e. I forward filled NA values corresponding to 'closed' days and applied a simple 2 week moving average to all variables (see above). This approach will be revised now the ensemble code is set up.
+
+# Modelling approach
+
+We aim to forecast 6 targets at the regional (Himachal Pradesh) and hospital (n=10) levels up to 14 days ahead: total daily hospital admissions and admissions disaggregated by gender and age.
+
+First, we develop a suite of individual forecasting models for total hospital admissions. Individual predictions are then combine into an ensemble from which population-specific estimates are derived. Model development uses two periods: a training period (01 January 2017 to 01 June 2017) to select predictors, evaluate individual models, and determine ensemble composition; and a test period (02 June 2017 to 30 September 2017) to evaluate ensemble performance on unseen data to proximate real-time analysis.
+
+A cross-validation approach is applied, based on a rolling forecasting origin: For each day *t*, we make forecasts for the period *t-1* up to day *t + 14*, using only past data up to day *t-2*, and computing evaluation metrics against the smoothed observed data. Forecasts start at t-1 because, in real time, values at *t* and *t-1* are not consolidated yet. Models are compared using the RMSE for point forecast error and the weighted interval score (WIS) to assess probabilistic forecast accuracy. For each period, we forecast 14 days ahead for each date within that period.
+
+## Training period: Individual models
+
+To start, we fit 5 individual models, including autoregressive integrated moving average models (ARIMA), generalized additive models (GAM), Multiple linear regression (MLR) and time series growth curves (TSGC). The details of each model are provided below. Please note that the first 3 models directly predict hospital admissions, whereas the others predict growth rate via exponential growth models.
+
+1.  **Baseline**: The baseline model assumes the number of hospital admissions stays at its current value indefinitely into the future, with uncertainty levels given by discretised truncated normal distribution with a lower bound of 0 and a standard deviation given by past one-day ahead deviations from the value of the metric.
+
+2.  **GAM1**: We fit a GAM model of hospital admissions with a single smooth term for time, using the *mgcv* package in R. The model is calibrated independently for each hospital.
+
+3.  **ARIMA1**: We fit a simple ARIMA model of hospital admissions, where the parameters are estimated at each time step using the *auto.arima()* function of the R package *forecast*, independently for each hospital.
+
+4.  **GAM2**: A GAM of the growth rate $g_t$ was fit with covariates selected by the DLNM analysis. The model is fit on all hospitals together and covariates $X_k$ are introduced as smoothed functions with lags $l_k$, to relax linearity assumptions. The best lag $l_k$ for each covariate is estimated at each time step using Pearson correlation coefficient between growth rate and the covariate. The growth rate is then predicted for all prediction horizons by assuming that all covariates will stay constant in the future (i.e. equal to their last observed values). Hospital admissions forecasts are then derived recursively.
+
+$$
+g_t = \beta_0 + \sum_{k} f_k( X_k\!\left(t - l_k\right))
+$$
+
+6.  **ARIMA2**: Using the *forecast* package, a multiple linear regression model of the growth rate with $k$ lagged covariates and an ARIMA error $\eta_k$ were fit to account for autocorrelation. Due to the ARIMA structure, separate models are fit for each location. This model used the same previously identified covariates.
+
+    $$
+    g_t = \beta_0 + \sum_{k} \beta_k \cdot X_k\!\left(t - l_k\right) + \eta_t
+    $$
+
+7.  **TSGC**: A TSGC was fit to the log growth rate of cumulative hospital admissions using a local linear trend state-space model with trigonometric seasonality, implemented via the Kalman filter using the *KFAS* package in R:
+
+$$
+\begin{aligned}
+\ln g_{t}
+  &= \delta_{t} + \theta_{t} 
+    + \beta x_{t} 
+    + \varepsilon_{t},
+    & \varepsilon_{t}\sim\mathcal{N}\!\bigl(0,\sigma_{\varepsilon}^{2}\bigr)
+\\[4pt]
+\delta_{t}
+  &= \delta_{t-1} + \gamma_{t-1} + \eta_{t},
+    & \eta_{t}\sim\mathcal{N}\!\bigl(0,\sigma_{\eta}^{2}\bigr)
+\\
+\gamma_{t}
+  &= \gamma_{t-1} + \zeta_{t},
+    & \zeta_{t}\sim\mathcal{N}\!\bigl(0,\sigma_{\zeta}^{2}\bigr)
+\end{aligned}
+$$
+
+where $\ln g_t$ is the log growth rate of cumulative admissions, $\delta_t$ is a stochastic level, $\gamma_t$ a stochastic slope, $\theta_t$ a trigonometric seasonal component of period $s = 7$, and $x_t$ the vector of lagged covariates with fixed coefficients $\beta$. The slope-to-irregular variance ratio is fixed at $\sigma^2_\zeta / \sigma^2_\varepsilon = q = 0.005$, while $\sigma^2_\varepsilon$ and the seasonal noise are estimated by maximum likelihood via BFGS. Seperate models were fit for each location. Using the last observation $Y$ at time $t$, Hospital admissions forecasts are derived recursively from the predicted growth rates each day $s$ across horizon $h$:
+
+$$
+\hat{Y}(t+h) = \hat{Y}(t) \prod_{s=1}^{h}\left(1 + g(t+s)\right)
+$$
+
+**Note on predictors**: In the original paper, predictors were selected during the training period using a forward stepwise selection method. However, considering the work we did with the DLNM and the purposes of this report, we will skip this for now and use mean temperature and precipitation for all multivariate models in this ensemble example.
+
+### Training Results
+
+Examining the regional and hospital prediction horizons for both RMSE and WIS, almost no model outperforms the baseline. The exception to this is ARIMA1, which outperforms baseline in WIS at both the regional and hospital level (@fig-train1). GAM1 performs very poorly, suggesting that this model likely needs further parameter tuning. When examining the prediction trajectories, we see that most models do okay (except GAM1) but with such erratic noise in the data, all model struggle to anticipate changes (@fig-train2).
+
+![**Comparison of the performance of individual models over the training period at the regional and hospital levels, by prediction horizon, for total hospital admissions.** (A) RMSE in Himachal Pradesh overall. (B) RMSE by hospital average. (C) Mean WIS in Himachal Pradesh overall. (D) WIS by hospital average. Models: ARIMA1, autoregressive integrated moving average model; GAM1, generalized additive model of hospital admissions; ARIMA2, multiple linear regression model with ARIMA error; GAM2, generalized additive model of the growth rate. The training period runs from 01 January 2017 to 01 June 2017.](III.%20ensemble/Figure1.png){#fig-train1}
+
+![**Trajectories of hospital admissions predicted by the 6 individual models for all available Himachal Pradesh facilities over the training period.** The black line is the eventually observed data (smoothed), and the coloured lines are trajectories predicted on day t, for prediction horizons t-1 up to t+14. The training period runs from 01 January 2017 to 01 June 2017.](III.%20ensemble/FigureS4.png){#fig-train2}
+
+## Test period: Ensemble model
+
+The training period was used to evaluate individual model performance. Individual model forecasts are combined into an ensemble by taking the unweighted mean of the point predictions and the unweighted mean of the 95% confidence intervals. According to Paireau, we should only select models that out perform the baseline model at all prediction horizons for both the RMSE and WIS metrics, at regional and hospital level. However, for testing purposes, I chose to pool all multivariate models fit (i.e. ARIM2, GAM2 and TSGC), despite the fact that they did not outperform baseline.
+
+### Training Results
+
+The ensemble model was evaluated over the test period and did not outperform baseline (@fig-test1), which is unsurprising considering that its components performed similarly in the training period.
+
+Similar to the training period, the ensemble captures trends well, but struggles to adjust to the noise in the dataset (@fig-test2 A). The model performance is comparable across hospitals and actually seems to do much better at capturing upward and downward trends at the hospital level (@fig-test2 B).
+
+For each hospital, the individual and ensemble models were ranked according to the RMSE over all prediction horizons (@fig-test3 A). The best individual model is not the same in all regions but ARIMA1 ranked first for most regions and the ensemble model mostly ranked 3rd or 4th. Despite this, the ensemble's mean absolute percentage error (MAPE) was less than 7% at day-7 at both regional and hospital level (@fig-test3 B).
+
+![**Comparison of the performance of the individual and ensemble models over the test period at the regional and hospital levels, by prediction horizon, for hospital admissions.** A. Root mean squared error (RMSE) in Himachal Pradesh overall. B. RMSE by hospital average. C. Mean weighted interval score (WIS) in Himachal Pradesh overall. D. WIS by hospital average. The testing period runs from 02 June 2017 to 30 September 2017.](III.%20ensemble/FigureS9.png){#fig-test1}
+
+![**Forecasts of hospital admissions over the test period (02 June 2017 to 30 September 2017).** (A) Trajectories predicted by the individual and ensemble models for all prediction horizons in Himachal Pradesh. The black line is the eventually observed data (smoothed), and the coloured lines are trajectories predicted on day t, for prediction horizons t 1 up to t + 14. (B) Forecasts of the ensemble model by region at 3, 7, and 14 d. The black line is the eventually observed data (smoothed). Shaded areas represent 95% prediction intervals.](III.%20ensemble/Figure3.png){#fig-test2}
+
+![**Model ranking by region and performance of the ensemble model over the test period.** (A) Ranks of the models. Models are ranked according to the RMSE over all prediction horizons. Reg. Ave. = regional average (RMSE computed over all hospitals, excluding the regional totals). (B) MAPE of the ensemble model by prediction horizon in Himachal Pradesh. (C) MAPE of the ensemble model by prediction horizon at the hospital level.](III.%20ensemble/Figure4.png){#fig-test3}
+
+# Forward
+
+-   **The noise in the data makes forecasting difficult.** This is further muddled when we aggregate the hospitals to a regional level, since each location has a different peaks and dips. Maybe we can improve noise with a better smoothing function, but, without more specific admissions, this will likely remain the biggest challenge.
+
+-   **The models need more rigorous tuning.** I did not have time to rigorously tune the model parameters or modify the assumptions from the original code (i.e. that weather variables remain constant over the forecast horizon). More work is needed on this.
+
+-   **Predictor importance still needs to be evaluated.** As of yet, I have not evaluated predictor importance, which is a key part of my research question.
+
+-   **Population-specific forecasts still needed.** The original paper did some fancy bootstrapping to predict related hospital admissions variables. I did test this for women, mean and ages \>65 and it seemed to work well, but took 5 hours to run on a very small sample. I will wait to extend this until I have addressed other issues and have a better understanding of their approach for this.
+
+-   **Additional model could help.** More models will be added eventually and will probably improve our ensemble\> however, the issues outlined above need to be addressed before this.

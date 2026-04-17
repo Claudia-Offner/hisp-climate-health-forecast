@@ -11,7 +11,7 @@ length_calib<-5
 
 proj_components<-tibble()
 for (model in models){
-  proj_tmp<-read.csv2(file=paste0("3_Ensemble/Results/",model,"_period",period,".csv"),stringsAsFactors =F)
+  proj_tmp<-read.csv(file=paste0("3_Ensemble/Results/",model,"_period",period,".csv"),stringsAsFactors =F)
   proj_components<-rbind.fill(proj_components,proj_tmp)
 }
 
@@ -23,7 +23,7 @@ proj_components <- proj_components %>%
 
 ens<-proj_components %>%
   filter(model %in% models_ensemble) %>%
-  group_by(var,region,date,prediction_horizon) %>%
+  group_by(var,location,date,prediction_horizon) %>%
   dplyr::summarise(point=mean(point,na.rm=T),
                    lower=mean(lower_5,na.rm=T),
                    upper=mean(upper_5,na.rm=T),

@@ -12,17 +12,17 @@ date_max<-max(dates_analysis)+max_prediction_horizon-remove_last_n
 dat2<-data_rt %>%
   filter(date_analysis==max(data_rt$date_analysis)) %>%
   filter(date>=min(dates_analysis)-remove_last_n & date<=date_max) %>%
-  dplyr::select(date,region,iHosp_smooth) %>%
-  pivot_longer(cols=c("iHosp_smooth"),
-               names_to="var",values_to="smooth_value") %>%
+  dplyr::select(date,location,outcome) %>%
+  pivot_longer(cols=c("outcome"),
+               names_to="var",values_to="value") %>%
   mutate(var=gsub("_smooth","",var)) %>%
-  filter(!is.element(region,c("COR","national")))
+  filter(!is.element(location,c("COR","national")))
 
 # 2. Load projections from components models ####
 
 proj<-tibble()
 for (model in models){
-  proj_tmp<-read.csv2(file=paste0("3_Ensemble/Results/",model,"_period",period,".csv"),stringsAsFactors =F)
+  proj_tmp<-read.csv(file=paste0("3_Ensemble/Results/",model,"_period",period,".csv"),stringsAsFactors =F)
   proj<-rbind.fill(proj,proj_tmp)
 }
 proj$model<-factor(proj$model,levels=models, ordered=T)
@@ -37,9 +37,9 @@ proj<- proj %>%
 
 # Error
 res<-proj %>%
-  left_join(dat2,by=c("date_proj"="date","region"="region","var"="var")) %>%
-  mutate(in_interval95 = smooth_value >= lower_5 & smooth_value <= upper_5) %>%
-  mutate(abs_error = point - smooth_value) 
+  left_join(dat2,by=c("date_proj"="date","location"="location","var"="var")) %>%
+  mutate(in_interval95 = value >= lower_5 & value <= upper_5) %>%
+  mutate(abs_error = point - value) 
 
 # WIS 
 # from https://github.com/reichlab/covid19-forecast-evals/blob/main/code/process-zoltar-scores.R
@@ -55,7 +55,7 @@ intervals <- list(
 
 for (iv in intervals) {
   res[[paste0("IS_", iv$suffix)]] <- scoringutils:::interval_score(
-    observed       = res$smooth_value,
+    observed       = res$value,
     lower          = res[[paste0("lower_", iv$suffix)]],
     upper          = res[[paste0("upper_", iv$suffix)]],
     interval_range = iv$range,
@@ -65,7 +65,7 @@ for (iv in intervals) {
 }
 
 res <- res %>%
-  mutate(IS_100 = abs(point-smooth_value)) %>%
+  mutate(IS_100 = abs(point-value)) %>%
   mutate(wis = (IS_2+IS_5+IS_10+IS_20+IS_30+IS_40+IS_50+
                   IS_60+IS_70+IS_80+IS_90+0.5*IS_100)/11.5)  
 
@@ -79,17 +79,17 @@ lab_mod<-levels(droplevels(proj$model))
 # SF4 : Forecasted trajectories of hospitalizations ####
 
 
-myvar<-"iHosp"
+myvar<-"outcome"
 (p1<-res %>%
   # filter(model=='TSGC') %>%
   filter(var==myvar) %>%
-  filter(region=="metropolitan") %>% 
+  filter(location=="metropolitan") %>% 
   filter(date_proj<=date_max) %>% 
   ggplot() +
   annotate(geom="rect",xmin=as.Date("2017-03-03"),xmax=as.Date("2017-03-18"),ymin=-Inf,ymax=Inf,fill="grey90",alpha=0.5)+
   geom_line(aes(x = date_proj, y = point, color = as.factor(prediction_horizon), group=date),size=0.8) +
-  geom_line(data = dat2[dat2$region=="metropolitan" & dat2$var==myvar & dat2$date>=min(dates_analysis),], 
-            aes(x = date, y = smooth_value), size = 0.8) +
+  geom_line(data = dat2[dat2$location=="metropolitan" & dat2$var==myvar & dat2$date>=min(dates_analysis),], 
+            aes(x = date, y = value), size = 0.8) +
   xlab("") +
   facet_wrap(~model, scale = "free", ncol=3) +
   scale_y_continuous("Hospital Admissions", limits = c(0, NA)) +
@@ -101,15 +101,15 @@ myvar<-"iHosp"
 
 
 ggsave(filename=paste0(path_figures, 'FigureS4.png'), plot=p1, 
-       width=12, height=12, units = "in", dpi=300, bg='white')
+       width=9, height=6, units = "in", dpi=300, bg='white')
 
 
 # MF1 : RMSE and WIS ####
 
 # RMSE national 
 p2<-res %>%
-  filter(region == "metropolitan") %>% 
-  filter(var=="iHosp") %>% 
+  filter(location == "metropolitan") %>% 
+  filter(var=="outcome") %>% 
   group_by(model,var,prediction_horizon) %>%
   dplyr::summarize(average_bias = sqrt(mean(abs_error^2,na.rm=T))) %>%
   ungroup() %>%
@@ -126,13 +126,13 @@ p2<-res %>%
          legend.key.size = unit(2, "mm"))+
   guides(color=guide_legend(ncol=1)) +
   labs(tag = "A") + 
-  ggtitle("RMSE, metropolitan France")
+  ggtitle("RMSE, Himachal Pradesh")
 
 
 # WIS national
 p3<-res %>%
-  filter(region == "metropolitan") %>% 
-  filter(var=="iHosp") %>% 
+  filter(location == "metropolitan") %>% 
+  filter(var=="outcome") %>% 
   group_by(model,var,prediction_horizon) %>%
   dplyr::summarize(average_bias = mean(wis,na.rm=T)) %>%
   ungroup() %>%
@@ -145,21 +145,21 @@ p3<-res %>%
   scale_color_manual("Model",labels=lab_mod,values=pal) +
   scale_size_manual("Model",labels=lab_mod,values=val_size) +
   scale_linetype_manual("Model",labels=lab_mod,values=val_linetype) +
-  #coord_cartesian(ylim=c(0,0.45)) +
+  coord_cartesian(ylim=c(0,2500)) +
   theme_bw()+
   theme( legend.text=element_text(size=10),
          legend.key.size = unit(2, "mm"))+
   guides(color=guide_legend(ncol=1)) +
   labs(tag = "C") + 
-  ggtitle("WIS, metropolitan France")
+  ggtitle("WIS, Himachal Pradesh")
 
 
 
-# RMSE regional
+# RMSE location
 p2_reg<-res %>%
-  filter(region %in% regions_metro) %>% 
-  filter(region != "COR") %>%
-  filter(var=="iHosp") %>% 
+  filter(location %in% locations_hosp) %>% 
+  filter(location != "COR") %>%
+  filter(var=="outcome") %>% 
   group_by(model,var,prediction_horizon) %>%
   dplyr::summarize(average_bias = sqrt(mean(abs_error^2,na.rm=T))) %>%
   ungroup() %>%
@@ -172,19 +172,19 @@ p2_reg<-res %>%
   scale_color_manual("Model",labels=lab_mod,values=pal) +
   scale_size_manual("Model",labels=lab_mod,values=val_size) +
   scale_linetype_manual("Model",labels=lab_mod,values=val_linetype) +
-  coord_cartesian(ylim=c(0,100)) +
+  # coord_cartesian(ylim=c(0,100)) +
   theme_bw()+
   theme( legend.text=element_text(size=10),
          legend.key.size = unit(2, "mm"))+
   guides(color=guide_legend(ncol=1))+
   labs(tag = "B") + 
-  ggtitle("RMSE, regional level")
+  ggtitle("RMSE, hospital level")
 
 
-# WIS regional
+# WIS location
 p3_reg<-res %>%
-  filter(region %in% regions_metro) %>% 
-  filter(var=="iHosp") %>% 
+  filter(location %in% locations_hosp) %>% 
+  filter(var=="outcome") %>% 
   group_by(model,var,prediction_horizon) %>%
   dplyr::summarize(average_bias = mean(wis,na.rm=T)) %>%
   ungroup() %>%
@@ -197,16 +197,17 @@ p3_reg<-res %>%
   scale_color_manual("Model",labels=lab_mod,values=pal) +
   scale_size_manual("Model",labels=lab_mod,values=val_size) +
   scale_linetype_manual("Model",labels=lab_mod,values=val_linetype) +
-  coord_cartesian(ylim=c(0,50)) +
+  coord_cartesian(ylim=c(0,250)) +
   theme_bw()+
   theme( legend.text=element_text(size=10),
          legend.key.size = unit(2, "mm"))+
   guides(color=guide_legend(ncol=1))+
   labs(tag = "D") + 
-  ggtitle("WIS, regional level")
+  ggtitle("WIS, hospital level")
 
 ggsave(filename = paste0(path_figures, "Figure1.png"),
        plot = plot_grid(p2, p2_reg, p3, p3_reg, ncol = 2, align = "v", axis = "lr"),
-       width = 9, height = 7, units = "in", dpi = 300)
+       width = 8, height = 6, units = "in", dpi = 300)
+
 
 

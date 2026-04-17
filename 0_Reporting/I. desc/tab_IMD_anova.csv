@@ -1,0 +1,10 @@
+"Variable","Factor","Df Between","Df Within","F","p"
+"Total patients","Season",3,11685,123.618,0
+"Total patients","Season",3,11685,123.618,0
+"Total patients","IMD: Max temp. >30°C",1,11687,85.214,0
+"Total patients","IMD: Min temp. <0°C",1,11687,237.668,0
+"Total patients","IMD: Rainfall >15mm",1,11633,50.065,0
+"Total patients","IMD: Wind speed >40km/h",1,11687,29.905,0
+"Total patients","IMD: Humidity <30%",1,11633,4.947,0.026
+"Total patients","IMD: Humidity >60%",1,11633,4.254,0.039
+"Total patients","IMD: PM2.5 >60 µg/m³",1,11687,66.86,0

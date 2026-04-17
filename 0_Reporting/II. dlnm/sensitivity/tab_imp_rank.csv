@@ -1,0 +1,14 @@
+"Feature","Top Half","Bottom Half","Mean Gain","Important"
+"Weekday",8,0,0.323296760787059,TRUE
+"Time",8,0,0.210658971688697,TRUE
+"Mean temp. (°C)",6,2,0.0646868146064155,TRUE
+"Max temp. (°C)",6,2,0.0604362642599711,TRUE
+"Windspeed (km/hr)",6,2,0.0504545520897192,TRUE
+"Min temp. (°C)",6,4,0.0470590951389947,TRUE
+"Wet-bulb temp. (°C)",5,6,0.0478632015014522,FALSE
+"Precipitation (mm)",4,6,0.0433818101361985,FALSE
+"Relative humidity (%)",3,5,0.0403246739279734,FALSE
+"Air pollution (µg/m³)",2,7,0.0375272685768158,FALSE
+"Diurnal temp. range (°C)",1,7,0.034415267294238,FALSE
+"Season",0,8,0.021181246179111,FALSE
+"Population density",1,7,0.018714073813355,FALSE
