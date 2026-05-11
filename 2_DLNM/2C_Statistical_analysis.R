@@ -6,7 +6,8 @@
 rm(list=ls()); graphics.off(); gc()
 
 # Set data path
-setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
+setwd('C:/Users/offne/Documents/GitHub/hisp-climate-health-forecast/')
+
 
 ####  DEPENDENCIES  ####
 source('2_DLNM/DLNM - Dependencies.R')
@@ -15,14 +16,15 @@ source('2_DLNM/DLNM - Dependencies.R')
 library(dlnm); library(splines); library(xtable); library(mvmeta); library(MASS);
 library(ggplot2); library(dplyr); library(purrr); library(patchwork); library(openxlsx);
 library(colorspace); library(png); library(grid); library(reshape2); library(cowplot)
+library(TTR)
 
 # Function to get empty plot with title, for nested wrap_plot work around
-get_title <- function(title){
+get_title <- function(title, size=16){
   
   ggplot() +
     labs(title = title) +
     theme_void() + 
-    theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"))
+    theme(plot.title = element_text(hjust = 0.5, size = size, face = "bold"))
   
 }
 
@@ -119,7 +121,7 @@ results <- list()
 
 # Set outcome outcome and exposures
 outcome <- 'total_patients'
-variables <- c('mx2t', 'tp')
+variables <- c('t2m', 'tp')
 
 # Analysis 1 - Overall (pooled params) ----
 
@@ -129,20 +131,333 @@ results$overall <- res
 output   <- res$output
 main_res <- res$results
 
-# Contours
-(con_tmp <- city_con_res(meta=output$meta_tmp, xlab='Temperature (%)', title='Maximum temperature', reference='50%', sig=F))
-(con_tp <- city_con_res(meta=output$meta_tp, xlab='Precipitation (%)', title='Total precipitation', reference='20%', sig=F))
-(con_tmp_sig <- city_con_res(meta=output$meta_tmp, xlab='Temperature (%)', title='Maximum temperature', reference='50%', sig=T))
-(con_tp_sig <- city_con_res(meta=output$meta_tp, xlab='Precipitation (%)', title='Total precipitation', reference='20%', sig=T))
+# Overall exposure-response by lag
+# (total_er_overall <- main_res$p_er_overall + plot_annotation(title=replace_exact_matches(outcome, nm)))
+# (total_er <- main_res$p_er + plot_annotation(title='Exposure-response'))
 
-# Overall
-(total_er_overall <- main_res$p_er_overall + plot_annotation(title=replace_exact_matches(outcome, nm)))
-(total_lr <- main_res$p_lr + plot_annotation(title='Lag-response'))
-(total_er <- main_res$p_er + plot_annotation(title='Exposure-response'))
 
-# Main exposure-response, by city
-(city_tmp_er <- get_city_legend(pred='mx2t', plot=main_res$p_er_tmp_city + plot_annotation(title='Exposure-response, by city: Temperature')))
-(city_tp_er <- get_city_legend(pred='tp', plot=main_res$p_er_tp_city + plot_annotation(title='Exposure-response, by city: Precipitation')))
+# Total patient Contours #####
+
+tot_contours <- function(sig=FALSE, max_dev_tmp=NULL, max_dev_tp=NULL){
+  
+  # CONTOURS
+  plot_contours <- function(meta, locations, xlab, title, reference='50%', sig=sig, 
+                            n_col=2, max_dev=NULL) {
+    
+    args <- list(meta=meta, xlab=xlab, reference=reference, sig=sig)
+    
+    # Shared limits
+    dfs <- c(
+      list(ALL=do.call(city_con_res, c(args, list(city='ALL', title='Overall')))$df),
+      setNames(lapply(locations, function(l) do.call(city_con_res, c(args, list(city=l, title=l)))$df), locations)
+    )
+    
+    if (is.null(max_dev)) max_dev <- max(abs(pretty(range(do.call(rbind, dfs)$z, na.rm=TRUE), n=15) - 1))
+    shared_lims <- c(1 - max_dev, 1 + max_dev)
+    shared_brks <- pretty(shared_lims, n=12)
+    args <- c(args, list(shared_lims=shared_lims, shared_brks=shared_brks))
+    
+    # Plots
+    contours <- list()
+    for (l in locations) {
+      contours[[l]] <- do.call(city_con_res, c(args, list(city=l, title=l)))$p
+    }
+    
+    # Layout
+    n_rows <- ceiling(length(contours) / n_col)
+    contours_mod <- lapply(seq_along(contours), function(i) {
+      row <- ceiling(i / n_col); col <- ((i - 1) %% n_col) + 1
+      contours[[i]] +
+        theme(
+          axis.title.x=if(row == n_rows) element_text() else element_blank(),
+          axis.title.y=if(col == 1)      element_text() else element_blank()
+        )
+    })
+    
+    wrap_plots(contours_mod, ncol=n_col) +
+      plot_layout(guides='collect') +
+      plot_annotation(title=title,
+                      theme=theme(plot.title=element_text(hjust=0.5, face='bold', size=14))) &
+      theme(legend.position='none')  
+  }
+  
+  # --- Compute shared max_dev across pooled AND city-specific ---
+  compute_max_dev <- function(meta, locations, reference, args_base) {
+    all_dfs <- c(
+      list(do.call(city_con_res, c(args_base, list(city='ALL', title='Overall')))$df),
+      lapply(locations, function(l) do.call(city_con_res, c(args_base, list(city=l, title=l)))$df)
+    )
+    max(abs(pretty(range(do.call(rbind, all_dfs)$z, na.rm=TRUE), n=15) - 1))
+  }
+  
+  args_tmp <- list(meta=output$meta_tmp, xlab='Temperature (%)',   reference='50%', sig=sig)
+  args_tp  <- list(meta=output$meta_tp,  xlab='Precipitation (%)', reference='20%', sig=sig)
+  
+  if (is.null(max_dev_tmp)) max_dev_tmp <- compute_max_dev(output$meta_tmp, locations, '50%', args_tmp)
+  if (is.null(max_dev_tp)) max_dev_tp <- compute_max_dev(output$meta_tp, locations, '50%', args_tmp)
+
+  # Shared limits for pooled plots
+  make_shared <- function(max_dev) {
+    lims <- c(1 - max_dev, 1 + max_dev)
+    list(shared_lims=lims, shared_brks=pretty(lims, n=10))
+  }
+  
+  # Overall pooled plots
+  tmp <- do.call(city_con_res, c(args_tmp, make_shared(max_dev_tmp), list(city='ALL', title=NULL)))$p 
+  tp  <- do.call(city_con_res, c(args_tp,  make_shared(max_dev_tp),  list(city='ALL', title=NULL)))$p
+  
+  # Extract legend from one plot using cowplot
+  shared_legend <- get_legend(tmp + theme(legend.position='bottom', legend.text=element_text(angle=45, hjust=1)))
+  
+  # Get title
+  tmp <- wrap_plots(get_title('Overall temperature'), tmp, nrow=2, heights=c(1, 40)) + 
+    theme(legend.position='none')
+  tp  <- wrap_plots(get_title('Overall precipitation'), tp, nrow=2, heights=c(1, 40)) + 
+    theme(legend.position='none')
+  
+  # City-specific plots
+  tmp_l <- plot_contours(meta=output$meta_tmp, locations=locations,
+                         xlab='Temperature (%)', title='Maximum Temperature',
+                         reference='50%', sig=sig, max_dev=max_dev_tmp) 
+  tp_l  <- plot_contours(meta=output$meta_tp, locations=locations,
+                         xlab='Precipitation (%)', title='Total Precipitation',
+                         reference='20%', sig=sig, max_dev=max_dev_tp)
+  tmp_l <- wrap_plots(get_title('Site-specific temperature'), tmp_l, nrow=2, heights=c(1, 40))
+  tp_l  <- wrap_plots(get_title('Site-specific precipitation'), tp_l, nrow=2, heights=c(1, 40))
+  
+  con_tmp <- wrap_plots(list(tmp, tmp_l), ncol=1) + plot_layout(heights=c(1, 2))
+  con_tp  <- wrap_plots(list(tp,  tp_l),  ncol=1) + plot_layout(heights=c(1, 2))
+  combined <- wrap_plots(list(con_tmp, con_tp), nrow=1)
+  
+  plot_grid(combined, shared_legend, ncol=1, rel_heights=c(1, 0.08))
+  
+}
+
+dev <- 0.16
+contour_all <- tot_contours(sig=FALSE, max_dev_tmp=dev, max_dev_tp=dev)
+contour_all_sig <- tot_contours(sig=TRUE, max_dev_tmp=dev, max_dev_tp=dev)
+
+ggsave(filename=paste0(path_report, 'II. dlnm/fig_contour_ALL.png'), plot=contour_all, width=7, height=11, dpi=300, bg='white')
+ggsave(filename=paste0(path_report, 'II. dlnm/fig_contour_ALL_sig.png'), plot=contour_all_sig, width=7, height=11, dpi=300, bg='white')
+
+
+# Total patient Exposure response ####
+
+tmp_lags <- list('ALL'= c(0,3), #c(0,3,7),
+                 'Una'= c(0,3), #c(4),
+                 'Hamirpur'=c(0,3), #c(0,2,8),
+                 'Nahan'=c(0,3), #c(0,8),
+                 'Chamba'=c(0,3), #c(0,4,8),
+                 'Kullu'=c(0,3), #c(0,4,7),
+                 'Dharamshala'=c(0,3), #c(0,8),
+                 'Solan'=c(0,3), #c(0,4,7,10),
+                 'Reckong Peo'=c(0,3)) #c(0,8))
+
+tp_lags <- list('ALL'=c(3,10),
+                'Una'=c(3,10), #c(),
+                'Hamirpur'=c(3,10), #c(),
+                'Nahan'=c(3,10), #c(),
+                'Chamba'=c(3,10), #c(3,10),
+                'Kullu'=c(3,10), #c(),
+                'Dharamshala'=c(3,10), #c(1,9),
+                'Solan'=c(3,10), #c(),
+                'Reckong Peo'=c(3,10)) #c())
+
+
+
+exp <- function(output, city, plot_key){
+  
+  city_tmp_lags <- tmp_lags[[city]]
+  city_tp_lags  <- tp_lags[[city]]
+  
+  # Build tmp plots
+  tmp_plots <- lapply(city_tmp_lags, function(lag) {
+    city_exp_res(city=city, lag=lag, meta=output$meta_tmp,
+                 col='#D74B3C', xlab='Temperature (%)', 
+                 title=paste0('Lag=', lag), reference='50%')[[plot_key]]
+  })
+  # Build tp plots
+  tp_plots <- lapply(city_tp_lags, function(lag) {
+    city_exp_res(city=city, lag=lag, meta=output$meta_tp,
+                 col='#1D98EB', xlab='Precipitation (%)', 
+                 title=paste0('Lag=', lag), reference='0%')[[plot_key]]
+  })
+  
+  all_plots <- c(tmp_plots, tp_plots)
+  
+  # Pad to exactly 5 with void placeholders
+  while (length(all_plots) < 5) all_plots <- c(all_plots, list(ggplot() + theme_void()))
+  
+  # Strip legends
+  all_plots <- lapply(all_plots, function(p) p + theme(legend.position='none'))
+  
+  return(all_plots)  # return list of exactly 5 plots
+}
+
+# --- Build label + 5 plots per row, assembled into one aligned grid ---
+locations_order <- c('Chamba', 'Dharamshala', 'Solan', 'Hamirpur', 'Kullu', 
+                     'Reckong Peo', 'Nahan', 'Una')
+
+# Collect all rows as flat list of (label + 5 plots)
+all_cells <- list()
+for (l in locations_order) {
+  
+  # Centered city label as a single cell
+  label_cell <- ggplot() +
+    annotate('text', x=0.5, y=0.5, label=l, 
+             fontface='bold', size=4.5, hjust=0.5, vjust=0.5) +
+    theme_void()
+  
+  plot_cells <- exp(output, l, plot_key='p_city')  # list of exactly 5
+  all_cells  <- c(all_cells, list(label_cell), plot_cells)  # 6 cells per row
+}
+
+# Assemble into grid: 6 cols (1 label + 5 plots), n rows
+combined <- wrap_plots(all_cells, ncol=6, byrow=TRUE) +
+  plot_layout(widths=c(10, rep(10, 5)))  # label col narrow, plot cols equal
+
+# --- Pooled ---
+exp_pool_plots <- exp(output, 'ALL', plot_key='p_blup')
+exp_pool <- wrap_plots(exp_pool_plots, nrow=1, ncol=5)
+
+# --- Unified legend ---
+unified_legend <- ggplot(data.frame(x=1, y=1), aes(x, y)) +
+  geom_line(aes(linetype='BLUP'),             colour='black') +
+  geom_line(aes(linetype='Pooled'),           colour='black') +
+  geom_line(aes(colour='Raw temperature'),    linewidth=1) +
+  geom_line(aes(colour='Raw precipitation'),  linewidth=1) +
+  scale_linetype_manual(name=NULL, values=c('BLUP'='dashed', 'Pooled'='solid')) +
+  scale_colour_manual(name=NULL, values=c('Raw temperature'='#D74B3C', 'Raw precipitation'='#1D98EB')) +
+  theme_void() +
+  theme(legend.position='bottom',
+        legend.direction='horizontal',
+        legend.text=element_text(size=10))
+shared_legend <- get_legend(unified_legend)
+
+
+exp_pool <- plot_grid(exp_pool, shared_legend, ncol=1, rel_heights=c(40, 1))
+exp_city <- plot_grid(combined, shared_legend, ncol=1, rel_heights=c(40, 1))
+
+
+ggsave(filename=paste0(path_report, 'II. dlnm/fig_exp_pool.png'), 
+       plot=exp_pool, width=15, height=4,  dpi=300, bg='white')
+ggsave(filename=paste0(path_report, 'II. dlnm/fig_exp_city.png'), 
+       plot=exp_city, width=10, height=15, dpi=300, bg='white')
+
+# Population Contours & Exposure responses #####
+
+pop_contours <- function(outcomes, output, tmp, tp, all_z_tmp, all_z_tp,max_dev=NULL, sig=FALSE){
+  
+  # --- Step 2: Compute shared limits across ALL outcomes ---
+  make_shared <- function(all_z, max_dev=0.18) {
+    if (is.null(max_dev)) max_dev <- max(abs(pretty(range(all_z, na.rm=TRUE), n=15) - 1))
+    shared_lims <- c(1 - max_dev, 1 + max_dev)
+    shared_brks <- pretty(shared_lims, n=12)
+    list(shared_lims=shared_lims, shared_brks=shared_brks)
+  }
+  
+  scale_tmp <- make_shared(all_z_tmp, max_dev=max_dev)
+  scale_tp  <- make_shared(all_z_tp, max_dev=max_dev)
+  
+  # --- Step 3: Build plots using shared limits ---
+  for (i in outcomes){
+    args_tmp <- c(list(meta=output[[i]]$meta_tmp, xlab='Temperature (%)',   reference='50%', sig=sig), scale_tmp)
+    args_tp  <- c(list(meta=output[[i]]$meta_tp,  xlab='Precipitation (%)', reference='20%', sig=sig), scale_tp)
+    
+    tmp[[i]] <- do.call(city_con_res, c(args_tmp, list(city='ALL', title=replace_exact_matches(i, nm))))$p
+    tp[[i]]  <- do.call(city_con_res, c(args_tp,  list(city='ALL', title=replace_exact_matches(i, nm))))$p
+  }
+  
+  # --- Step 4: Combine ---
+  con_tmp <- wrap_plots(tmp, ncol=4) + 
+    plot_layout(guides='collect') + 
+    plot_annotation(title='Overall maximum temperature', 
+                    theme=theme(plot.title=element_text(hjust=0.5, size=16, face="bold"))) &
+    theme(legend.position='none',
+          legend.text=element_text(angle=45, hjust=1))  
+  con_tp <- wrap_plots(tp, ncol=4) + 
+    plot_layout(guides='collect') + 
+    plot_annotation(title='Overall total precipitation', 
+                    theme=theme(plot.title=element_text(hjust=0.5, size=16, face="bold"))) &
+    theme(legend.position='none',
+          legend.text=element_text(angle=45, hjust=1))
+  
+  con_tmp <- wrap_plots(get_title('Pooled maximum temperature'), con_tmp, nrow=2, heights=c(1, 40))
+  con_tp <- wrap_plots(get_title('Pooled 7-day cummulative precipitation'), con_tp, nrow=2, heights=c(1, 40))
+
+  # Extract legend from one plot using cowplot
+  shared_legend <- get_legend(
+    tmp[[1]] + theme(legend.position='bottom',
+                     legend.text=element_text(angle=45, hjust=1))
+  )
+  
+  combined <- wrap_plots(list(con_tmp, con_tp), nrow=2) + plot_annotation(theme=theme(plot.title=element_text(hjust=0.5, size=16, face="bold")))
+  plot_grid(combined, shared_legend, ncol=1, rel_heights=c(1, 0.08))
+
+}
+
+outcomes <- h_cols[1:8]
+output <- list()
+tmp    <- list()
+tp     <- list()
+pop_exp <- list()
+
+# --- Step 1: Run models and collect all z-values first ---
+all_z_tmp <- c()
+all_z_tp  <- c()
+
+for (i in outcomes){
+  print(i)
+  res <- run_bestfit(df, locations, i, params=final_params$pooled, pooled=TRUE, city=NULL)
+  output[[i]] <- res$output
+  
+  args_tmp <- list(meta=output[[i]]$meta_tmp, xlab='Temperature (%)',   reference='50%', sig=F)
+  args_tp  <- list(meta=output[[i]]$meta_tp,  xlab='Precipitation (%)', reference='20%', sig=F)
+  
+  tp_lags$ALL <- c(3,10)
+  if(i %in% c('M', 'age25_64', 'over_65')){
+    tp_lags$ALL <- c(10)
+  } else if (i == 'age5_14'){
+    tp_lags$ALL <- c()
+  }
+  
+  # exp_pool_plots <- exp(output[[i]] , 'ALL', plot_key='p_blup')
+  # exp_pool_plots <- wrap_plots(exp_pool_plots, nrow=1)
+  # pop_exp[[i]] <- wrap_plots(get_title(replace_exact_matches(i, nm), size=14), exp_pool_plots, nrow=2, heights=c(1, 40))
+  # With:
+  exp_pool_plots <- exp(output[[i]], 'ALL', plot_key='p_blup')
+  
+  # Pad to exactly 5 slots
+  while (length(exp_pool_plots) < 5) exp_pool_plots <- c(exp_pool_plots, list(ggplot() + theme_void()))
+  exp_pool_plots <- exp_pool_plots[1:5]  # ensure never more than 5
+  
+  exp_pool_plots <- wrap_plots(exp_pool_plots, nrow=1, ncol=5)
+  pop_exp[[i]] <- wrap_plots(get_title(replace_exact_matches(i, nm), size=14), exp_pool_plots, nrow=2, heights=c(1, 40))
+  
+  # Collect z ranges across all outcomes
+  all_z_tmp <- c(all_z_tmp, do.call(city_con_res, c(args_tmp, list(city='ALL', title=i)))$df$z)
+  all_z_tp  <- c(all_z_tp,  do.call(city_con_res, c(args_tp,  list(city='ALL', title=i)))$df$z)
+}
+
+# Get contours
+contour_pop <- pop_contours(outcomes, output, tmp, tp, all_z_tmp, all_z_tp, max_dev=0.18, sig=FALSE)
+contour_pop_sig <- pop_contours(outcomes, output, tmp, tp, all_z_tmp, all_z_tp, max_dev=0.18, sig=TRUE)
+
+# Get exp-response
+pop_exp_all <- wrap_plots(pop_exp, ncol=2)
+pop_exp_all <- plot_grid(pop_exp_all, shared_legend, ncol=1, rel_heights=c(40, 1))
+
+ggsave(filename=paste0(path_report, 'II. dlnm/fig_contour_pop.png'), plot=contour_pop, width=10, height=12, dpi=300, bg='white')
+ggsave(filename=paste0(path_report, 'II. dlnm/fig_contour_pop_sig.png'), plot=contour_pop_sig, width=10, height=12, dpi=300, bg='white')
+ggsave(filename=paste0(path_report, 'II. dlnm/fig_pop_exp.png'), plot=pop_exp_all, width=15, height=10, dpi=300, bg='white')
+
+
+#########################
+
+
+# # Main exposure-response, by city
+# (city_tmp_er <- get_city_legend(pred='mx2t', plot=main_res$p_er_tmp_city + plot_annotation(title='Exposure-response, by city: Temperature')))
+# (city_tp_er <- get_city_legend(pred='tp', plot=main_res$p_er_tp_city + plot_annotation(title='Exposure-response, by city: Precipitation')))
 
 # Main lag-response, by city
 # (city_tmp_lr <- main_res$p_lr_tmp_city + plot_annotation(title=replace_exact_matches('wb', nm)))
@@ -150,6 +465,8 @@ main_res <- res$results
 
 # City case study: Chamba & Dharamshala
 dharam_res <- format_results(output, outcome, city='Dharamshala')
+
+
 dharam_lr <- get_city_legend(wrap_plots(dharam_res$p_lr_tmp_city, dharam_res$p_lr_tp_city,
                                         nrow=2)+plot_annotation(title='Lag-response: Dharamshala', theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold'))))
 dharam_er <- get_city_legend(wrap_plots(dharam_res$p_er_tmp_city, dharam_res$p_er_tp_city,
@@ -218,6 +535,7 @@ for (l in locations){
   results[[l]] <- res
   print(l)
 }
+
 
 (spec_dharam_er <- results[['Dharamshala']]$results$p_er + plot_annotation(title=paste0('Exposure-response: Dharamshala')))
 (spec_cham_er <- results[['Chamba']]$results$p_er + plot_annotation(title=paste0('Exposure-response: Chamba')))

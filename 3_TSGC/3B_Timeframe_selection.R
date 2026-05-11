@@ -6,7 +6,7 @@
 rm(list = ls()); graphics.off(); gc()
 
 # Set data path
-setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
+setwd('C:/Users/offne/Documents/GitHub/hisp-climate-health-forecast/')
 
 #### DEPENDENCIES ####
 source('3_TSGC/TSGC - Dependencies.R')
@@ -86,28 +86,28 @@ get_ts_loc <- function (loc, df) {
   clean <- sub[!is.na(sub$total_patients), ]
   
   # Get full TS
-  startdate <- as.Date('2015-02-14')
-  enddate <- as.Date('2019-02-13')
-  clean <- clean[clean$date >= startdate & clean$date <= enddate,]
+  startdate <- min(df$date)
+  enddate <- max(df$date)-30
+  # clean <- clean[clean$date >= startdate & clean$date <= enddate,]
   variable <- xts(clean$total_patients,  order.by=clean$date)
-  (ts_plot <- plot_moving_avg(variable, MA=30, y.lab='Total patients', colour='#8968CD', plt.start.date=startdate, estimation.date.end=enddate)+
-      ggtitle(paste0(loc, ' (Feb 2015 to Feb 2019)')) + theme(plot.title = element_text(size=16, hjust = 0.5)))
+  (ts_plot <- plot_moving_avg(variable, MA=14, y.lab='Total patients', colour='#8968CD', plt.start.date=startdate, estimation.date.end=enddate)+
+      ggtitle(paste0(loc, ' ')) + theme(plot.title = element_text(size=16, hjust = 0.5)))
   
-  # Get param select TS (2015-2017)
-  startdate <- as.Date('2015-02-14')
-  enddate <- as.Date('2017-02-13')
-  clean_2017 <- clean[clean$date >= startdate & clean$date <= enddate,]
-  (ts_stack_2017 <- get_ts_stack(data=clean_2017, startdate=startdate, enddate=enddate, plot_specs=plot_specs,
-                                 title=paste0(loc, ' (Feb 2015 to Feb 2017)')))
-
-  # Get param select TS (2017-2019)
-  startdate <- as.Date('2015-02-14')
-  enddate <- as.Date('2019-02-13')
-  clean_2019 <- clean[clean$date >= startdate & clean$date <= enddate,]
-  (ts_stack_2019 <- get_ts_stack(data=clean_2019, startdate=startdate, enddate=enddate, plot_specs=plot_specs,
-                                 title=paste0(loc, ' (Feb 2015 to Feb 2019)')))
+  # # Get param select TS (2015-2017)
+  # startdate <- as.Date('2015-02-14')
+  # enddate <- as.Date('2017-02-13')
+  # clean_2017 <- clean[clean$date >= startdate & clean$date <= enddate,]
+  # (ts_stack_2017 <- get_ts_stack(data=clean_2017, startdate=startdate, enddate=enddate, plot_specs=plot_specs,
+  #                                title=paste0(loc, ' (Feb 2015 to Feb 2017)')))
+  # 
+  # # Get param select TS (2017-2019)
+  # startdate <- as.Date('2015-02-14')
+  # enddate <- as.Date('2019-02-13')
+  # clean_2019 <- clean[clean$date >= startdate & clean$date <= enddate,]
+  # (ts_stack_2019 <- get_ts_stack(data=clean_2019, startdate=startdate, enddate=enddate, plot_specs=plot_specs,
+  #                                title=paste0(loc, ' (Feb 2015 to Feb 2019)')))
   
-  return(list(ts_plot=ts_plot, ts_stack_2017=ts_stack_2017, ts_stack_2019=ts_stack_2019))
+  return(list(ts_plot=ts_plot)) #, ts_stack_2017=ts_stack_2017, ts_stack_2019=ts_stack_2019))
   
 }
 
@@ -128,23 +128,21 @@ plot_specs <- list(
 
 # 1. Time series visuals ####
 
-
-ts_chamb <- get_ts_loc('Chamba', df)
-ts_dharam <- get_ts_loc('Dharamshala', df)
-
+ts_solan <- get_ts_loc(loc='Solan', df)
+ts_nala <- get_ts_loc(loc='Nalagarh', df)
+ts_shimla <- get_ts_loc(loc='Shimla', df)
 
 #### EXPORT ####
 
 # Figures
-figs <- list('2B_ts_cham'=list(p=ts_chamb$ts_plot, w=8, h=5),
-             # '2B_ts_cham_2017'=list(p=ts_chamb$ts_stack_2017, w=6, h=7),
-             '2B_ts_cham_2019'=list(p=ts_chamb$ts_stack_2019, w=6, h=7),
-             '2C_ts_dharam'=list(p=ts_dharam$ts_plot, w=8, h=5),
-             # '2C_ts_dharam_2017'=list(p=ts_dharam$ts_stack_2017, w=6, h=7),
-             '2C_ts_dharam_2019'=list(p=ts_dharam$ts_stack_2019, w=6, h=7)
+figs <- list('2A_ts_solan'=list(p=ts_solan$ts_plot, w=8, h=5),
+             # '2A_ts_solan_stack'=list(p=ts_solan$ts_stack_2019, w=6, h=7)#,
+             '2B_ts_nala'=list(p=ts_nala$ts_plot, w=8, h=5),
+             '2C_ts_shimla'=list(p=ts_shimla$ts_plot, w=8, h=5)
              )
 
 for (f in names(figs)){
   ggsave(paste0(path_report, 'III. tsgc/fig_desc_', f, '.png'), figs[[f]]$p, width = figs[[f]]$w, height = figs[[f]]$h, dpi = 300, bg='white')
 }
+
 

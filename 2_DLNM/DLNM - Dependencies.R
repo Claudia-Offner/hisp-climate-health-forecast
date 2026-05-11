@@ -8,7 +8,7 @@ options(scipen=999)
 set.seed(123)
 
 #### PATHS ####
-user <- 'claer14'
+user <- 'offne'
 path_data <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
 path_git <- paste0('C:/Users/', user, '/Documents/GitHub/hisp-climate-health-forecast/')
 path_project <- paste0(path_git, '2_DLNM/')
@@ -197,18 +197,20 @@ run_model <- function(data, locations, outcome, fam_type='quasi',
       # CREATE THE SPLINES
       cb.tmp <- crossbasis(sub$mx2t, lag=c(0,10), argvar=argvar_tmp, arglag=arglag_tmp, group=sub$year)
       cb.tp <- crossbasis(sub$tp, lag=c(0,10), argvar=argvar_tp, arglag=arglag_tp, group=sub$year)
-      # cb.fg10 <- crossbasis(sub$fg10, lag=c(0,10),argvar=argvar_fg10, arglag=arglag_fg10, group=sub$year)
-      # cb.rh <- crossbasis(sub$rh, lag=c(0,10),argvar=list(fun='ns', df=arg_rh$argvar), arglag=list(fun='ns', df=arg_rh$arglag), group=sub$year)
-      # cb.pm25 <- crossbasis(sub$pm25, lag=c(0,10),argvar=list(fun='lin'), arglag=list(fun='ns', df=arg_pm25$arglag), group=sub$year)
+
+      # Get 7-day ema
+      sub$fg10_ema <- EMA(na.approx(sub$fg10, na.rm = FALSE), n = 7)
+      sub$pm25_ema <- EMA(na.approx(sub$pm25, na.rm = FALSE), n = 7)
+      sub$rh_ema   <- EMA(na.approx(sub$rh,   na.rm = FALSE),   n = 7)
       
       # Set formula
       form <- as.formula(
         paste0(outcome, 
-          " ~ month + weekday + ns(time, df=", longterm_df, "*", years, ') ', 
-          lags, '+ cb.tmp + cb.tp + fg10 + pm25 + rh'
+               " ~ month + weekday + holiday + ns(time, df=", longterm_df, "*", years, ') ', 
+               lags, '+ cb.tmp + cb.tp + fg10_ema + pm25_ema + rh_ema'
         )
       )
-      
+
       # RUN THE MODEL
       if(fam_type=='quasi'){
         model <- glm(formula=form, family=quasipoisson(), data=sub)
@@ -317,9 +319,6 @@ format_results <- function(output, outcome, city=NULL){
     
     meta_tmp <- output$meta_tmp
     meta_tp <- output$meta_tp
-    # meta_fg10 <- output$meta_fg10
-    # meta_rh <- output$meta_rh
-    # meta_pm25 <- output$meta_pm25
 
     # Model selection criteria
     tab <- matrix(NA,2,12)
@@ -327,29 +326,17 @@ format_results <- function(output, outcome, city=NULL){
     rownames(tab) <- c('tmp','tp') #, 'fg10', 'rh', 'fg10', 'pm25')
     tab[1,] <- ftab(m=meta_tmp$mv)
     tab[2,] <- ftab(m=meta_tp$mv)
-    # tab[3,] <- ftab(m=meta_fg10$mv)
-    # tab[4,] <- ftab(m=meta_rh$mv)
-    # tab[5,] <- ftab(m=meta_pm25$mv)
     
-    # Exposure response (with city specs) - Overall
+    # Exposure response (with city specs) by lag
     p_er_tmp <- city_exp_res(city=city, lag=lags, meta=meta_tmp, col='#D74B3C', xlab='Max. Temperature (%)', title=NULL)
     p_er_tp <- city_exp_res(city=city, lag=lags, meta=meta_tp, col='#1D98EB', xlab='Precipitation (%)', title=NULL, reference='0%')
-    # p_er_fg10 <- city_exp_res(city=city, lag=lags, meta=meta_fg10, col='#8968CD', xlab='Wind speed (%)', title=NULL)
-    # p_er_rh <- city_exp_res(city=city, lag=lags, meta=meta_rh, col='#A6B727', xlab='Relative humidity (%)', title=NULL)
-    # p_er_pm25 <- city_exp_res(city=city, lag=lags, meta=meta_pm25, col='#E569BF', xlab='Air pollution (%)', title=NULL)
-    
+ 
     # Lag response (with city specs) by percentile
     q_tmp <- rowMeans(meta_tmp$cen)[probs]
     q_tp <- rowMeans(meta_tp$cen)[probs]
-    # q_fg10 <- rowMeans(meta_fg10$cen)[probs]
-    # q_rh <- rowMeans(meta_rh$cen)[probs]
-    # q_pm25 <- rowMeans(meta_pm25$cen)[probs]
     p_lr_tmp <- city_lag_res(city=city, quant_v=q_tmp, meta=meta_tmp, col='#D74B3C', xlab='Max. Temperature (%)', title=NULL)
     p_lr_tp <- city_lag_res(city=city, quant_v=q_tp, meta=meta_tp, col='#1D98EB', xlab='Precipitation (%)', title=NULL, reference='0%')
-    # p_lr_fg10 <- city_lag_res(city=city, quant_v=q_fg10, meta=meta_fg10, col='#8968CD', xlab='Wind speed (%)', title=NULL)
-    # p_lr_rh <- city_lag_res(city=city, quant_v=q_rh, meta=meta_rh, col='#A6B727', xlab='Relative humidity (%)', title=NULL)
-    # p_lr_pm25 <- city_lag_res(city=city, quant_v=q_pm25, meta=meta_pm25, col='#E569BF', xlab='Air pollution (%)', title=NULL)
-    
+
     return(list(tab=tab, 
                 p_er_tmp=p_er_tmp, p_er_tp=p_er_tp, #p_er_fg10=p_er_fg10, p_er_rh=p_er_rh, p_er_pm25=p_er_pm25, 
                 p_lr_tmp=p_lr_tmp, p_lr_tp=p_lr_tp)) #, p_lr_fg10=p_lr_fg10, p_lr_rh=p_lr_rh, p_lr_pm25=p_lr_pm25)) 
@@ -383,17 +370,11 @@ format_results <- function(output, outcome, city=NULL){
     # Format lag plots
     p_lr_tmp <- wrap_plots(lapply(quant, function(x) x$p_lr_tmp$p_blup), ncol=4) & theme(legend.position='none')
     p_lr_tp <- wrap_plots(lapply(quant, function(x) x$p_lr_tp$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    # p_lr_fg10 <- wrap_plots(lapply(quant, function(x) x$p_lr_fg10$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    # p_lr_rh <- wrap_plots(lapply(quant, function(x) x$p_lr_rh$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    # p_lr_pm25 <- wrap_plots(lapply(quant, function(x) x$p_lr_pm25$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
     p_lr <- wrap_plots(p_lr_tmp, p_lr_tp, nrow=2)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
     
     # Format exposure plots
     p_er_tmp <- wrap_plots(lapply(lags, function(x) x$p_er_tmp$p_blup), ncol=4) & theme(legend.position='none')
     p_er_tp <- wrap_plots(lapply(lags, function(x) x$p_er_tp$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    # p_er_fg10 <- wrap_plots(lapply(lags, function(x) x$p_er_fg10$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    # p_er_rh <- wrap_plots(lapply(lags, function(x) x$p_er_rh$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    # p_er_pm25 <- wrap_plots(lapply(lags, function(x) x$p_er_pm25$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
     p_er <- wrap_plots(p_er_tmp, p_er_tp, nrow=2)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
     
     if(!is.null(city)){
@@ -666,10 +647,10 @@ city_exp_res <- function(city='ALL', meta, col, xlab=NULL, lag=NULL, title=NULL,
     # Get city specific Raw AND BLUP estimates
     if(city=='ALL'){
       
-      # Set title based on lags
-      if(!is.null(lag)){
-        title <- paste0(title, ' (Lag=', lag, ')')
-      } 
+      # # Set title based on lags
+      # if(!is.null(lag)){
+      #   title <- paste0(title, ' (Lag=', lag, ')')
+      # } 
       
       # Plot average vs city estimates
       p_raw  <- plot_estimates(city=city, df_specific1=df_city, df_overall=df_overall, xlab=xlab, col=col, title=title, legend='City-specific (Raw)')
@@ -890,118 +871,130 @@ city_lag_res <- function(city='ALL', meta, col, xlab=NULL, quant_v=NULL, title=N
 }
 
 # Function to extract and plot overall & city specific 2D contour plots
-city_con_res <- function(meta, xlab=NULL, title=NULL, reference='50%', sig=F){
-
-   make_dlnm_plot <- function(df, xlab="", title="",
-                             ncol=300,   # resolution of color ramp
-                             nbreaks=15, # number of breaks for contour lines / ticks
-                             contour_size=0.35, sig=F) {
-
-    # Colour palette
+city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL, 
+                         reference='50%', sig=FALSE, shared_lims=NULL, shared_brks=NULL) {
+  
+  make_dlnm_plot <- function(df, xlab="", title="", ncol=300, nbreaks=15, contour_size=0.35, 
+                             sig=FALSE, shared_lims=NULL, shared_brks=NULL) {
     pal <- colorRampPalette(c('#1D98EB', 'white', '#D74B3C'))(ncol)
-
-    # Breaks for contour lines
     brks <- pretty(range(df$z, na.rm=TRUE), n=nbreaks)
-
-    # Highlight significance for modelling
-    if (sig==T){
-      df$z <- ifelse(df$z_low <= 1 & df$z_high >= 1,
-                         NA,   # not significant → will be grey
-                         df$z)
+    
+    # Use shared limits if provided, otherwise compute from data
+    if (!is.null(shared_lims) && !is.null(shared_brks)) {
+      lims <- shared_lims
+      brks <- shared_brks
+    } else {
+      max_dev <- max(abs(brks - 1))
+      lims <- c(1 - max_dev, 1 + max_dev)
+      brks <- pretty(lims, n=nbreaks)
     }
     
-    max_dev <- max(abs(brks - 1))
-    lims <- c(1 - max_dev, 1 + max_dev)
-    brks <- pretty(lims, n = nbreaks)
-    
-    # Base ggplot
-    p <- ggplot(df, aes(x=x, y=y, fill=z)) +
+    if (sig == TRUE) {
+      df$z <- ifelse(df$z_low <= 1 & df$z_high >= 1, NA, df$z)
+      # If all NA, add a single dummy non-NA value outside limits to anchor the scale
+      if (all(is.na(df$z))) {
+        df$z[1] <- lims[1]
+      }
+    }
+    # if (sig == TRUE) {
+    #   z_masked <- ifelse(df$z_low <= 1 & df$z_high >= 1, NA, df$z)
+    #   df$z <- if (all(is.na(z_masked))) {
+    #     message("Nothing significant in '", title, "' — skipping mask")
+    #     df$z
+    #   } else {
+    #     z_masked
+    #   }
+    # }
+    # 
 
-      # Raster background
+    ggplot(df, aes(x=x, y=y, fill=z)) +
       geom_raster(interpolate=TRUE) +
-
-      # Contour lines coloured by same scale
       geom_contour(aes(z=z, colour=..level..),
-                   breaks=brks,
-                   size=contour_size,
-                   show.legend=FALSE) +
-
-      # Fill gradient + legend
+                   breaks=brks, size=contour_size, show.legend=FALSE) +
       scale_fill_gradient2(
-        low = '#1D98EB',
-        mid = 'white',
-        high = '#D74B3C',
-        midpoint = 1,
-        limits = lims,
-        breaks = brks,
-        name = "RR",
-        na.value = "grey85", # 👈 THIS makes non-significant grey
-        guide = guide_colorbar(
-          barwidth = unit(0.6, "lines"),
-          barheight = unit(12, "lines"),
-          ticks = TRUE,
-          frame.colour = "black",
-          ticks.colour = "black"
+        low='#1D98EB', mid='white', high='#D74B3C',
+        midpoint=1, limits=lims, breaks=brks, name="RR",
+        na.value="grey85",
+        # guide=guide_colorbar(
+        #   barwidth=unit(0.6, "lines"), barheight=unit(12, "lines"),
+        #   ticks=TRUE, frame.colour="black", ticks.colour="black"
+        # )
+        guide=guide_colorbar(
+          barwidth=unit(12, "lines"),
+          barheight=unit(0.6, "lines"),
+          ticks=TRUE,
+          frame.colour="black",
+          ticks.colour="black",
+          title.position="top",
+          title.hjust=0.5,
+          direction="horizontal"
         )
       ) +
-
-      # Contour lines use same palette
-      scale_colour_gradientn(
-        colours=pal,
-        limits =range(brks),
-        breaks =brks,
-        guide="none"
-      ) +
-
-      # Optional light band-outline
+      scale_colour_gradientn(colours=pal, limits=range(brks), breaks=brks, guide="none") +
       geom_contour(aes(z=z), breaks=brks, colour="white", size=0.7, alpha=0.6) +
-
-      # Axis breaks dynamically
-      scale_x_continuous(breaks=pretty(df$x, n=6)) +
+      scale_x_continuous(breaks=pretty(df$x, n=5)) +
       scale_y_continuous(breaks=pretty(df$y, n=6)) +
-
-      labs(
-        x=xlab,
-        y="Lag (days)",
-        title=title
-      ) +
-
+      labs(x=xlab, y="Lag (days)", title=title) +
       coord_cartesian(expand=FALSE) +
-
-      # Theme with panel outline and tick marks
       theme_classic(base_size=13) +
       theme(
         panel.grid=element_blank(),
-        panel.border=element_rect(colour="black", fill=NA, size=0.8),  # outlined panel
-        axis.title =element_text(size=12),
-        axis.text  =element_text(size=10),
-        axis.ticks =element_line(colour="black"),  # show tick marks
-        legend.title= element_text(size=12),
+        panel.border=element_rect(colour="black", fill=NA, size=0.8),
+        axis.title=element_text(size=12),
+        axis.text=element_text(size=10),
+        axis.ticks=element_line(colour="black"),
+        legend.title=element_text(size=12),
         legend.text=element_text(size=10),
-        plot.title=element_text(size=14, face="plain", hjust=0.5)  # centered
+        legend.position='bottom',
+        plot.title=element_text(size=14, face="plain", hjust=0.5)
       )
-
-    return(p)
   }
-
-  # Unlist meta-analysis w/ prediction basis
-  list2env(meta, envir=environment())
-
-  # Remove duplicates from cen list (especially for tp)
-  rows_with_dup <- apply(cen, 1, function(row) any(duplicated(row)))
-  cen <- cen[!rows_with_dup, ]
-  perc <- as.numeric(sub("%", "", names(rowMeans(cen))))
-
-  # Get overall estimates (for specific lag, if applicable)
-  cp <- crosspred(b_mean, coef=coef(mv),vcov=vcov(mv), model.link='log', at=rowMeans(cen), cen=rowMeans(cen)[reference])
-  df_overall <- expand.grid(x=perc, y=seq(cp$lag[1], cp$lag[2]))
-  df_overall$z <- as.vector(cp$matRRfit)
-  df_overall$z_low <- as.vector(cp$matRRlow)
-  df_overall$z_high <- as.vector(cp$matRRhigh)
   
-  p <- make_dlnm_plot(df=df_overall, xlab=xlab, title=paste0(title), sig=sig)
-
-  return(p)
+  make_df <- function(cp, perc) {
+    df <- expand.grid(x=perc, y=seq(cp$lag[1], cp$lag[2]))
+    df$z      <- as.vector(cp$matRRfit)
+    df$z_low  <- as.vector(cp$matRRlow)
+    df$z_high <- as.vector(cp$matRRhigh)
+    df
+  }
+  
+  # ── Unlist meta ──────────────────────────────────────────────────────────────
+  list2env(meta, envir=environment())
+  
+  if (city == 'ALL') {
+    
+    # Pooled estimate from mv
+    rows_with_dup <- apply(cen, 1, function(row) any(duplicated(row)))
+    cen  <- cen[!rows_with_dup, ]
+    perc <- as.numeric(sub("%", "", names(rowMeans(cen))))
+    
+    cp <- crosspred(b_mean, coef=coef(mv), vcov=vcov(mv),
+                    model.link='log', at=rowMeans(cen),
+                    cen=rowMeans(cen)[reference])
+    df_overall <- make_df(cp, perc)
+    
+    p <- make_dlnm_plot(df_overall, xlab=xlab, title=title, sig=sig, shared_lims=shared_lims, shared_brks=shared_brks)
+    
+    return(list(df=df_overall, p=p))
+    
+  } else {
+    
+    # City-specific raw estimate
+    rows_with_dup <- apply(cen, 1, function(row) any(duplicated(row)))
+    cen  <- cen[!rows_with_dup, ]
+    perc <- as.numeric(sub("%", "", names(rowMeans(cen))))
+    
+    i <- which(rownames(ymat) == city)
+    cp <- crosspred(b_mean, coef=ymat[i, ], vcov=Slist[[i]],
+                    model.link='log',
+                    from=ranges[i, 1], to=ranges[i, 2],
+                    at=cen[, i], cen=cen[reference, i])
+    df_city <- make_df(cp, perc)
+    
+    p <- make_dlnm_plot(df_city, xlab=xlab, title=city, sig=sig, shared_lims=shared_lims, shared_brks=shared_brks)
+    
+    return(list(df=df_city, p=p))
+  }
 }
 
 #### DEPENDENCIES ####

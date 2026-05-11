@@ -1,12 +1,12 @@
 ### ------------------------------------------------------------------------ ### 
-###  TSGC - Sensitivity analysis (HISP: Chamba)
+###  TSGC - Sensitivity analysis (HISP: Solan)
 ### ------------------------------------------------------------------------ ### 
 
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
 
 # Set data path
-setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
+setwd('C:/Users/offne/Documents/GitHub/hisp-climate-health-forecast/')
 
 #### DEPENDENCIES ####
 source('3_TSGC/TSGC - Dependencies.R')
@@ -46,7 +46,7 @@ load(paste0('3_TSGC/', file_import, '.RData'))
 
 # 1. Set base model parameters ####
 
-df <- df %>% filter(location=='Chamba')
+df <- df %>% filter(location=='Solan')
 
 # Variables
 outcome <- 'total_patients_c' 
@@ -57,10 +57,10 @@ plot_components <- c(paste(controls, collapse = ' + '), paste(exposures, collaps
 # Create xts object and subset relevant variables as numeric
 Y <- xts(subset(df, select=c(outcome, exposures, controls)),  order.by=df$date)
 
-# Parameters to test
+# Parameters to test (JUNE 2016)
 q <- 0.005
 estimation.window <- 3
-estimation.date.end <- as.Date('2016-02-01')
+estimation.date.end <- as.Date('2016-06-01')
 n.ahead <- 10
 confidence.level <- 0.68
 
@@ -306,7 +306,7 @@ names(result_all) <- gsub(".1", "", names(result_all))
 result_all$Test[54:56] <- NA  # or "" if you prefer blank strings
 
 # Save tables
-write.xlsx(result_all, file = paste0(path_report, "III. tsgc/tab_chamb_sens_param.xlsx"))
-write.xlsx(result_lags, file = paste0(path_report, "III. tsgc/tab_chamb_sens_lag.xlsx"))
+write.xlsx(result_all, file = paste0(path_report, "III. tsgc/tab_solan_sens_param.xlsx"))
+write.xlsx(result_lags, file = paste0(path_report, "III. tsgc/tab_solan_sens_lag.xlsx"))
 
 

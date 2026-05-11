@@ -1,18 +1,18 @@
 ### ------------------------------------------------------------------------ ### 
-###  TSGC - Forecast Sep 2017 (HISP: Chamba)
+###  TSGC - Forecast May 2017 (HISP: Solan)
 ### ------------------------------------------------------------------------ ### 
 
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
 
 # Set data path
-setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
+setwd('C:/Users/offne/Documents/GitHub/hisp-climate-health-forecast/')
 
 #### DEPENDENCIES ####
 source('3_TSGC/TSGC - Dependencies.R')
 setwd(path_git)
 file_import <- 'ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide'
-file_export <- 'chamb-2017-09'
+file_export <- 'solan-2017-06'
 
 ### Get model functions (make sure wd is in repo folder)
 run_models <- function(Y, y, exposures, controls, new.data,
@@ -47,14 +47,15 @@ load(paste0('3_TSGC/', file_import, '.RData'))
 
 # Set identified parameters
 q <- 0.005
-estimation.window <- 8 # months
-estimation.date.end <- as.Date('2017-09-14')
-n.ahead <- 9
+estimation.window <- 5 # months
+# estimation.date.end <- as.Date('2017-05-14')
+estimation.date.end <- as.Date('2023-12-14')
+n.ahead <- 14
 confidence.level <- 0.68
 sea.type <- 'trigonometric'
 sea.period <- 7
 
-df <- df %>% filter(location == 'Chamba')
+df <- df %>% filter(location == 'Solan')
 
 # 1. Model Results (exposures): Coefficients ####
 
@@ -192,7 +193,7 @@ plot_list[[1]] <- plot_list[[1]] + theme(legend.position = 'bottom')
 (forecast_plots <- wrap_plots(plot_list, ncol = ncol) + 
   plot_layout(guides = "collect") +
   plot_annotation(
-    title = "Chamba with exposures (Sep 2017)",
+    title = "Solan with exposures (May 2017)",
     theme = theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"))
   ) &
   theme(legend.position = "bottom"))
@@ -210,7 +211,7 @@ esti_df <- esti_df[-1, ]
 
 # Save tables
 write.xlsx(esti_df, file = paste0(path_report, 'III. tsgc/tab_weat_coefs_', file_export, '_ALL.xlsx'))
-write.xlsx(comp_df, file = paste0(path_report, 'III. tsgc/tab_comp_model_', file_export, '_ALL.xlsx'))
+# write.xlsx(comp_df, file = paste0(path_report, 'III. tsgc/tab_comp_model_', file_export, '_ALL.xlsx'))
 
 # Save figures
 ggsave(paste0(path_report, 'III. tsgc/fig_forecast_', file_export, '_ALL.png'), forecast_plots, width = 10, height = 6, dpi = 300)
@@ -354,7 +355,7 @@ plot_list[[1]] <- plot_list[[1]] + theme(legend.position = 'bottom')
 (forecast_plots <- wrap_plots(plot_list, ncol = ncol) + 
     plot_layout(guides = "collect") +
     plot_annotation(
-      title = "Chamba without exposures (Sep 2017)",
+      title = "Solan without exposures (May 2017)",
       theme = theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"))
     ) &
     theme(legend.position = "bottom"))
@@ -373,7 +374,7 @@ names(esti_df)[ncol(esti_df)] <- 'MAPE'
 esti_df <- esti_df[-1,]
 
 # Save tables
-write.xlsx(comp_df, file = paste0(path_report, 'III. tsgc/tab_comp_model_', file_export, '_noExp.xlsx'))
+# write.xlsx(comp_df, file = paste0(path_report, 'III. tsgc/tab_comp_model_', file_export, '_noExp.xlsx'))
 # Save figures
 ggsave(paste0(path_report, 'III. tsgc/fig_forecast_', file_export, '_noExp.png'), forecast_plots, width = 10, height = 6, dpi = 300)
 

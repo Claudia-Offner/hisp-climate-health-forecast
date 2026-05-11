@@ -6,7 +6,7 @@
 rm(list = ls()); graphics.off(); gc()
 
 # Set data path
-setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
+setwd('C:/Users/offne/Documents/GitHub/hisp-climate-health-forecast/')
 
 #### DEPENDENCIES ####
 source('1_Data/Data - Dependencies.R')
@@ -134,12 +134,12 @@ startdate <- as.Date('2015-02-14')
 enddate <- as.Date('2020-02-13')
 df_ensm <- df_ensm [df_ensm $date >= startdate & df_ensm $date <= enddate,]
 
-# # Create 7-day rolling sum & log transform
-# df_ensm <- df_ensm %>%
-#   group_by(location) %>%
-#   mutate(tp_roll=rollapply(tp,   width = 7, FUN = sum,  align = "right", fill = NA)) %>%
-#   ungroup()
-# df_ensm $tp <- log(df_ensm $tp_roll+10)
+# Create 7-day rolling sum & log transform
+df_ensm <- df_ensm %>%
+  group_by(location) %>%
+  mutate(tp_roll=rollapply(tp,   width = 7, FUN = sum,  align = "right", fill = NA)) %>%
+  ungroup()
+df_ensm $tp <- log(df_ensm $tp_roll+10)
 
 # Create percentile look up
 variables <- c('mx2t', 'tp')
@@ -149,9 +149,9 @@ for (v in variables) {
   cen <- sapply(datalist,function(x) {
     quantile(x[[v]],c(0:100)/100,na.rm=T)
   })
-  # if (v=='tp'){
-  #   cen <- exp(cen)-10
-  # }
+  if (v=='tp'){
+    cen <- exp(cen)-10
+  }
   colnames(cen) <- locations
   # cen <- cbind(cen, Average = rowMeans(cen))
   cen_tables[[v]] <- round(cen, 4)

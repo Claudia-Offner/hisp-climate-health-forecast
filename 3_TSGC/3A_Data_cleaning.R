@@ -6,7 +6,7 @@
 rm(list = ls()); graphics.off(); gc()
 
 # Set data path
-setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
+setwd('C:/Users/offne/Documents/GitHub/hisp-climate-health-forecast/')
 
 #### DEPENDENCIES ####
 source('3_TSGC/TSGC - Dependencies.R')
@@ -16,6 +16,20 @@ file_export <- 'ind_5km_BigThaw-HISP-ALL_2015-2023_hosp_wide'
 
 #### MAIN CODE ####
 
+
+load('2_Active_Data/201_heal/ind_adm4_HISP-HP_2015-2023_patient_visits_SUB_clean.Rdata')
+
+df <- df_heal_w
+df$tp <- sample(0:50, nrow(df), replace = TRUE)
+df$mx2t <- sample(-10:45, nrow(df), replace = TRUE)
+# Create cumulative health outcomes
+### NB: Set NA values to 1 in the cumulative variable - otherwise the growth curve model gets confused!!
+df <- df %>%
+  group_by(location) %>%
+  arrange(location, date, .by_group = TRUE) %>%
+  mutate(across(all_of(names(df)[6:33]), ~ cumsum(replace_na(., 1)), .names = '{.col}_c'))
+
+
 # Load data
 load('2_Active_Data/203_comb/ind_5km_BigThaw-HISP-ALL_2015-2023_daily_hosp_wide.Rdata')
 df <- df_wide
@@ -24,7 +38,8 @@ df <- df_wide
 df <- df %>% filter(location != 'Bilaspur')
 
 # Identify locations
-locations <- as.character(df %>% distinct(location, elev) %>% arrange(elev) %>% pull(location))
+# locations <- as.character(df %>% distinct(location, elev) %>% arrange(elev) %>% pull(location))
+locations <- unique(df$location)
 
 # Select year of interest
 startdate <- as.Date('2015-02-14')

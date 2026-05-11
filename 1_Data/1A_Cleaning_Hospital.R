@@ -4,7 +4,7 @@
 
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
-setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
+setwd('C:/Users/offne/Documents/GitHub/hisp-climate-health-forecast/')
 
 
 ####  DEPENDENCIES  ####
@@ -96,9 +96,9 @@ for (l in unique(missing_days$location)){
 }
 
 # Cut large gaps in days: 268+41+557 days missing between '2015-02-14' and '2023-01-19'
-startdate <- as.Date('2015-02-14')
-enddate <- as.Date('2023-01-19')
-df_heal <- df_heal[df_heal$date >= startdate & df_heal$date <= enddate,]
+# startdate <- as.Date('2015-02-14')
+# # enddate <- as.Date('2023-01-19')
+# df_heal <- df_heal[df_heal$date >= startdate & df_heal$date <= enddate,]
 date_range <- seq(from = min(df_heal$date), to = max(df_heal$date), by = 'day')
 (missing_days <- df_heal %>% group_by(location) %>%
     summarise(min_date = min(date, na.rm = TRUE),
@@ -203,8 +203,8 @@ total <- df_heal %>%
 ward_wide <- df_heal %>%
   group_by(location, date, ward_name) %>%
   summarise(patients = n(), .groups = 'drop') %>%
-  pivot_wider(names_from = ward_name, values_from = patients, values_fill = 0) %>%
-  dplyr::select(location, date, !!!syms(ward_levels))
+  pivot_wider(names_from = ward_name, values_from = patients, values_fill = 0) #%>%
+  # dplyr::select(location, date, !!!syms(ward_levels))
 
 # Aggregate by age
 age_wide <- df_heal %>%
@@ -314,11 +314,11 @@ sum(missing$n_missing)
 missing_days <- missing$missing_days
 missing_weekday <- missing$missing_weekday
 
-# 1338 days with total_patient values < 100
+# 1338 days with total_patient values < 50
 (zero <- df_heal_w %>%
   group_by(location) %>%
   summarise(
-    zero_days = list(date[total_patients < 100]),
+    zero_days = list(date[total_patients < 50]),
     .groups = 'drop'
   ) %>%
   mutate(
@@ -371,8 +371,10 @@ hols_s <- data.frame(date = date_range) %>% dplyr::filter(weekdays(date) == 'Sun
 all_hols <- unique(c(hols_f$Date, hols_hp$Date, hols_s$date))
 
 # 4861 accounted for by holidays (78%) and 1405 not (22%)
-account_hols_list <- lapply(all_days, function(d) {intersect(d, all_hols)})
-account_not_list <- lapply(all_days, function(d) {setdiff(d, all_hols)})
+account_hols_list <- lapply(all_days, function(d) {
+  as.Date(intersect(d, all_hols), origin = "1970-01-01")})
+account_not_list <- lapply(all_days, function(d) {  
+  as.Date(setdiff(d, all_hols), origin = "1970-01-01")})
 # Counts per location
 (account_summary <- data.frame(
   location = all$location,
@@ -393,13 +395,13 @@ names(account_not_tables) <- all$location
 account_not_tables
 
 # 4. B: Checks across wards ####
-
+ward_levels <- unique(df_heal_l$ward_name)[-1]
 # Combine location names and corresponding all missing days
 filtered_list <- mapply(function(loc, days) {
   df_heal_w %>%
     dplyr::filter(location == loc & date %in% days) %>%
     dplyr::select(location, date, total_patients, all_of(ward_levels))
-}, loc = zero$location, days = zero$zero_days    , SIMPLIFY = FALSE)
+}, loc = zero$location, days = zero$zero_days, SIMPLIFY = FALSE)
 
 # Combine into a single data frame
 filtered_df_heal <- bind_rows(filtered_list)

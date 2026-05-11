@@ -6,7 +6,7 @@
 rm(list=ls()); graphics.off(); gc()
 
 # Set data path
-setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
+setwd('C:/Users/offne/Documents/GitHub/hisp-climate-health-forecast/')
 
 ####  DEPENDENCIES  ####
 source('2_DLNM/DLNM - Dependencies.R')

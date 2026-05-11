@@ -9,7 +9,7 @@ set.seed(123)
 
 
 #### PATHS ####
-user <- 'claer14'
+user <- 'offne'
 path_data <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
 path_git <- paste0('C:/Users/', user, '/Documents/GitHub/hisp-climate-health-forecast/')
 path_project <- paste0(path_git, '1_Data/')
@@ -63,7 +63,7 @@ h_cols <- c('total_patients',
             'ncd', 'antiretroviral', 'substance_counselling', 'physiotherapy')
 
 # location_levels <- as.character(df_wide %>% distinct(location, elev) %>% arrange(elev) %>% pull(location))
-location_levels <- c('Mandi', 'Kangra', "Una", "Hamirpur", "Nahan", "Chamba", "Kullu", "Dharamshala", "Solan", "Reckong Peo")
+location_levels <- c('Mandi', 'Kangra', "Una", "Hamirpur", "Nahan", "Chamba", "Kullu", "Dharamshala", "Solan", "Reckong Peo", 'Shimla', 'Nalagarh')
 season_levels   <- c('Winter (Jan-Feb)', 'Pre-Monsoon (Mar-May)', 'Monsoon (Jun-Sep)', 'Post-Monsoon (Oct-Dec)')
 month_levels    <- c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
 weekday_levels  <- c('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
