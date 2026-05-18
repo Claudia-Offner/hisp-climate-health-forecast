@@ -541,7 +541,7 @@ city_exp_res <- function(city='ALL', meta, col, xlab=NULL, lag=NULL, title=NULL,
           )
           
           color_vals <- c('Pooled'='black', 'Raw'=col)
-          linetype_vals <- c('Pooled'='solid', 'Raw'='solid')
+          linetype_vals <- c('Pooled'='dashed', 'Raw'='solid')
           size_vals <- c('Pooled'=0.7, 'Raw'=1.2)
           
         } else {
@@ -671,7 +671,7 @@ city_exp_res <- function(city='ALL', meta, col, xlab=NULL, lag=NULL, title=NULL,
       
       # Plot average vs specific city estimates
       p_raw <- NULL
-      p_blup <- NULL
+      p_blup <- plot_estimates(city=city, df_specific1=df_city, df_overall=df_overall, xlab=xlab, col=col, title=title, legend='City-specific (BLUP)')
       p_city  <- plot_estimates(city=city, df_specific1=df_city, df_specific2=df_blup, df_overall=df_overall, xlab=xlab, col=col, title=title)
       
     }
@@ -944,7 +944,7 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL,
         axis.text=element_text(size=10),
         axis.ticks=element_line(colour="black"),
         legend.title=element_text(size=12),
-        legend.text=element_text(size=10),
+        legend.text=element_text(size=10, angle=45, hjust=1),
         legend.position='bottom',
         plot.title=element_text(size=14, face="plain", hjust=0.5)
       )

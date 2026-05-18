@@ -4,7 +4,7 @@
 
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
-setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
+setwd('C:/Users/offne/Documents/GitHub/hisp-climate-health-forecast/')
 
 
 ####  DEPENDENCIES  #####
@@ -198,6 +198,21 @@ get_desc <- function(df, h_cols, w_cols) {
   # Remove frequency values for raw weather data
   base_desc$Frequency[base_desc$Variable %in%  gsub('(_IMD_b|_p90|_p10)$', '', w_cols)] <- NA
   
+  # Sort ward rows by total_visits descending
+  ward_cols <- h_cols[11:28]
+  general_idx <- which(desc$Variable == "general")
+  if (length(general_idx) > 0) {
+    # Find all ward rows (from 'general' onward until next non-ward section)
+    ward_vars <- desc$Variable[desc$Variable %in% 
+                                 ward_cols]  # or however ward levels are defined
+    ward_rows <- base_desc[base_desc$Variable %in% ward_vars, ]
+    non_ward_rows <- base_desc[!base_desc$Variable %in% ward_vars, ]
+    ward_idx  <- which(base_desc$Variable %in% ward_vars)
+    
+    base_desc[ward_idx, ] <- ward_rows[order(
+      as.numeric(gsub(",", "", sub(" \\(.*", "", ward_rows$Frequency))), 
+      decreasing = TRUE, na.last = TRUE), ]
+  }
   
   # FORMATING
   # Insert headings at fixed positions
@@ -494,7 +509,7 @@ location_levels <- unique(df_wide$location)
 # TAB: Base statistics (base, base_loc) ####
 
 # OVERALL
-base <- get_desc(df_wide, h_cols, w_cols)
+base <- get_desc(df_wide, h_cols, w_cols[c(1:13, 16)])
 base <- replace_exact_matches(base, nm)
 
 # SITE SPECIFIC
@@ -514,34 +529,153 @@ for (l in locations) {
 }
 base_loc <- replace_exact_matches(base_loc, nm)
 
+# EXPORT TABLES ####
 
-# TAB: Table of weather averages & frequencies (weat_loc_tab) ####
+library(flextable)
+library(officer)
 
-weat_av <- base_loc[33:39, grepl('Variable|Average', names(base_loc))]
-names(weat_av) <- c('Variable', as.character(location_levels))
-weat_freq <- base_loc[40:nrow(base_loc), grepl('Variable|Frequency', names(base_loc))]
-names(weat_freq) <- c('Variable', as.character(location_levels))
-weat_loc_tab <- rbind(weat_av, weat_freq)
+# ── Helper to convert flextable to a full .tex file ───────────────────────────
 
-# TAB: Table of population averages & frequencies (pop_loc_tab) ####
-pop_av <- base_loc[1:12, grepl('Variable|Average', names(base_loc))]
-names(pop_av) <- c('Variable', as.character(location_levels))
-pop_av$Variable <- paste0(pop_av$Variable, ' (Average)')
-pop_freq <- base_loc[1:12, grepl('Variable|Frequency', names(base_loc))]
-names(pop_freq) <- c('Variable', as.character(location_levels))
-pop_av$Variable <- paste0(pop_av$Variable, ' (Frequency)')
-pop_loc_tab <- rbind(pop_freq, pop_av)
+save_ft_latex <- function(ft, path, caption, label, footnotes) {
+  
+  tab <- flextable:::knit_to_latex(ft, bookdown = FALSE, quarto = FALSE)
 
-# TAB: Table of population averages & frequencies (ward_loc_tab) ####
-ward_av <- base_loc[13:31, grepl('Variable|Average', names(base_loc))]
-names(ward_av) <- c('Variable', as.character(location_levels))
-ward_av$Variable <- paste0(ward_av$Variable, ' (Average)')
-rownames(ward_av) <- NULL
-ward_freq <- base_loc[14:31, grepl('Variable|Frequency', names(base_loc))]
-names(ward_freq) <- c('Variable', as.character(location_levels))
-ward_freq$Variable <- paste0(ward_freq$Variable, ' (Frequency)')
-rownames(ward_freq) <- NULL
-ward_loc_tab <- rbind(ward_freq, ward_av)
+  footnote_lines <- paste(footnotes, collapse = " \\\\[3pt]\n")
+  
+  latex_table <- c(
+    "\\fontsize{12}{14}\\selectfont",
+    paste0("\\captionof{table}{", caption, "}"),
+    paste0("\\label{", label, "}"),
+    "",
+    tab,
+    "",
+    "\\vspace{2mm}",
+    "\\begin{minipage}{\\textwidth}",
+    "\\footnotesize",
+    paste0("\\textit{Note.} ", footnote_lines),
+    "\\end{minipage}"
+  )
+  
+  writeLines(latex_table, path)
+  message("Saved -> ", path)
+}
+
+# ── Table 1 ───────────────────────────────────────────────────────────────────
+# Define which rows get which formatting
+italic_vals <- c(5:12, 14,15,17:21,23:40)  
+italic_idx <- italic_vals
+bold_idx   <- which(base$Variable %in% c("Hospital Characteristics", "Weather Characteristics"))
+indent1 <- which( base$Variable %in% c("Closed", "Total patients", "Location", "Gender", "Age", "Ward", w_cols))
+indent2 <- italic_vals
+ft1 <- flextable(base) |>
+  flextable::width(j = "Variable",  width = 3) |>
+  flextable::width(j = "Frequency", width = 1.5) |>
+  flextable::width(j = "Average",   width = 2) |>
+  fontsize(size = 12, part = "all") |>
+  font(fontname = "Times New Roman", part = "all") |>
+  
+  # Allow table to break across pages in LaTeX
+  set_table_properties(opts_pdf = list(tabcolsep = 2, arraystretch = 1)) |>
+  
+  # Rename headers
+  set_header_labels(
+    Variable  = " ",
+    Frequency = "Frequency* (%)",
+    Average   = "Average ± SD (Min, Max)"
+  ) |>
+  
+  # Bold and center headers
+  bold(part = "header") |>
+  flextable::align(align = "center", part = "header") |>
+  
+  # Center Frequency and Average columns in body
+  flextable::align(j = c("Frequency", "Average"), align = "center", part = "body") |>
+  
+  # Bold rows
+  bold(i = bold_idx, j = "Variable", part = "body") |>
+  
+  # Italic rows
+  italic(i = italic_idx, j = "Variable", part = "body") |>
+  
+  # Single indent
+  compose(
+    i = indent1, j = "Variable", part = "body",
+    value = as_paragraph(
+      as_chunk("\u00a0\u00a0\u00a0\u00a0"),
+      as_chunk(base$Variable[indent1])
+    )
+  ) |>
+  
+  # Double indent — italic rows
+  compose(
+    i = indent2, j = "Variable", part = "body",
+    value = as_paragraph(
+      as_chunk("\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0"),
+      as_chunk(base$Variable[indent2],
+               props = fp_text(italic = TRUE, font.family = "Times New Roman", font.size = 12))
+    )
+  )
+
+save_ft_latex(
+  ft       = ft1,
+  path     = paste0(path_report, "II. dlnm/MT_base_desc.tex"),
+  caption  = "Summary statistics of variables used in analysis (2015-2020)",
+  label    = "tab:MT_base_desc",
+  footnotes = c(
+    "* Binary event percentages represent the proportion of occurrence over time, and 
+    hospital admission percentages represent the proportion of total patients. 
+    Tp values are reported with positive SDs only because of its inverse exponential 
+    distribution. IMD: Indian Meteorological Department thresholds; SD: Standard deviation.")
+  )
+
+
+# ── Table 2 ───────────────────────────────────────────────────────────────────
+
+ft2 <- flextable(base_loc) |>
+  # ... your formatting here ...
+  fontsize(size = 12, part = "all") |>
+  font(fontname = "Times New Roman", part = "all")
+
+save_ft_latex(
+  ft       = ft2,
+  path     = paste0(path_report, "II. dlnm/ST_base_desc_loc.tex"),
+  caption  = "Summary statistics of variables used in analysis (2015-2020), by location",
+  label    = "tab:MT_base_desc_loc",
+  footnotes = c(
+    "* Binary event percentages represent the proportion of occurrence over time",
+    "and hospital admission percentages represent the proportion of total patients. ",
+    "Precipitation is reported with positive SDs only because of its inverse exponential ",
+    "distribution. IMD: Indian Meteorological Department thresholds; SD: Standard deviation.")
+)
+
+
+# # TAB: Table of weather averages & frequencies (weat_loc_tab) ####
+# 
+# weat_av <- base_loc[33:39, grepl('Variable|Average', names(base_loc))]
+# names(weat_av) <- c('Variable', as.character(location_levels))
+# weat_freq <- base_loc[40:nrow(base_loc), grepl('Variable|Frequency', names(base_loc))]
+# names(weat_freq) <- c('Variable', as.character(location_levels))
+# weat_loc_tab <- rbind(weat_av, weat_freq)
+# 
+# # TAB: Table of population averages & frequencies (pop_loc_tab) ####
+# pop_av <- base_loc[1:12, grepl('Variable|Average', names(base_loc))]
+# names(pop_av) <- c('Variable', as.character(location_levels))
+# pop_av$Variable <- paste0(pop_av$Variable, ' (Average)')
+# pop_freq <- base_loc[1:12, grepl('Variable|Frequency', names(base_loc))]
+# names(pop_freq) <- c('Variable', as.character(location_levels))
+# pop_av$Variable <- paste0(pop_av$Variable, ' (Frequency)')
+# pop_loc_tab <- rbind(pop_freq, pop_av)
+# 
+# # TAB: Table of population averages & frequencies (ward_loc_tab) ####
+# ward_av <- base_loc[13:31, grepl('Variable|Average', names(base_loc))]
+# names(ward_av) <- c('Variable', as.character(location_levels))
+# ward_av$Variable <- paste0(ward_av$Variable, ' (Average)')
+# rownames(ward_av) <- NULL
+# ward_freq <- base_loc[14:31, grepl('Variable|Frequency', names(base_loc))]
+# names(ward_freq) <- c('Variable', as.character(location_levels))
+# ward_freq$Variable <- paste0(ward_freq$Variable, ' (Frequency)')
+# rownames(ward_freq) <- NULL
+# ward_loc_tab <- rbind(ward_freq, ward_av)
 
 # FIG: Histograms total_patients, weather (hist_tota, hist_tota_loc, hist_weat) ####
 sub1 <- df_wide %>% ungroup() %>% dplyr::select(total_patients, all_of(w_cols[!grepl('_p|IMD', w_cols)]))
@@ -986,17 +1120,20 @@ map_stat$location[map_stat$location == "ReckongPeo"] <- "Reckong Peo"
 loc_stats <- merge(loc_points, map_stat, by = "location", all.x = TRUE)
 # Filter to exisitng locations
 loc_stats <- loc_stats %>% filter(!is.na(t2m)) %>% filter(location != 'Bilaspur')
+loc_points <- loc_points %>% filter(!location %in% c('Bilaspur', 'Kyelang'))
 
 # New points
 new_points <- data.frame(
-  lon = c(76.92898, 76.27332772176327, 76.76117),
-  lat = c(31.71256, 32.102957165868474, 31.34124),
-  name = c("Mandi", "Kangra", 'Bilaspur')
+  lon = c(76.92898, 76.27332772176327), # 76.76117),
+  lat = c(31.71256, 32.102957165868474), # 31.34124),
+  name = c("Mandi", "Kangra") #, 'Bilaspur'
 )
 
 # Map
 # save_elev(hp, loc_stats, ind)
-(study_area <- plot_shp_elevation_map(hp, loc_stats, ind, stats=FALSE, new_points=new_points))
+(study_area <- plot_shp_elevation_map(hp, loc_points, ind, stats=FALSE))
+
+# (study_area <- plot_shp_elevation_map(hp, loc_stats, ind, stats=FALSE, new_points=new_points))
 # (study_area <- plot_shp_elevation_map(hp, loc_stats, ind, stats=TRUE))
 
 # NB: use aspect ratio of bbox to estimate white space removal

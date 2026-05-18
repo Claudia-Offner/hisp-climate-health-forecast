@@ -124,7 +124,7 @@ ward_patterns <- c(
   'new building' = 'general',
   'gynae|gyne' = 'gynaecology',
   'mch' = 'mch',
-  'NAI DISHA KENDRA' = 'substance_counselling',
+  'DISHA KENDRA' = 'substance_counselling',
   'ncd|nirog' = 'ncd',
   'ortho' = 'orthopaedics',
   'cancer' = 'oncology',
@@ -157,6 +157,16 @@ df_heal$ward_group <- NULL
 
 # Remove irrelevant wards
 df_heal <- df_heal %>% filter(ward_name != 'remove')
+
+unique(df_heal$ward_name)
+
+# How many are shared across all sites
+df_heal %>%
+  distinct(location, ward_name) %>%
+  group_by(ward_name) %>%
+  summarise(n_locations = n()) %>%
+  filter(n_locations == n_distinct(df_heal$location)) %>%
+  arrange(ward_name)
 
 
 # AGE GROUPS
