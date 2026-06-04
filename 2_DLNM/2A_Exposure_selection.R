@@ -9,7 +9,7 @@ rm(list = ls()); graphics.off(); gc()
 setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
 ####  DEPENDENCIES  ####
-source('2_DLNM/DLNM - Dependencies.R')
+source('2_DLNM/2_Utilities.R')
 
 # Load packages
 library(xgboost); library(dplyr); library(data.table); library(caret); 
@@ -190,12 +190,12 @@ var_list <- c(control_cols, w_cols, lagged_cols)
 # end_time <- Sys.time()
 # # Print time & save (~80min)
 # print(difftime(end_time, start_time, units = "mins"))
-# save(xg_res, file = paste0(path_project, 'ind_xgboost_params_lags.RData'))
+# save(xg_res, file = paste0(path_project, 'Results/ind_xgboost_params_lags.RData'))
 # 
 
 # 2B. Lags: Format results ####
 # Get results
-load('2_DLNM/ind_xgboost_params_lags.RData')
+load('2_DLNM/Results/ind_xgboost_params_lags.RData')
 
 # Assessment table of feature importance consistency 
 imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
@@ -237,12 +237,12 @@ var_list <- c(control_cols, w_cols)
 # end_time <- Sys.time()
 # # Print time & save (~35min)
 # print(difftime(end_time, start_time, units = "mins"))
-# save(xg_res, file = paste0(path_project, 'ind_xgboost_params_nolags.RData'))
+# save(xg_res, file = paste0(path_project, 'Results/ind_xgboost_params_nolags.RData'))
 
 
 # 3B. No Lags: Format results ####
 # Get results
-load('2_DLNM/ind_xgboost_params_nolags.RData')
+load('2_DLNM/Results/ind_xgboost_params_nolags.RData')
 
 # Re-extract with identified parameters
 re_xgboost <- list()

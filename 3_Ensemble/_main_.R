@@ -1,5 +1,5 @@
 ### ------------------------------------------------------------------------ ### 
-###  Ensemble - Main script
+###  DLNM - Main script
 ### ------------------------------------------------------------------------ ### 
 
 # Prep environment
@@ -17,7 +17,7 @@ start <- Sys.time()
 # Install packages if not already in library & load
 pkgs <- c('tidyverse', 'plyr', 'dplyr', 'ggplot2', 'zoo', 'Rcpp', 'dfoptim', 'forecast', 'MASS',
           'msm', 'mgcv', 'RColorBrewer', 'gridExtra', 'cowplot')
-# install.packages(pkgs[!pkgs %in% installed.packages()[, 'Package']])
+install.packages(pkgs[!pkgs %in% installed.packages()[, 'Package']])
 invisible(lapply(pkgs, library, character.only = TRUE))
 
 # Load utilities and set output paths

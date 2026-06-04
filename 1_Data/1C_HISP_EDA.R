@@ -4,7 +4,7 @@
 
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
-setwd('C:/Users/offne/Documents/GitHub/hisp-climate-health-forecast/')
+setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
 
 ####  DEPENDENCIES  #####
