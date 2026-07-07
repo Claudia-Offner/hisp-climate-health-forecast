@@ -13,15 +13,17 @@ source('2_DLNM/2_Utilities.R')
 
 # Load packages
 library(dlnm); library(splines); library(xtable); library(mvmeta); library(MASS);
-library(ggplot2); library(dplyr); library(purrr); library(patchwork)
+library(ggplot2); library(dplyr); library(purrr); library(patchwork); library(TTR)
 
 # Function for parameter testing
-get_parameter_test <- function(data, locations, outcome, pooled,
-                               test='Variable Lag', variables=NULL, v_lag=10, 
-                               longterm_df=8, autocorr_lag=14,
-                               arg_lag=list(fun='ns', df=3),
-                               arg_var=list(fun='ns', df=3)){
-  # Build datalist
+run_param <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE, 
+                    control_test=NULL, var_test=NULL, 
+                    longterm_df=10, autocorr_lag=0, lag_window=c(0,10),
+                    arglag_var=4, argvar_var=1){
+  
+  # 1. Data and dependency prep ----
+  
+  # LIST OF DATAFRAMES FOR ALL SITES
   datalist <- lapply(locations, function(region) data[data$location == region, ])
   names(datalist) <- locations
   
@@ -30,34 +32,29 @@ get_parameter_test <- function(data, locations, outcome, pooled,
   
   # Use names that survived filtering
   locs_used <- names(datalist)
-  
   m <- length(datalist)
   years <- length(unique(data$year))
   
-  # Initialize output lists with correct names
-  list_comp  <- vector('list', m)
-  list_model <- vector('list', m)
-  
-  names(list_comp)  <- locs_used
-  names(list_model) <- locs_used
-  
-  # IF variable=test parameters
-  if(!is.null(variables)){
-    
-    reference <- ifelse(variables %in% c("tp", "fg10"), "10%", "50%")
-
-    ranges <- t(sapply(datalist,function(x) range(x[[variables]],na.rm=T)))
-    cen <- sapply(datalist,function(x) {
-      quantile(x[[variables]],c(0:100)/100,na.rm=T)
+  # Optional: Test controls
+  if(!is.null(var_test)){
+    ranges_var <- t(sapply(datalist,function(x) range(x[[var_test]],na.rm=T)))
+    cen_var <- sapply(datalist,function(x) {
+      quantile(x[[var_test]],c(0:100)/100,na.rm=T)
     })
-    df <- prod(arg_var$df, arg_lag$df)
-    
-    # Set storage matrix
-    ymat <- matrix(NA,m,df,dimnames=list(locs_used,paste('spl',seq(df),sep='')))
-    Slist <- vector('list',m)
-    names(Slist) <- locs_used
+    arglag_var <- list(fun='ns', df=arglag_var)
+    argvar_var <- if (argvar_var == 1) list(fun="lin") else list(fun="ns", df=argvar_var)
+    df_var <- prod(arglag_var$df, argvar_var$df)
     
   }
+
+  # 2. Stage 1: Fit the DLNM ----
+  
+  # BUILT OBJECTS WHERE outputs WILL BE STORED:
+  
+  Slist_comp <- vector('list',m)
+  Slist_model <- vector('list', m)
+  names(Slist_comp) <- locs_used
+  names(Slist_model) <- locs_used
   
   # WARNING FOR PREDICTION BEYOND BOUNDARIES SUPPRESSED
   options(warn=-1)
@@ -69,105 +66,108 @@ get_parameter_test <- function(data, locations, outcome, pooled,
       cat(i,'')
       
       # LOAD
-      data <- datalist[[i]]
-
-      # RUN THE MODEL & EXTRACT COMPARATIVE METRICS
-      if(test=='Longterm'){
-        # Fit model
-        baseformula <- as.formula(paste0(outcome, ' ~  month + weekday + holiday + ns(time, df=', longterm_df,'*', years, ')'))
-        model <- glm(formula=baseformula,family=quasipoisson(),data)
-        list_comp[[i]] <- comp_metrics(model)
-        list_model[[i]] <- model
-      } else if (test == 'Autocorrelation') {
-        
-        if (autocorr_lag==0) {
-          # Fit model
-          baseformula <- as.formula(paste0(outcome, ' ~  month + weekday + holiday + ns(time, df=', longterm_df,'*', years, ')'))
-          model <- glm(formula=baseformula,family=quasipoisson(),data)
-          list_comp[[i]] <- comp_metrics(model)
-          list_model[[i]] <- model
-        } else{
-          
-          # Select lags
-          lag_terms <- paste0(outcome, '_lag', 1:autocorr_lag)
-          
-          baseformula <- as.formula(
-            paste0(
-              outcome, ' ~ month + weekday + holiday + ns(time, df=', longterm_df, '*', years, ') + ',
-              paste(lag_terms, collapse=' + ')
-            )
-          )
-          
-          # Fit model
-          model <- glm(formula=baseformula,family=quasipoisson(),data)
-          list_comp[[i]] <- comp_metrics(model)
-          list_model[[i]] <- model
-        }
-      } else if (grepl('Variable', test)){
-
-        # Select lags
-        if(autocorr_lag==0){
-          lags <- ''
-        } else {
-          lag_terms <- paste0(outcome, '_lag', 1:autocorr_lag)
-          lags <- paste0('+ ', paste(lag_terms, collapse=' + '))
-        }
-
-        # Fit cross basis
-        cb <- crossbasis(data[[variables]], lag=c(0,v_lag), argvar=arg_var, arglag=arg_lag, group=data$year)
-        # Fit model
-        baseformula <- as.formula(
-          paste0(
-            outcome, ' ~ month + weekday + holiday + ns(time, df=', longterm_df, '*', years, ') ', lags, ' + cb'
-          )
-        )
-        model <- glm(formula=as.formula(baseformula),family=quasipoisson(),data)
-        list_comp[[i]] <- comp_metrics(model, cb=cb, cen=cen[reference,i])
-        list_model[[i]] <- model
-        # Make predictions
-        pred <- crosspred(cb, model, cen=cen[reference,i])
-        ymat[i,] <- pred$coef
-        Slist[[i]] <- pred$vcov
+      sub <- datalist[[i]]
+      
+      # SELECT AUTOCORR LAGS
+      if(autocorr_lag==0){
+        lags <- ''
+      } else {
+        lag_terms <- paste0(outcome, '_lag', 1:autocorr_lag)
+        lags <- paste0('+ ', paste(lag_terms, collapse=' + '))
       }
+      
+      if(!is.null(var_test)){
+        
+        if (control_test=='None'){
+          x_rep <- NULL
+        } else if (control_test == 'Single Lag') {
+          x_rep <- dplyr::lag(sub[[var_test]], n = 1)
+          
+        } else if (control_test == 'Moving Average') {
+          x_rep <- TTR::SMA(na.approx(sub[[var_test]], na.rm = FALSE), n = lag_window[2])
+          
+        } else if (control_test == 'Exponential Moving Average') {
+          x_rep <- TTR::EMA(na.approx(sub[[var_test]], na.rm = FALSE), n = lag_window[2], wilder = FALSE)
+          
+        } else if (control_test == 'Distributed Lag'){
+          x_rep <- sub[[var_test]]
+        }
+        
+        if(!is.null(x_rep)){
+          
+          # Store this location's range/percentiles for later pooling
+          ranges_var[i, ] <- range(x_rep, na.rm = TRUE)
+          cen_var[, i] <- quantile(x_rep, probs = c(0:100) / 100, na.rm = TRUE)
+          
+          # Build the basis (no lag dimension -- already collapsed above)
+          if (control_test=='Distributed Lag'){
+            
+            cb <- crossbasis(x_rep, lag=lag_window, argvar=argvar_var, arglag=arglag_var)
+            
+          } else{
+            
+            if (argvar_var$fun == 'lin') {
+              cb <- onebasis(x_rep, fun = 'lin')
+            } else {
+              cb <- onebasis(x_rep, fun = argvar_var$fun, df = argvar_var$df)
+            }
+          }
+          
+          
+          controls <- '+ weekday + holiday + cb'
+          
+        } else {
+          controls <- '+ weekday + holiday'
+        }
+        
+      } else{
+        controls <- ''
+      }
+
+      
+      # Set formula
+      form <- as.formula(
+        paste0(outcome, 
+               " ~ ns(time, df=", longterm_df, "*", years, ')', 
+               controls, lags)
+      )
+      
+      # RUN THE MODEL
+      if(fam_type=='quasi'){
+        model <- glm(formula=form, family=quasipoisson(), data=sub)
+      } else if (fam_type=='binom'){
+        model <- glm.nb(formula=form,data=sub)
+      } else {
+        stop('Unknown model type: ', fam_type)
+      }
+      
+      # EXTRACT AND SAVE THE RELATED COEF AND VCOV
+      
+      # EXTRACT COMPARATIVE METRICS
+      Slist_comp[[i]] <- comp_metrics(model)
+      Slist_model[[i]] <- model
+      
     })
+  
+  
+  # 3. Stage 2: Multivariate Meta-analysis ----
   
   # Meta metrics
   meta_comp <- list()
-  meta_comp[['sum_aic']] <- sum(sapply(list_comp, function(x) x$aic))
-  meta_comp[['sum_pacf']] <- rowMeans(sapply(list_comp, function(x) as.numeric(x$pacf)))
-  meta_comp[['sum_acf']] <- rowMeans(sapply(list_comp, function(x) as.numeric(x$acf)))
+  meta_comp[['sum_aic']] <- sum(sapply(Slist_comp, function(x) x$aic))
+  meta_comp[['sum_pacf']] <- rowMeans(sapply(Slist_comp, function(x) as.numeric(x$pacf)))
+  meta_comp[['sum_acf']] <- rowMeans(sapply(Slist_comp, function(x) as.numeric(x$acf)))
   
-  if (grepl('Variable', test)) {
-    
-    meta_comp[['avg']] <- mean(sapply(list_comp, function(x) x$esti))
-    meta_coef <- get_meta_analysis(pooled=pooled, ymat=ymat,  Slist=Slist, arg_var=arg_var, arg_lag=arg_lag, ranges=ranges, cen=cen)
-    
-  } else {
-    meta_coef <- NULL
-  }
+  # RESET WARNING
+  options(warn=0)
   
-  # Format AIC
-  if(test=='Longterm'){
-    aic_result <- data.frame(paste0(test, ' (',longterm_df,')'), meta_comp[['sum_aic']])
-  } else if (test == 'Autocorrelation') {
-    aic_result <- data.frame(paste0(test, ' (',autocorr_lag,')'), meta_comp[['sum_aic']])
-  } else if (test == 'Variable Lag'){
-    aic_result <- data.frame(paste0(variables, 
-                                    ' (arglag=', arg_lag$fun, '|', arg_lag$df,  ')'), meta_comp[['sum_aic']])
-  } else if (test == 'Variable Shape'){
-    aic_result <- data.frame(paste0(variables, 
-                                    ' (argvar=', arg_var$fun, '|', arg_var$df,')'), meta_comp[['sum_aic']])
-  }
-  names(aic_result) <- c('model','AIC' )
-  
-  return(list(aic_result=aic_result, models=list_model, meta_coef=meta_coef,
-              pacf_result=meta_comp[['sum_pacf']], 
-              acf_result=meta_comp[['sum_acf']]))
+  return(list(models=Slist_model, meta_comp=meta_comp))
   
 }
 
+
 # Function to plot AIC results (comparison)
-plot_AIC_res <- function(modelfitstats, best_fit, main_title){
+plot_AIC_res <- function(modelfitstats, title, best_fit, xlab='Degrees of freedom'){
   
   modelfitstats$highlight <- ifelse(modelfitstats$model == best_fit, 'yes', 'no')
   
@@ -179,14 +179,55 @@ plot_AIC_res <- function(modelfitstats, best_fit, main_title){
     geom_line(color='grey20') +
     geom_point(aes(color=highlight), size=3) +
     scale_color_manual(values=c('no'='black', 'yes'='red')) +
-    labs(title=main_title,
-         y='AIC') +
+    labs(title=title,
+         y='Sum of AIC', x=xlab) +
     theme_classic() +
     theme(
       axis.line=element_line(color='gray20'),
       axis.text=element_text(color='gray20'),
-      axis.text.x=element_text(angle=45, hjust=1),
-      axis.title.x =element_blank(),
+      # axis.text.x=element_text(angle=45, hjust=1),
+      # axis.title.x =element_blank(),
+      axis.ticks=element_line(color='gray20'),
+      plot.title=element_text(face='bold', hjust=0.5, size=12),
+      legend.position='none'  # hide legend if not needed
+    )
+  return(p)
+  
+}
+
+# Function to plot average estimates results (comparison)
+plot_ESTI_res <- function(modelfitstats, exp){
+  
+  if(exp=='tmp'){
+    y <- 'Average temperature estimates'
+    modelfitstats$exp <- modelfitstats$avg_tmp
+  } else {
+    y <- 'Average precipitation estimates'
+    modelfitstats$exp <- modelfitstats$avg_tp
+  }
+  
+  best_fit <- if (mean(modelfitstats$AIC) < 0) {
+    modelfitstats[which.max(modelfitstats$AIC), ]$model
+  } else {
+    modelfitstats[which.min(modelfitstats$AIC), ]$model
+  }
+  
+  modelfitstats$highlight <- ifelse(modelfitstats$model == best_fit, 'yes', 'no')
+  
+  # Preserve original order
+  modelfitstats$model <- factor(modelfitstats$model, levels=modelfitstats$model)
+  
+  # Plot with highlighted point
+  p <- ggplot(modelfitstats, aes(x=model, y=exp, group=1)) +
+    geom_line(color='grey20') +
+    geom_point(aes(color=highlight), size=3) +
+    scale_color_manual(values=c('no'='black', 'yes'='red')) +
+    labs(title=NULL, y=y, x='Degree of freedom') +
+    theme_classic() +
+    theme(
+      axis.line=element_line(color='gray20'),
+      axis.text=element_text(color='gray20'),
+      # axis.text.x=element_text(angle=45, hjust=1),
       axis.ticks=element_line(color='gray20'),
       plot.title=element_text(face='bold', hjust=0.5, size=12),
       legend.position='none'  # hide legend if not needed
@@ -209,40 +250,50 @@ m <- length(locations)
 sens_res <- list()
 start <- Sys.time()
 outcome <- 'total_patients'
-var <- c('mx2t', 'tp', 'fg10')
 
 # 1. (Longterm) Test time df for capturing long-term/seasonal ####
 
 test_longterm <- function(df, outcome, pooled=TRUE){
   
   if(length(unique(df$location)) !=1 ){
-    title <- 'Pooled AIC: Long-term Seasonality'
+    title <-  'Pooled AIC & Estimates: Long-term seasonality'
   } else{
-    if(outcome == 'total_patients'){
-      title <- as.character(unique(df$location))
-    } else {
-      title <- 'Emergency AIC: Long-term Seasonality'
-    }
+    title <- as.character(unique(df$location))
   }
   
-  setNames(modelfitstats <- data.frame(matrix(NA,0,2)),c('model', 'AIC' ))
-  for(i in 1:10){
-    test_result <- get_parameter_test(data=df, locations=locations, outcome=outcome, pooled=pooled,
-                                      test='Longterm', longterm_df=i)
-    modelfitstats <- rbind(modelfitstats, test_result$aic_result)
+  modelfitstats <- data.frame()
+  for (i in 1:10) {
+    test_result <- run_param(data=df, locations=locations, outcome=outcome, 
+                             pooled=pooled, longterm_df=i, autocorr_lag=0,
+                             control_test='None')
+    modelfitstats <- rbind(modelfitstats, data.frame(
+      model  =i,
+      AIC    =test_result$meta_comp$sum_aic
+      # avg_tmp=test_result$meta_comp$avg_tmp,
+      # avg_tp =test_result$meta_comp$avg_tp
+    ))
   }
+  
+  # Get AIC
   best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-  aic_plot <- plot_AIC_res(modelfitstats, best_fit, title)
+  aic_plot <- plot_AIC_res(modelfitstats, title, best_fit)
+  # # Get avg tmp
+  # esti_tmp_plot <- plot_ESTI_res(modelfitstats, exp='tmp')
+  # esti_tp_plot <- plot_ESTI_res(modelfitstats, exp='tp')
+  # Combine plots
+  # all_plot <- wrap_plots(list(aic_plot+theme(plot.title=element_blank()), esti_tmp_plot, esti_tp_plot), nrow=1)  &
+  #   plot_annotation(title=title,theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
+  
   modelfitstats <- modelfitstats %>% arrange(AIC)
   num <- as.numeric(sub('.*\\((\\d+)\\).*', '\\1', best_fit))
   num[is.na(num)] <- 1
   
-  return(list(modelfitstats=modelfitstats, aic_plot=aic_plot, best_fit=num))
+  return(list(modelfitstats=modelfitstats, best_fit=num, aic_plot=aic_plot))
 }
 
 # Pooled tests
 sens_res$pooled$longterm$res <- test_longterm(df, outcome, pooled=TRUE)
-sens_res$pooled$longterm$aic <- sens_res$pooled$longterm$res$aic_plot
+pool_longterm_aic <- sens_res$pooled$longterm$res$aic_plot
 
 # Site specific tests
 city_longterm_res <- list()
@@ -252,53 +303,39 @@ for (l in locations){
   city_longterm_res[[l]] <- res
   print(l)
 }
-city_longterm_aic <- wrap_plots(map(city_longterm_res, 'aic_plot'), nrow=2) &
-    plot_annotation(title='City-specific AIC: Long-term seasonality',
-    theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
 sens_res$city$longterm$res <- city_longterm_res
-sens_res$city$longterm$aic <- city_longterm_aic
+city_longterm_aic <- wrap_plots(map(city_longterm_res, 'aic_plot'), nrow=2) &
+    plot_annotation(title='City-specific AIC & Estimates: Long-term seasonality',
+    theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
 
-# Emergency ward tests
-l <- 'Hamirpur'
-sub <- df %>% filter(location==l)
-res <- test_longterm(sub, outcome='emergency', pooled=FALSE)
-sens_res$emergency$longterm$res <- res
-sens_res$emergency$longterm$aic <- res$aic_plot
 
 # EXPORT
-sens_analysis <- list('1A_pooled_longterm_AIC'=list(p=sens_res$pooled$longterm$aic, w=6, h=4),
-                      '1B_emg_longterm_AIC'=list(p=sens_res$emergency$longterm$aic, w=6, h=4),
-                      '1C_city_longterm_AIC'=list(p=sens_res$city$longterm$aic, w=12, h=8))
+sens_analysis <- list('1A_pooled_longterm_AIC'=list(p=pool_longterm_aic, w=6, h=4),
+                      '1B_city_longterm_AIC'=list(p=city_longterm_aic, w=15, h=8))
 for (n in names(sens_analysis)) {
-  ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/fig_', n, '.png'), 
+  ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/SM_', n, '.png'), 
          plot=sens_analysis[[n]]$p, width=sens_analysis[[n]]$w,height=sens_analysis[[n]]$h, dpi=300)
   print(n)
 }
 
-# Check results (update best fit params based on outputs)
-sens_res$pooled$longterm$aic
-sens_res$emergency$longterm$aic
-sens_res$city$longterm$aic
-
-# Updates
-updates <- list('Chamba' = 7, 'Dharamshala' = 8, 'Hamirpur' = 9, 'Kullu' = 9,
-                'Nahan' = 9, 'Reckong Peo' = 7, 'Solan' = 6, 'Una' = 8)
-for(l in locations){
-  sens_res$city$longterm$res[[l]]$best_fit <- updates[[l]]
-}
-sens_res$pooled$longterm$res$best_fit <- 8
-sens_res$emergency$longterm$res$best_fit <- 8
-
+# # Updates
+# sens_res$pooled$longterm$res$best_fit <- 8
+# sens_res$emergency$longterm$res$best_fit <- 9
+# updates <- list('Una'=10, 'Kangra'=8, 'Nahan'=8, 'Hamirpur'=8, 'Mandi'=8,
+#                 'Chamba'=7, 'Dharamshala'=8, 'Solan'=6, 'Kullu'=8, 'Reckong Peo'=8)
+# for(l in locations){
+#   sens_res$city$longterm$res[[l]]$best_fit <- updates[[l]]
+# }
 
 # 2. (Autocorr) Test autocorrelation of hospital admissions #####
 
 test_autocorr <- function(df, outcome, pooled=TRUE){
   
   # Function to plot pooled ACF/PACF results
-  plot_pooled_acf <- function(test_result, plot='PACF', name=NULL){
+  plot_pooled_acf <- function(test_result, plot='PACF', name=NULL, num=NULL){
     
     # Conditionally set plot
-    value_col <- if(plot=='ACF') test_result$acf_result else test_result$pacf_result
+    value_col <- if(plot=='ACF') test_result$meta_comp$sum_acf else test_result$meta_comp$sum_pacf
     if(plot=='ACF') value_col <- value_col[-1]   # Skip lag 0 for ACF
     
     # Set data frame
@@ -306,7 +343,7 @@ test_autocorr <- function(df, outcome, pooled=TRUE){
     n_obs <- sum(sapply(test_result$models, function(m) length(m$residuals)))
     
     # Title
-    num <- as.numeric(sub('.*\\((\\d+)\\).*', '\\1', test_result$aic_result$model))
+    num <- as.numeric(sub('.*\\((\\d+)\\).*', '\\1', num))
     
     # Plot
     ggplot(df, aes(x=Lag, y=Value)) +
@@ -322,65 +359,75 @@ test_autocorr <- function(df, outcome, pooled=TRUE){
         axis.text=element_text(color='black'),
         plot.title=element_text(size=12, face='bold', hjust=0.5)
       ) +
-      coord_cartesian(ylim = c(-0.2, 0.2), xlim=c(0, 30)) +
+      coord_cartesian(ylim=c(-0.2, 0.2), xlim=c(0, 30)) +
       scale_x_continuous(breaks=round(seq(0, max(df$Lag), length.out=6)))
   }
   
   # Select best params from previous tests
   if(pooled==TRUE){
-    title <- 'Pooled AIC: Autocorrelation lags'
+    title <- 'Pooled AIC'
     longterm_df <- sens_res$pooled$longterm$res$best_fit
     name <- 'Pooled'
   } else{
-    if(outcome == 'total_patients'){
-      title <- as.character(unique(df$location))
-      longterm_df <- sens_res$city$longterm$res[[title]]$best_fit
-      name <- title
-    } else {
-      title <- 'Emergency AIC: Autocorrelation lags'
-      longterm_df <- sens_res$emergency$longterm$res$best_fit
-      name <- 'Emergency'
-    }
+    title <- as.character(unique(df$location))
+    longterm_df <- sens_res$city$longterm$res[[title]]$best_fit
+    name <- title
   }
   
   # Visualize ACF/PACF plot
-  test_result <- get_parameter_test(data=df, locations=locations, outcome=outcome, pooled=pooled, 
-                                    longterm_df=longterm_df,
-                                    test='Autocorrelation', autocorr_lag=0)
-  acf_plot_raw <- plot_pooled_acf(test_result, plot='ACF', name=name)
-  pacf_plot_raw <- plot_pooled_acf(test_result, plot='PACF', name=name)
+  test_result <- run_param(data=df, locations=locations, outcome=outcome, 
+                         pooled=pooled, longterm_df=longterm_df, autocorr_lag=0)
+  
+  acf_plot_raw <- plot_pooled_acf(test_result, plot='ACF', name=name, num=0)
+  pacf_plot_raw <- plot_pooled_acf(test_result, plot='PACF', name=name, num=0)
   
   # Assess 1st AR lag term
-  setNames(modelfitstats <- data.frame(matrix(NA,0,2)),c('model', 'AIC' ))
-  for(i in 0:14){
-    test_result <- get_parameter_test(data=df, locations=locations, outcome=outcome, pooled=pooled, 
-                                      longterm_df=longterm_df,
-                                      test='Autocorrelation', autocorr_lag=i)
-    modelfitstats <- rbind(modelfitstats, test_result$aic_result)
+  modelfitstats <- data.frame()
+  for (i in 1:14) {
+    test_result <- run_param(data=df, locations=locations, outcome=outcome, 
+                             pooled=pooled, longterm_df=longterm_df, autocorr_lag=i)
+    
+    modelfitstats <- rbind(modelfitstats, data.frame(
+      model  =i,
+      AIC    =test_result$meta_comp$sum_aic
+      # avg_tmp=test_result$meta_comp$avg_tmp,
+      # avg_tp =test_result$meta_comp$avg_tp
+    ))
   }
+  
+  # Get AIC
   best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-  aic_plot <- plot_AIC_res(modelfitstats, best_fit, title)
+  aic_plot <- plot_AIC_res(modelfitstats, title, best_fit, 'Autocorrelation Lag')
+  # Get avg tmp
+  # esti_tmp_plot <- plot_ESTI_res(modelfitstats, exp='tmp')
+  # esti_tp_plot <- plot_ESTI_res(modelfitstats, exp='tp')
+  # # Combine plots
+  # all_plot <- wrap_plots(list(aic_plot+theme(plot.title=element_blank()), esti_tmp_plot, esti_tp_plot), nrow=1)  &
+  #   plot_annotation(title=title,theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
+  
   modelfitstats <- modelfitstats %>% arrange(AIC)
   num <- as.numeric(sub('.*\\((\\d+)\\).*', '\\1', best_fit))
   num[is.na(num)] <- 1
   
   # Visualize final PACF plot
-  test_result <- get_parameter_test(data=df, locations=locations, outcome=outcome, pooled=pooled,
-                                    longterm_df=longterm_df,
-                                    test='Autocorrelation', autocorr_lag=num)
-  acf_plot_fin <- plot_pooled_acf(test_result, plot='ACF', name=name)
-  pacf_plot_fin <- plot_pooled_acf(test_result, plot='PACF', name=name)
-  AIC_ACF <- acf_plot_raw + acf_plot_fin + plot_layout(ncol=2)
-  AIC_PACF <- pacf_plot_raw + pacf_plot_fin + plot_layout(ncol=2)
+  test_result <- run_param(data=df, locations=locations, outcome=outcome, pooled=pooled, autocorr_lag=num)
+  acf_plot_fin <- plot_pooled_acf(test_result, plot='ACF', name=name, num)
+  pacf_plot_fin <- plot_pooled_acf(test_result, plot='PACF', name=name, num)
   
-  return(list(modelfitstats=modelfitstats, aic_plot=aic_plot, best_fit=num, 
+  AIC_ACF <- list(); AIC_PACF <- list()
+  AIC_ACF$raw <- acf_plot_raw
+  AIC_ACF$fin <- acf_plot_fin
+  AIC_PACF$raw <- pacf_plot_raw
+  AIC_PACF$fin <- pacf_plot_fin
+  AIC_ACF$all <- acf_plot_raw + acf_plot_fin + plot_layout(ncol=2)
+  AIC_PACF$all <- pacf_plot_raw + pacf_plot_fin + plot_layout(ncol=2)
+  
+  return(list(modelfitstats=modelfitstats,  best_fit=num, aic_plot=aic_plot,
               AIC_ACF=AIC_ACF, AIC_PACF=AIC_PACF))
 }
 
 # Pooled tests
 sens_res$pooled$autocorr$res <- test_autocorr(df, outcome, pooled=TRUE)
-sens_res$pooled$autocorr$aic <- sens_res$pooled$autocorr$res$aic_plot
-sens_res$pooled$autocorr$acf <- sens_res$pooled$autocorr$res$AIC_ACF
 
 # Site specific tests
 city_autocorr_res <- list()
@@ -390,383 +437,151 @@ for (l in locations){
   city_autocorr_res[[l]] <- res
   print(l)
 }
-city_autocorr_aic <- wrap_plots(map(city_autocorr_res, 'aic_plot'), nrow=2) &
-    plot_annotation(title='City-specific AIC: Autocorrelation lags',
-                    theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
-city_autocorr_acf <- (wrap_plots(map(city_autocorr_res, "AIC_ACF"), nrow = 4) & theme(axis.title.x = element_blank()))  +
-  plot_annotation(
-    title = "City-specific ACF Comparison",
-    theme = theme(plot.title = element_text(hjust = 0.5, face = "bold"))
-  )
 sens_res$city$autocorr$res <- city_autocorr_res
-sens_res$city$autocorr$aic <- city_autocorr_aic
-sens_res$city$autocorr$acf <- city_autocorr_acf
+city_autocorr_aic <- wrap_plots(map(city_autocorr_res, 'aic_plot'), nrow=2) &
+  plot_annotation(title='City-specific AIC: Autocorrelation lags',
+                  theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
+city_autocorr_acf <- (wrap_plots(map(map(city_autocorr_res, "AIC_ACF"), 'all'), nrow=4) & theme(axis.title.x=element_blank()))  +
+  plot_annotation(
+    title="City-specific ACF Comparison",
+    theme=theme(plot.title=element_text(hjust=0.5, face="bold"))
+  )
 
-# Emergency ward tests
-l <- 'Hamirpur'
-sub <- df %>% filter(location==l)
-res <- test_autocorr(sub, outcome='emergency', pooled=FALSE)
-sens_res$emergency$autocorr$res <- res
-sens_res$emergency$autocorr$aic <- res$aic_plot
-sens_res$emergency$autocorr$acf <- res$AIC_ACF
+# ALL plots for appendix
+all <- list(sens_res$pooled$autocorr$res$aic_plot, sens_res$pooled$autocorr$res$AIC_ACF$raw, sens_res$pooled$autocorr$res$AIC_ACF$fin)
+pooled_autocorr <- (wrap_plots(all, nrow=1))  +
+  plot_annotation(
+    tag_levels = 'A',
+    theme=theme(plot.title=element_text(hjust=0.5, face="bold"))
+  )
+
 
 # EXPORT
-sens_analysis <- list('2A_pooled_autocorr_AIC'=list(p=sens_res$pooled$autocorr$aic, w=6, h=4),
-                      '2A_pooled_autocorr_ACF'=list(p=sens_res$pooled$autocorr$acf, w=6, h=4),
-                      '2B_emg_autocorr_AIC'=list(p=sens_res$emergency$autocorr$aic, w=6, h=4),
-                      '2B_emg_autocorr_ACF'=list(p=sens_res$emergency$autocorr$acf, w=6, h=4),
-                      '2C_city_autocorr_AIC'=list(p=sens_res$city$autocorr$aic, w=12, h=8),
-                      '2C_city_autocorr_ACF'=list(p=sens_res$city$autocorr$acf, w=12, h=12))
+sens_analysis <- list('2A_pooled_autocorr_ALL'=list(p=pooled_autocorr, w=12, h=4),
+                      '2A_pooled_autocorr_AIC'=list(p=sens_res$pooled$autocorr$res$aic_plot, w=6, h=4),
+                      '2A_pooled_autocorr_ACF'=list(p=sens_res$pooled$autocorr$res$AIC_ACF$all, w=6, h=4),
+                      '2B_city_autocorr_AIC'=list(p=city_autocorr_aic, w=12, h=8),
+                      '2B_city_autocorr_ACF'=list(p=city_autocorr_acf, w=12, h=12))
 
 for (n in names(sens_analysis)) {
-  ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/fig_', n, '.png'), 
+  ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/SM_', n, '.png'), 
          plot=sens_analysis[[n]]$p, width=sens_analysis[[n]]$w,height=sens_analysis[[n]]$h, dpi=300)
   print(n)
 }
 
-# Check results (update best fit params based on outputs)
-sens_res$pooled$autocorr$aic
-sens_res$emergency$autocorr$aic
-sens_res$city$autocorr$aic
-sens_res$city$autocorr$res$Kullu$aic_plot
-sens_res$city$autocorr$res$`Reckong Peo`$aic_plot
-sens_res$city$autocorr$res$Solan$aic_plot
-sens_res$city$autocorr$res$Una$aic_plot
+# # Updates
+# sens_res$pooled$autocorr$res$best_fit <- 14
+# sens_res$emergency$autocorr$res$best_fit <- 14
+# updates <- list('Una'=14, 'Kangra'=14, 'Nahan'=14, 'Hamirpur'=14, 'Mandi'=10,
+#                 'Chamba'=14, 'Dharamshala'=1, 'Solan'=11, 'Kullu'=14, 'Reckong Peo'=10)
+# for(l in locations){
+#   sens_res$city$autocorr$res[[l]]$best_fit <- updates[[l]]
+# }
 
-# Updates
-updates <- list('Chamba' = 13, 'Dharamshala' =13, 'Hamirpur' = 11, 'Kullu' = 14,
-                'Nahan' = 8, 'Reckong Peo' = 10, 'Solan' = 1, 'Una' = 14)
-for(l in locations){
-  sens_res$city$autocorr$res[[l]]$best_fit <- updates[[l]]
-}
-sens_res$pooled$autocorr$res$best_fit <- 14
-sens_res$emergency$autocorr$res$best_fit <- 14
+# 3. (Var) Test added value of each weather variable within model ####
 
-# 3. (ArgLag) Test single weather variables for lag structures ####
-
-test_arglag <- function(df, outcome, pooled, var){
+test_var <- function (df, outcome, exp, pooled=TRUE){
   
   # Select best params from previous tests
   if(pooled==TRUE){
-    title <- replace_exact_matches(var, nm)
+    title <-  paste0('Pooled AIC & Estimates: Time-varying confounders (', 
+                     replace_exact_matches(exp, nm), ')')
     longterm_df <- sens_res$pooled$longterm$res$best_fit
     autocorr_lag <- sens_res$pooled$autocorr$res$best_fit
   } else{
-    if(outcome == 'total_patients'){
-      title <- as.character(unique(df$location))
-      longterm_df <- sens_res$city$longterm$res[[title]]$best_fit
-      autocorr_lag <- sens_res$city$autocorr$res[[title]]$best_fit
-    } else {
-      title <- replace_exact_matches(var, nm)
-      longterm_df <- sens_res$emergency$longterm$res$best_fit
-      autocorr_lag <- sens_res$emergency$autocorr$res$best_fit
-    }
+    title <- as.character(unique(df$location))
+    longterm_df <- sens_res$city$longterm$res[[title]]$best_fit
+    autocorr_lag <- sens_res$city$longterm$res[[title]]$best_fit
   }
 
-  setNames(modelfitstats <- data.frame(matrix(NA,0,2)),c('model', 'AIC' ))
-  for(i in 3:6){
-    print(i)
-    test_result <- get_parameter_test(data=df, locations=locations, outcome=outcome, pooled=pooled,
-                                      longterm_df=longterm_df, autocorr_lag=autocorr_lag,
-                                      test='Variable Lag' , variables=c(var), 
-                                      arg_lag=list(fun='ns', df=i),
-                                      arg_var=list(fun='ns', df=4))
-    modelfitstats <- rbind(modelfitstats, test_result$aic_result)
-  }
-  best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-  aic_plot <- plot_AIC_res(modelfitstats, best_fit, title)
-  modelfitstats <- modelfitstats %>% arrange(AIC)
-  num <- as.numeric(sub('.*\\|(\\d+)\\).*', '\\1', best_fit))
-  num[is.na(num)] <- 1
+  lag_df <- 4; var_df <- 3
+  settings <- list(
+    C0=list(test='None'),
+    C1=list(test='Single Lag',                 arg_var=1),
+    C2=list(test='Moving Average',             arg_var=1),
+    C3=list(test='Exponential Moving Average', arg_var=1),
+    C4=list(test='Distributed Lag',            arg_var=1, arg_lag=lag_df),
+    C5=list(test='Single Lag',                 arg_var=var_df),
+    C6=list(test='Moving Average',             arg_var=var_df),
+    C7=list(test='Exponential Moving Average', arg_var=var_df),
+    C8=list(test='Distributed Lag',            arg_var=var_df, arg_lag=lag_df)
+  )
   
-  return(list(modelfitstats=modelfitstats, aic_plot=aic_plot, best_fit=num))
-}
+  modelfitstats <- data.frame()
+  for (cname in names(settings)) {
+    
+    s <- settings[[cname]]
+    cat('\n[', cname, '-', s$test, ']\n')
+    
+    if (cname == 'C0') {
 
-# Pooled tests
-pooled_arglag_res <- list()
-for (v in var){
-  print(v)
-  pooled_arglag_res[[v]] <- test_arglag(df, outcome, pooled=TRUE, v)
-}
-pooled_arglag_aic <- wrap_plots(map(pooled_arglag_res, 'aic_plot'), nrow=1) &
-   plot_annotation(title='Pooled AIC: Variable lag | df',
-                   theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
-sens_res$pooled$arglag$res <- pooled_arglag_res
-sens_res$pooled$arglag$aic <- pooled_arglag_aic
-
-# Site specific tests
-city_arglag_res <- list()
-city_arglag_aic <- list()
-for (v in var){
-  print(v)
-  for (l in locations){
-    sub <- df %>% filter(location==l)
-    city_arglag_res[[v]][[l]] <- test_arglag(sub, outcome, pooled=FALSE, v)
-    print(l)
+      test_result <- run_param(data=df, locations=locations, outcome=outcome, 
+                               pooled=pooled, longterm_df=longterm_df, autocorr_lag=autocorr_lag,
+                               control_test=s$test, var_test=exp)
+      
+    } else {
+      test_result <- run_param(data=df, locations=locations, outcome=outcome, 
+                               pooled=pooled, longterm_df=longterm_df, autocorr_lag=autocorr_lag,
+                               control_test=s$test, var_test=exp, 
+                               argvar_var=s$arg_var, arglag_var=s$arg_lag)
+    }
+    
+    modelfitstats <- rbind(modelfitstats, data.frame(
+      model  =cname,
+      AIC    =test_result$meta_comp$sum_aic
+      # avg_tmp=test_result$meta_comp$avg_tmp,
+      # avg_tp =test_result$meta_comp$avg_tp
+    )) 
+    
   }
-  city_arglag_aic[[v]] <- wrap_plots(map(city_arglag_res[[v]], 'aic_plot'), nrow=2) &
-    plot_annotation(title=paste0('City-specific AIC: ', replace_exact_matches(v, nm),' lag | df'),
-                    theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
-}
-sens_res$city$arglag$res <- city_arglag_res
-sens_res$city$arglag$aic <- city_arglag_aic
 
-# Emergency ward tests
-l <- 'Hamirpur'
-sub <- df %>% filter(location==l)
-emg_arglag_res <- list()
-for (v in var){
-  print(v)
-  emg_arglag_res[[v]] <- test_arglag(sub, outcome='emergency', pooled=FALSE, v)
+  # Get AIC
+  best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
+  aic_plot <- plot_AIC_res(modelfitstats, title, best_fit, xlab='Model')
+  # Get avg tmp
+  # esti_tmp_plot <- plot_ESTI_res(modelfitstats, exp='tmp')
+  # esti_tp_plot <- plot_ESTI_res(modelfitstats, exp='tp')
+  # Combine plots
+  # all_plot <- wrap_plots(list(aic_plot+theme(plot.title=element_blank()), esti_tmp_plot, esti_tp_plot), nrow=1)  &
+  #   plot_annotation(title=title,theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
+
+  modelfitstats <- modelfitstats %>% arrange(AIC)
+
+  return(list(modelfitstats=modelfitstats, best_fit=best_fit, aic_plot=aic_plot))
+
 }
-emg_arglag_aic <- wrap_plots(map(emg_arglag_res, 'aic_plot'), nrow=1) &
-  plot_annotation(title='Emergency AIC: Variable lag | df',
+
+controls <- c('mx2t', 'tp', 'pm25', 'fg10', 'rh')
+results <- list()
+for (c in controls){
+  
+  print(c)
+  results[[c]] <- test_var(df, outcome, exp=c, pooled=TRUE)
+  
+}
+
+sens_res$pooled$confound$res <- results
+
+plots <- map(results, 'aic_plot')
+titles <- replace_exact_matches(controls, nm)
+pool_confound_aic <- wrap_plots(map2(plots, titles, \(p, t) p + ggtitle(t)), nrow=2) &
+  plot_annotation(title='Pooled AIC: Time-varying exposures',
                   theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
-sens_res$emergency$arglag$res <- emg_arglag_res
-sens_res$emergency$arglag$aic <- emg_arglag_aic
-
 
 # EXPORT
-sens_analysis <- list('3A_pooled_arglag_AIC'=list(p=sens_res$pooled$arglag$aic, w=8, h=4),
-                      '3B_emg_arglag_AIC'=list(p=sens_res$emergency$arglag$aic, w=8, h=4),
-                      '3C_city_arglag1_mx2t_AIC'=list(p=sens_res$city$arglag$aic$mx2t, w=12, h=8),
-                      '3C_city_arglag2_tp_AIC'=list(p=sens_res$city$arglag$aic$tp, w=12, h=8),
-                      '3C_city_arglag3_fg10_AIC'=list(p=sens_res$city$arglag$aic$fg10, w=12, h=8))
-
+sens_analysis <- list('3A_pooled_confound_ALL'=list(p=pool_confound_aic, w=15, h=5))
 for (n in names(sens_analysis)) {
-  ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/fig_', n, '.png'), 
+  ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/SM_', n, '.png'), 
          plot=sens_analysis[[n]]$p, width=sens_analysis[[n]]$w,height=sens_analysis[[n]]$h, dpi=300)
   print(n)
 }
 
-# Check results (update best fit params based on outputs)
-sens_res$pooled$arglag$aic
-sens_res$emergency$arglag$aic
-sens_res$city$arglag$aic
 
-# Updates
-updates <- list(
-  'mx2t' = list('pooled' = 4, 'emergency'=3, 'Chamba' = 4, 'Dharamshala' = 5, 'Hamirpur' = 4, 'Kullu' = 4, 'Nahan' = 4, 'Reckong Peo' = 3, 'Solan' = 4, 'Una' = 3),
-  'tp'   = list('pooled' = 4, 'emergency'=3, 'Chamba' = 5, 'Dharamshala' = 4, 'Hamirpur' = 4, 'Kullu' = 4, 'Nahan' = 3, 'Reckong Peo' = 3, 'Solan' = 4, 'Una' = 3),
-  'fg10' = list('pooled' = 4, 'emergency'=3, 'Chamba' = 3, 'Dharamshala' = 4, 'Hamirpur' = 3, 'Kullu' = 3, 'Nahan' = 4, 'Reckong Peo' = 3, 'Solan' = 4, 'Una' = 5)
-)
-for (v in var){
-  sens_res$pooled$arglag$res[[v]]$best_fit <- updates[[v]]$pooled
-  sens_res$emergency$arglag$res[[v]]$best_fit <- updates[[v]]$emergency
-  for(l in locations){
-    sens_res$city$arglag$res[[v]][[l]]$best_fit <- updates[[v]][[l]]
-  }
-}
-
-# 4. (ArgVar) Test single weather variables for shape structures ####
-
-test_argvar <- function(df, outcome, pooled, var){
-  
-  # Select best params from previous tests
-  if(pooled==TRUE){
-    city <- 'ALL'
-    p <- 'p_raw'
-    title <- replace_exact_matches(var, nm)
-    longterm_df <- sens_res$pooled$longterm$res$best_fit
-    autocorr_lag <- sens_res$pooled$autocorr$res$best_fit
-    arglag_df <- sens_res$pooled$arglag$res[[var]]$best_fit
-  } else{
-    city <- as.character(unique(df$location))
-    p <- 'p_raw'    
-    if(outcome == 'total_patients'){
-      title <- city
-      longterm_df <- sens_res$city$longterm$res[[city]]$best_fit
-      autocorr_lag <- sens_res$city$autocorr$res[[city]]$best_fit
-      arglag_df <- sens_res$city$arglag$res[[var]][[city]]$best_fit
-    } else {
-      title <- replace_exact_matches(var, nm)
-      longterm_df <- sens_res$emergency$longterm$res$best_fit
-      autocorr_lag <- sens_res$emergency$autocorr$res$best_fit
-      arglag_df <- sens_res$emergency$arglag$res[[var]]$best_fit
-    }
-  }
-  
-  reference <- ifelse(var %in% c("tp", "fg10"), "0%", "50%")
-  
-
-  color <- as.character(c(mx2t='#D74B3C', tp='#1D98EB', fg10='#8968CD')[var] %||% 'black')
-  
-  var_shp <- list()
-  setNames(modelfitstats <- data.frame(matrix(NA,0,2)),c('model', 'AIC' ))
-  test_result <- get_parameter_test(data=df, locations=locations, outcome=outcome, pooled=pooled, 
-                                    longterm_df=longterm_df, autocorr_lag=autocorr_lag,
-                                    arg_lag=list(fun='ns', df=arglag_df),
-                                    test='Variable Shape', variables=c(var), 
-                                    arg_var=list(fun='lin'))
-  modelfitstats <- rbind(modelfitstats, test_result$aic_result)
-  var_shp[['Linear']] <- city_exp_res(city=city, lag=NULL, meta=test_result$meta_coef, col=color, xlab=paste0(replace_exact_matches(var, nm), ' - %'), title='Linear', reference=reference)[[p]]
-  for (j in 3:6){ # test exp-resp dfs (between 3 and 8 as per lit)
-    print(j)
-    name <- paste0('NS df=', j)
-    test_result <- get_parameter_test(data=df, locations=locations, outcome=outcome, pooled=pooled,
-                                      longterm_df=longterm_df, autocorr_lag=autocorr_lag,
-                                      arg_lag=list(fun='ns', df=arglag_df),
-                                      test='Variable Shape' , variables=c(var), 
-                                      arg_var=list(fun='ns', df=j))
-    modelfitstats <- rbind(modelfitstats, test_result$aic_result)
-    var_shp[[name]] <- city_exp_res(city=city, lag=NULL, meta=test_result$meta_coef, col=color, xlab=paste0(replace_exact_matches(var, nm), ' - %'), title=name, reference=reference)[[p]]
-  }
-  best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-  aic_plot <- plot_AIC_res(modelfitstats, best_fit, title)
-  dis_plot <- (wrap_plots(var_shp, nrow=2)& theme(legend.position='none')) +
-      plot_annotation(title=title, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-  modelfitstats <- modelfitstats %>% arrange(AIC)
-  num <- as.numeric(sub('.*\\|(\\d+)\\).*', '\\1', best_fit))
-  num[is.na(num)] <- 1
-  
-  return(list(modelfitstats=modelfitstats, aic_plot=aic_plot, dis_plot=dis_plot, best_fit=num))
-}
-
-# Pooled tests
-pooled_argvar_res <- list()
-for (v in var){
-  print(v)
-  pooled_argvar_res[[v]] <- test_argvar(df, outcome, pooled=TRUE, var=v)
-}
-pooled_argvar_aic <- wrap_plots(map(pooled_argvar_res, 'aic_plot'), nrow=1) &
-    plot_annotation(title='Pooled AIC: Variable shape | df',
-                    theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
-pooled_argvar_dis <- wrap_plots(map(pooled_argvar_res, 'dis_plot'), nrow=3) &
-    plot_annotation(title='Pooled Relationship: Variable exposure distribution, by df',
-                    theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
-sens_res$pooled$argvar$res <- pooled_argvar_res
-sens_res$pooled$argvar$aic <- pooled_argvar_aic
-sens_res$pooled$argvar$dis <- pooled_argvar_dis
-
-# Site specific tests
-city_argvar_res <- list()
-city_argvar_aic <- list()
-city_argvar_dis <- list()
-for (v in var){
-  print(v)
-  for (l in locations){
-    sub <- df %>% filter(location==l)
-    city_argvar_res[[v]][[l]] <- test_argvar(df=sub, outcome, pooled=FALSE, var=v)
-    print(l)
-  }
-  city_argvar_aic[[v]] <- wrap_plots(map(city_argvar_res[[v]], 'aic_plot'), nrow=2) &
-    plot_annotation(title=paste0('City-specific AIC: ', replace_exact_matches(v, nm),' shape | df'),
-                    theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
-}
-
-# Get city specific distributions
-for (l in locations){
-  out <- map(city_argvar_res, l)
-  city_argvar_dis[[l]] <- wrap_plots(map(out, 'dis_plot'), ncol=1) &
-    plot_annotation(title=paste0('City-specific shapes, by df: ', l),
-                    theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
-  
-}
-sens_res$city$argvar$res <- city_argvar_res
-sens_res$city$argvar$aic <- city_argvar_aic
-sens_res$city$argvar$dis <- city_argvar_dis
-
-# Emergency ward tests
-l <- 'Hamirpur'
-sub <- df %>% filter(location==l)
-emg_argvar_res <- list()
-for (v in var){
-  print(v)
-  emg_argvar_res[[v]] <- test_argvar(sub, outcome='emergency', pooled=FALSE, v)
-}
-emg_argvar_aic <- wrap_plots(map(emg_argvar_res, 'aic_plot'), nrow=1) &
-  plot_annotation(title='Emergency AIC: Variable shape | df',
-                  theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
-emg_argvar_dis <- wrap_plots(map(emg_argvar_res, 'dis_plot'), nrow=3) &
-  plot_annotation(title='Emergency Relationship: Variable exposure distribution, by df',
-                  theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
-sens_res$emergency$argvar$res <- emg_argvar_res
-sens_res$emergency$argvar$aic <- emg_argvar_aic
-sens_res$emergency$argvar$dis <- emg_argvar_dis
-
-# EXPORT
-sens_analysis <- list('4A_pooled_argvar_AIC'=list(p=sens_res$pooled$argvar$aic, w=8, h=4),
-                      '4A_pooled_argvar_DIS'=list(p=sens_res$pooled$argvar$dis, w=8, h=12),
-                      '4B_emg_argvar_AIC'=list(p=sens_res$emergency$argvar$aic, w=8, h=4),
-                      '4B_emg_argvar_DIS'=list(p=sens_res$emergency$argvar$dis, w=8, h=12),
-                      '4C_city_argvar1_AIC_mx2t'=list(p=sens_res$city$argvar$aic$mx2t, w=12, h=8),
-                      '4C_city_argvar2_AIC_tp'=list(p=sens_res$city$argvar$aic$tp, w=12, h=8),
-                      '4C_city_argvar3_AIC_fg10'=list(p=sens_res$city$argvar$aic$fg10, w=12, h=8))
-
-# AIC
-for (n in names(sens_analysis)) {
-  ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/fig_', n, '.png'), 
-         plot=sens_analysis[[n]]$p, width=sens_analysis[[n]]$w,height=sens_analysis[[n]]$h, dpi=300)
-  print(n)
-}
-# City distributions only
-for (n in names(city_argvar_dis)) {
-  title <- paste0('4C_city_argvar_DIS_',n)
-  ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/fig_', title, '.png'), 
-         plot=city_argvar_dis[[n]], w=8, h=12, dpi=300)
-  print(n)
-}
-
-# Check results (update best fit params based on outputs)
-sens_res$pooled$argvar$aic
-sens_res$pooled$argvar$dis
-sens_res$emergency$argvar$aic
-sens_res$emergency$argvar$dis
-sens_res$city$argvar$aic
-sens_res$city$argvar$dis
-
-# Updates
-updates <- list(
-  'mx2t' = list('pooled' = 3, 'emergency'=1, 'Chamba' = 3, 'Dharamshala' = 4, 'Hamirpur' = 3, 'Kullu' = 3, 'Nahan' = 3, 'Reckong Peo' = 3, 'Solan' = 3, 'Una' = 1),
-  'tp'   = list('pooled' = 1, 'emergency'=1, 'Chamba' = 1, 'Dharamshala' = 3, 'Hamirpur' = 1, 'Kullu' = 1, 'Nahan' = 1, 'Reckong Peo' = 1, 'Solan' = 5, 'Una' = 3),
-  'fg10' = list('pooled' = 1, 'emergency'=1, 'Chamba' = 1, 'Dharamshala' = 1, 'Hamirpur' = 1, 'Kullu' = 1, 'Nahan' = 1, 'Reckong Peo' = 1, 'Solan' = 1, 'Una' = 1)
-)
-
-for (v in var){
-  sens_res$pooled$argvar$res[[v]]$best_fit <- updates[[v]]$pooled
-  sens_res$emergency$argvar$res[[v]]$best_fit <- updates[[v]]$emergency
-  for(l in locations){
-    sens_res$city$argvar$res[[v]][[l]]$best_fit <- updates[[v]][[l]]
-  }
-}
-
-
-# -- Store parameters -- ####
-
-# Get pooled params
-final_params <- list()
-final_params$pooled$longterm <- sens_res$pooled$longterm$res$best_fit
-final_params$pooled$autocorr <- sens_res$pooled$autocorr$res$best_fit
-for(v in var){
-  final_params$pooled$arglag[[v]] <- sens_res$pooled$arglag$res[[v]]$best_fit
-  final_params$pooled$argvar[[v]] <- sens_res$pooled$argvar$res[[v]]$best_fit
-}
-
-# Get city params
-for (l in locations){
-  final_params[[l]]$longterm <- sens_res$city$longterm$res[[l]]$best_fit
-  final_params[[l]]$autocorr <- sens_res$city$autocorr$res[[l]]$best_fit
-  for(v in var){
-    final_params[[l]]$arglag[[v]] <- sens_res$city$arglag$res[[v]][[l]]$best_fit
-    final_params[[l]]$argvar[[v]] <- sens_res$city$argvar$res[[v]][[l]]$best_fit
-  }
-}
-
-# Get emergency params
-final_params$emergency$longterm <- sens_res$emergency$longterm$res$best_fit
-final_params$emergency$autocorr <- sens_res$emergency$autocorr$res$best_fit
-for(v in var){
-  final_params$emergency$arglag[[v]] <- sens_res$emergency$arglag$res[[v]]$best_fit
-  final_params$emergency$argvar[[v]] <- sens_res$emergency$argvar$res[[v]]$best_fit
-}
-
-# 5. (Var) Test added value of each weather variable within model ####
+# 3. (Var) Check added confounder combinations #####
 
 # Function for parameter testing
-get_compvar_test <- function(data, locations, outcome, pooled=TRUE, variables=NULL, v_lag=14, 
-                               longterm_df=8, autocorr_lag=14,
-                               arg_lag=list('mx2t'=3,'tp'=1,'fg10'=3),
-                               arg_var=list('mx2t'=3,'tp'=1,'fg10'=3)){
+get_compvar_test <- function(data, locations, outcome, pooled=TRUE, variables=NULL, v_lag=10,
+                             longterm_df=8, autocorr_lag=14, arg_lag=4, arg_var=3){
   # Build datalist
   datalist <- lapply(locations, function(region) data[data$location == region, ])
   names(datalist) <- locations
@@ -788,11 +603,11 @@ get_compvar_test <- function(data, locations, outcome, pooled=TRUE, variables=NU
   names(list_model) <- locs_used
   
   # PER-VARIABLE reference, ranges, centering, df, and storage objects
-
+  
   # Reference percentile per variable
   reference <- setNames(
     lapply(variables, function(v) {
-      if (v %in% c("tp", "fg10")) "10%" else "50%"
+      if (v %in% c('mx2t', 'rh')) "50%" else "0%"
     }),
     variables
   )
@@ -800,7 +615,7 @@ get_compvar_test <- function(data, locations, outcome, pooled=TRUE, variables=NU
   # Ranges per variable (locations × 2)
   ranges <- setNames(
     lapply(variables, function(v) {
-      t(sapply(datalist, function(x) range(x[[v]], na.rm = TRUE)))
+      t(sapply(datalist, function(x) range(x[[v]], na.rm=TRUE)))
     }),
     variables
   )
@@ -809,29 +624,31 @@ get_compvar_test <- function(data, locations, outcome, pooled=TRUE, variables=NU
   cen <- setNames(
     lapply(variables, function(v) {
       sapply(datalist, function(x) {
-        quantile(x[[v]], c(0:100) / 100, na.rm = TRUE)
+        quantile(x[[v]], c(0:100) / 100, na.rm=TRUE)
       })
     }),
     variables
   )
   
   arg_lag_list <- lapply(arg_lag, function(x) {
-    if (x == 1) list(fun = "lin") else list(fun = "ns", df = x)
+    if (x == 1) list(fun="lin") else list(fun="ns", df=x)
   })
   
   # Build arglag list per variable (always natural spline)
   arg_var_list <- lapply(arg_var, function(x) {
-    list(fun = "ns", df = x)
+    if (x == 1) list(fun="lin") else list(fun="ns", df=x)
   })
   
   # Degrees of freedom per variable (arg_var × arg_lag)
   df <- setNames(
     lapply(variables, function(v) {
-      prod(arg_var[[v]], arg_lag[[v]])
+      var_df  <- if (arg_var[[v]] == 1) 1 else arg_var[[v]]
+      lag_df  <- if (arg_lag[[v]] == 1) 1 else arg_lag[[v]]
+      if (var_df * lag_df == 1) 2 else var_df * lag_df
     }),
     variables
   )
-  
+
   # Storage matrices per variable
   ymat <- setNames(
     lapply(variables, function(v) {
@@ -839,7 +656,7 @@ get_compvar_test <- function(data, locations, outcome, pooled=TRUE, variables=NU
         NA,
         m,
         df[[v]],
-        dimnames = list(locs_used, paste0("spl", seq(df[[v]])))
+        dimnames=list(locs_used, paste0("spl", seq(df[[v]])))
       )
     }),
     variables
@@ -860,7 +677,7 @@ get_compvar_test <- function(data, locations, outcome, pooled=TRUE, variables=NU
   options(warn=-1)
   
   for(i in seq(m)) {
-  
+    
     # PRINT ITERATION
     cat(i,'')
     
@@ -868,16 +685,16 @@ get_compvar_test <- function(data, locations, outcome, pooled=TRUE, variables=NU
     data <- datalist[[i]]
     
     # RUN THE MODEL & EXTRACT COMPARATIVE METRICS
-
-      # Select lags
-      if(autocorr_lag==0){
-        lags <- ''
-      } else {
-        lag_terms <- paste0(outcome, '_lag', 1:autocorr_lag)
-        lags <- paste0('+ ', paste(lag_terms, collapse=' + '))
-      }
-      
-      # Fit cross basis
+    
+    # Select lags
+    if(autocorr_lag==0){
+      lags <- ''
+    } else {
+      lag_terms <- paste0(outcome, '_lag', 1:autocorr_lag)
+      lags <- paste0('+ ', paste(lag_terms, collapse=' + '))
+    }
+    
+    # Fit cross basis
     nvar <- length(variables)
     
     if (nvar == 1) {
@@ -942,11 +759,11 @@ get_compvar_test <- function(data, locations, outcome, pooled=TRUE, variables=NU
         longterm_df, "*", years, ") ",
         lags,
         " + ",
-        cb_terms, '+ rh + pm25'
+        cb_terms
       )
     )
     
-  
+    
     model <- glm(formula=as.formula(baseformula),family=quasipoisson(),data)
     list_comp[[i]] <- comp_metrics(model)
     list_model[[i]] <- model
@@ -954,14 +771,14 @@ get_compvar_test <- function(data, locations, outcome, pooled=TRUE, variables=NU
     # Make predictions
     if (nvar == 1) {
       
-      pred1 <- crosspred(cb1, model, cen = cen[[variables[1]]][reference[[variables[1]]], i])
+      pred1 <- crosspred(cb1, model, cen=cen[[variables[1]]][reference[[variables[1]]], i])
       ymat[[variables[1]]][i, ]  <- pred1$coef
       Slist[[variables[1]]][[i]] <- pred1$vcov
       
     } else if (nvar == 2) {
       
-      pred1 <- crosspred(cb1, model, cen = cen[[variables[1]]][reference[[variables[1]]], i])
-      pred2 <- crosspred(cb2, model, cen = cen[[variables[2]]][reference[[variables[2]]], i])
+      pred1 <- crosspred(cb1, model, cen=cen[[variables[1]]][reference[[variables[1]]], i])
+      pred2 <- crosspred(cb2, model, cen=cen[[variables[2]]][reference[[variables[2]]], i])
       
       ymat[[variables[1]]][i, ]  <- pred1$coef
       Slist[[variables[1]]][[i]] <- pred1$vcov
@@ -970,9 +787,9 @@ get_compvar_test <- function(data, locations, outcome, pooled=TRUE, variables=NU
       
     } else if (nvar == 3) {
       
-      pred1 <- crosspred(cb1, model, cen = cen[[variables[1]]][reference[[variables[1]]], i])
-      pred2 <- crosspred(cb2, model, cen = cen[[variables[2]]][reference[[variables[2]]], i])
-      pred3 <- crosspred(cb3, model, cen = cen[[variables[3]]][reference[[variables[3]]], i])
+      pred1 <- crosspred(cb1, model, cen=cen[[variables[1]]][reference[[variables[1]]], i])
+      pred2 <- crosspred(cb2, model, cen=cen[[variables[2]]][reference[[variables[2]]], i])
+      pred3 <- crosspred(cb3, model, cen=cen[[variables[3]]][reference[[variables[3]]], i])
       
       ymat[[variables[1]]][i, ]  <- pred1$coef
       Slist[[variables[1]]][[i]] <- pred1$vcov
@@ -983,10 +800,10 @@ get_compvar_test <- function(data, locations, outcome, pooled=TRUE, variables=NU
       
     } else if (nvar == 4) {
       
-      pred1 <- crosspred(cb1, model, cen = cen[[variables[1]]][reference[[variables[1]]], i])
-      pred2 <- crosspred(cb2, model, cen = cen[[variables[2]]][reference[[variables[2]]], i])
-      pred3 <- crosspred(cb3, model, cen = cen[[variables[3]]][reference[[variables[3]]], i])
-      pred4 <- crosspred(cb4, model, cen = cen[[variables[4]]][reference[[variables[4]]], i])
+      pred1 <- crosspred(cb1, model, cen=cen[[variables[1]]][reference[[variables[1]]], i])
+      pred2 <- crosspred(cb2, model, cen=cen[[variables[2]]][reference[[variables[2]]], i])
+      pred3 <- crosspred(cb3, model, cen=cen[[variables[3]]][reference[[variables[3]]], i])
+      pred4 <- crosspred(cb4, model, cen=cen[[variables[4]]][reference[[variables[4]]], i])
       
       ymat[[variables[1]]][i, ]  <- pred1$coef
       Slist[[variables[1]]][[i]] <- pred1$vcov
@@ -999,11 +816,11 @@ get_compvar_test <- function(data, locations, outcome, pooled=TRUE, variables=NU
       
     } else if (nvar == 5) {
       
-      pred1 <- crosspred(cb1, model, cen = cen[[variables[1]]][reference[[variables[1]]], i])
-      pred2 <- crosspred(cb2, model, cen = cen[[variables[2]]][reference[[variables[2]]], i])
-      pred3 <- crosspred(cb3, model, cen = cen[[variables[3]]][reference[[variables[3]]], i])
-      pred4 <- crosspred(cb4, model, cen = cen[[variables[4]]][reference[[variables[4]]], i])
-      pred5 <- crosspred(cb5, model, cen = cen[[variables[5]]][reference[[variables[5]]], i])
+      pred1 <- crosspred(cb1, model, cen=cen[[variables[1]]][reference[[variables[1]]], i])
+      pred2 <- crosspred(cb2, model, cen=cen[[variables[2]]][reference[[variables[2]]], i])
+      pred3 <- crosspred(cb3, model, cen=cen[[variables[3]]][reference[[variables[3]]], i])
+      pred4 <- crosspred(cb4, model, cen=cen[[variables[4]]][reference[[variables[4]]], i])
+      pred5 <- crosspred(cb5, model, cen=cen[[variables[5]]][reference[[variables[5]]], i])
       
       ymat[[variables[1]]][i, ]  <- pred1$coef
       Slist[[variables[1]]][[i]] <- pred1$vcov
@@ -1028,50 +845,84 @@ get_compvar_test <- function(data, locations, outcome, pooled=TRUE, variables=NU
   meta_comp[['sum_pacf']] <- rowMeans(sapply(list_comp, function(x) as.numeric(x$pacf)))
   meta_comp[['sum_acf']] <- rowMeans(sapply(list_comp, function(x) as.numeric(x$acf)))
   meta_comp[['avg']] <- mean(sapply(list_comp, function(x) x$esti))
-
+  
   meta_coef <- list()
   for (v in variables) {
-    meta_coef[[v]] <- get_meta_analysis(pooled=pooled, ymat=ymat[[v]],  Slist=Slist[[v]], 
-                                   arg_var=arg_var_list[[v]], arg_lag=arg_lag_list[[v]], ranges=ranges[[v]], cen=cen[[v]])
+    meta_coef[[v]] <- get_meta_analysis(pooled=pooled, ymat=ymat[[v]],  Slist=Slist[[v]],
+                                        arg_var=arg_var_list[[v]], arg_lag=arg_lag_list[[v]], ranges=ranges[[v]], cen=cen[[v]])
   }
   
   # Format AIC
-  aic_result <- data.frame(paste(variables, collapse = "|"), meta_comp[['sum_aic']])
+  aic_result <- data.frame(paste(variables, collapse="|"), meta_comp[['sum_aic']])
   names(aic_result) <- c('model','AIC' )
   
   return(list(aic_result=aic_result, models=list_model, meta_coef=meta_coef,
-              pacf_result=meta_comp[['sum_pacf']], 
+              pacf_result=meta_comp[['sum_pacf']],
               acf_result=meta_comp[['sum_acf']]))
   
 }
 
-arglag <- final_params$pooled$arglag
-argvar <- final_params$pooled$argvar
 
-tmp <- get_compvar_test(df, locations, outcome, pooled=TRUE, variables=c('mx2t'),
-                        arg_lag=list('mx2t'=arglag$mx2t), 
-                        arg_var=list('mx2t'=argvar$mx2t))
-tp <- get_compvar_test(df, locations, outcome, pooled=TRUE, variables=c('tp'),
-                        arg_lag=list('tp'=arglag$tp), 
-                        arg_var=list('tp'=argvar$tp))
-fg10 <- get_compvar_test(df, locations, outcome, pooled=TRUE, variables=c('fg10'),
-                        arg_lag=list('fg10'=arglag$fg10), 
-                        arg_var=list('fg10'=argvar$fg10))
-tmp_tp <- get_compvar_test(df, locations, outcome, pooled=TRUE, variables=c('mx2t', 'tp'),
-                           arg_lag=list('mx2t'=arglag$mx2t,'tp'=arglag$tp),
-                           arg_var=list('mx2t'=argvar$mx2t,'tp'=argvar$tp))
-tmp_fg10 <- get_compvar_test(df, locations, outcome, pooled=TRUE, variables=c('mx2t', 'fg10'),
-                             arg_lag=list('mx2t'=arglag$mx2t,'fg10'=arglag$fg10),
-                             arg_var=list('mx2t'=argvar$mx2t,'fg10'=argvar$fg10))
-tp_fg10 <- get_compvar_test(df, locations, outcome, pooled=TRUE, variables=c('tp', 'fg10'),
-                             arg_lag=list('tp'=arglag$tp,'fg10'=arglag$fg10),
-                             arg_var=list('tp'=argvar$tp,'fg10'=argvar$fg10))
-tmp_tp_fg10 <- get_compvar_test(df, locations, outcome, pooled=TRUE, variables=c('mx2t', 'tp', 'fg10'),
-                           arg_lag=list('mx2t'=arglag$mx2t,'tp'=arglag$tp, 'fg10'=arglag$fg10),
-                           arg_var=list('mx2t'=argvar$mx2t,'tp'=argvar$tp, 'fg10'=argvar$fg10))
+# # Pre-compute EMA columns for any _ema variables
+# df <- df %>%
+#   group_by(location) %>%
+#   mutate(across(all_of(c('pm25', 'rh', 'fg10')), 
+#                 ~ TTR::EMA(zoo::na.approx(.x, na.rm=FALSE), n=14, wilder=FALSE),
+#                 .names = "{.col}_ema")) %>%
+#   mutate(across(all_of(c('rh', 'fg10')), 
+#                 ~ dplyr::lag(.x, n=1),
+#                 .names = "{.col}_lag1")) %>%
+#   ungroup()
+# 
+# 
+# variables_ema<- c('mx2t', 'tp', 'rh_ema', 'fg10_ema', 'pm25_ema')
+# lin_arglag_ema <- list('mx2t'=4, 'tp'=4, 'rh_ema'=1, 'fg10_ema'=1, 'pm25_ema'=1)
+# lin_argvar_ema <- list('mx2t'=3, 'tp'=1, 'rh_ema'=1, 'fg10_ema'=1, 'pm25_ema'=1)
+# nonlin_arglag_ema <- list('mx2t'=4, 'tp'=4, 'rh_ema'=4, 'fg10_ema'=4, 'pm25_ema'=1)
+# nonlin_argvar_ema <- list('mx2t'=3, 'tp'=1, 'rh_ema'=3, 'fg10_ema'=1, 'pm25_ema'=1)
+# 
+# variables_lag <- c('mx2t', 'tp', 'rh_lag1', 'fg10_lag1', 'pm25_ema')
+# lin_arglag_lag <- list('mx2t'=4, 'tp'=4, 'rh_lag1'=1, 'fg10_lag1'=1, 'pm25_ema'=1)
+# lin_argvar_lag <- list('mx2t'=3, 'tp'=1, 'rh_lag1'=1, 'fg10_lag1'=1, 'pm25_ema'=1)
+# nonlin_arglag_lag <- list('mx2t'=4, 'tp'=4, 'rh_lag1'=4, 'fg10_lag1'=4, 'pm25_ema'=1)
+# nonlin_argvar_lag <- list('mx2t'=3, 'tp'=1, 'rh_lag1'=3, 'fg10_lag1'=1, 'pm25_ema'=1)
+# 
+# variables_all <- c('mx2t', 'tp', 'rh', 'fg10', 'pm25_ema')
+# lin_arglag <- list('mx2t'=4, 'tp'=4, 'rh'=1, 'fg10'=1, 'pm25_ema'=1)
+# lin_argvar <- list('mx2t'=3, 'tp'=1, 'rh'=1, 'fg10'=1, 'pm25_ema'=1)
+# nonlin_arglag <- list('mx2t'=4, 'tp'=4, 'rh'=4, 'fg10'=4, 'pm25_ema'=1)
+# nonlin_argvar <- list('mx2t'=3, 'tp'=1, 'rh'=3, 'fg10'=1, 'pm25_ema'=1)
+# 
+# 
+# scenarios <- list(
+#   linear     = list(vars=variables_all, arglag=lin_arglag,    argvar=lin_argvar),
+#   nonlinear  = list(vars=variables_all, arglag=nonlin_arglag, argvar=nonlin_argvar),
+#   linear_lag = list(vars=variables_lag, arglag=lin_arglag_lag, argvar=lin_argvar_lag),
+#   nonlin_lag = list(vars=variables_lag, arglag=nonlin_arglag_lag, argvar=nonlin_argvar_lag),
+#   linear_ema = list(vars=variables_ema, arglag=lin_arglag_ema, argvar=lin_argvar_ema),
+#   nonlin_ema = list(vars=variables_ema, arglag=nonlin_arglag_ema, argvar=nonlin_argvar_ema)
+#   )
+# 
+# all_results <- lapply(scenarios, function(s) {
+#   combos <- unlist(lapply(seq_along(s$vars), function(k) combn(s$vars, k, simplify=FALSE)), recursive=FALSE)
+#   
+#   res <- lapply(combos, function(vars) {
+#     print(vars)
+#     get_compvar_test(df, locations, outcome, pooled=TRUE,
+#                      variables=vars, arg_lag=s$arglag[vars], arg_var=s$argvar[vars])
+#   })
+#   names(res) <- sapply(combos, paste, collapse="|")
+#   
+#   out <- do.call(rbind, lapply(res, `[[`, "aic_result"))
+#   row.names(out) <- NULL
+#   out
+# })
+# 
+# pooled_var_res <- do.call(rbind, Map(function(d, nm) { d$type <- nm; d }, all_results, names(all_results)))
+# pooled_var_res <- pooled_var_res[, c('type', setdiff(names(pooled_var_res), 'type'))]
+# row.names(pooled_var_res) <- NULL
+# pooled_var_res[order(pooled_var_res$AIC), ]
 
-pooled_var_res <- rbind(tmp$aic_result, tp$aic_result, fg10$aic_result, tmp_tp$aic_result, 
-                        tmp_fg10$aic_result, tp_fg10$aic_result, tmp_tp_fg10$aic_result)
 
 # # Check tmp dis
 # (x <- city_exp_res(city='ALL', lag=NULL, meta=tmp$meta_coef$mx2t, col='red', xlab=NULL, title='tmp', reference='50%')[['p_raw']])
@@ -1080,30 +931,303 @@ pooled_var_res <- rbind(tmp$aic_result, tp$aic_result, fg10$aic_result, tmp_tp$a
 # (x <- city_exp_res(city='ALL', lag=NULL, meta=tmp_tp_fg10$meta_coef$mx2t, col='red', xlab=NULL, title='tmp_tp_fg10', reference='50%')[['p_raw']])
 
 # Check AIC: Suggests removing windspeed from analysis #278079.9
-sens_res$pooled$var$aic <- pooled_var_res[order(pooled_var_res$AIC), ]
+# sens_res$pooled$var$aic <- pooled_var_res[order(pooled_var_res$AIC), ]
 
 
+
+
+# 4. (ArgLag) Test single weather variables for lag structures ####
+
+test_arglag <- function(df, outcome, pooled){
+  
+  # Select best params from previous tests
+  if(pooled==TRUE){
+    title <- 'Pooled AIC: Variable lag'
+    longterm_df <- sens_res$pooled$longterm$res$best_fit
+    autocorr_lag <- sens_res$pooled$autocorr$res$best_fit
+  } else{
+    title <- as.character(unique(df$location))
+    longterm_df <- sens_res$city$longterm$res[[title]]$best_fit
+    autocorr_lag <- sens_res$city$autocorr$res[[title]]$best_fit
+  }
+  
+  # Get tmp and tp lag params
+  fit_arglag <- function(param, ex) {
+    modelfitstats <- do.call(rbind, lapply(3:6, \(i) {
+      args <- list(data=df, locations=locations, outcome=outcome,
+                   pooled=pooled, longterm_df=longterm_df, autocorr_lag=autocorr_lag)
+      args[[param]] <- i
+      test_result <- do.call(run_model, args)
+      data.frame(model=i, AIC=test_result$meta_comp$sum_aic,
+                 avg_tmp=test_result$meta_comp$avg_tmp, avg_tp=test_result$meta_comp$avg_tp)
+    }))
+    
+    best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
+    aic_plot <- plot_AIC_res(modelfitstats, ex, best_fit)
+    # esti_tmp_plot <- plot_ESTI_res(modelfitstats, exp='tmp')
+    # esti_tp_plot  <- plot_ESTI_res(modelfitstats, exp='tp')
+    # all_plot <- wrap_plots(list(aic_plot + theme(plot.title=element_blank()), esti_tmp_plot, esti_tp_plot), nrow=1) &
+    #   plot_annotation(title=paste0(title, '(', ex, ')'), theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
+    
+    modelfitstats <- modelfitstats %>% arrange(AIC)
+    num <- as.numeric(sub('.*\\((\\d+)\\).*', '\\1', best_fit))
+    num[is.na(num)] <- 1
+    
+    return(list(modelfitstats=modelfitstats, best_fit=num, aic_plot=aic_plot))
+  }
+  
+  modelfitstats_tmp <- fit_arglag('arglag_tmp', replace_exact_matches('mx2t',nm))
+  modelfitstats_tp  <- fit_arglag('arglag_tp',  replace_exact_matches('tp',nm))
+  modelfitstats_fg10  <- fit_arglag('arglag_fg10',  replace_exact_matches('fg10',nm))
+  
+  return(list(tmp=modelfitstats_tmp, tp=modelfitstats_tp, fg10=modelfitstats_fg10))
+}
+
+# Pooled tests
+pooled_arglag_res <- test_arglag(df, outcome, pooled=TRUE)
+sens_res$pooled$arglag$res <- pooled_arglag_res
+pooled_arglag_aic <- wrap_plots(map(pooled_arglag_res, 'aic_plot'), nrow=1) &
+   plot_annotation(title='Pooled AIC: Variable lag',
+                   theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
+
+# Site specific tests
+city_arglag_res <- list()
+for (l in locations){
+  sub <- df %>% filter(location==l)
+  city_arglag_res[[l]] <- test_arglag(sub, outcome, pooled=FALSE)
+  print(l)
+}
+sens_res$city$arglag$res <- city_arglag_res
+city_arglag_aic_tmp <- wrap_plots(
+  imap(city_arglag_res, \(city, locations) city$tmp$aic_plot + ggtitle(locations)),
+  nrow = 2
+) &
+  plot_annotation(title = paste0('City-specific AIC: ', replace_exact_matches('mx2t', nm), ' lag'),
+                  theme = theme(plot.title = element_text(hjust = 0.5, face = 'bold')))
+city_arglag_aic_tp <- wrap_plots(
+  imap(city_arglag_res, \(city, locations) city$tp$aic_plot + ggtitle(locations)),
+  nrow = 2
+) &
+  plot_annotation(title = paste0('City-specific AIC: ', replace_exact_matches('tp', nm), ' lag'),
+                  theme = theme(plot.title = element_text(hjust = 0.5, face = 'bold')))
+
+# EXPORT
+sens_analysis <- list('4A_pooled_arglag_AIC'=list(p=pooled_arglag_aic, w=10, h=4),
+                      '4B_city_arglag_mx2t_AIC'=list(p=city_arglag_aic_tmp, w=12, h=8),
+                      '4B_city_arglag_tp_AIC'=list(p=city_arglag_aic_tp, w=12, h=8))
+
+for (n in names(sens_analysis)) {
+  ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/SM_', n, '.png'), 
+         plot=sens_analysis[[n]]$p, width=sens_analysis[[n]]$w,height=sens_analysis[[n]]$h, dpi=300)
+  print(n)
+}
+
+
+# # Updates
+# updates <- list(
+#   'mx2t'=list('pooled'=4, 'emergency'=3, 'Una'=3, 'Kangra'=6, 'Nahan'=4, 'Hamirpur'=4, 'Mandi'=4, 'Chamba'=4, 'Dharamshala'=6, 'Solan'=4, 'Kullu'=4, 'Reckong Peo'=3),
+#   'tp'  =list('pooled'=4, 'emergency'=3, 'Una'=3, 'Kangra'=3, 'Nahan'=4, 'Hamirpur'=4, 'Mandi'=4, 'Chamba'=4, 'Dharamshala'=4, 'Solan'=4, 'Kullu'=4, 'Reckong Peo'=3),
+#   'fg10'=list('pooled'=4, 'emergency'=3, 'Una'=3, 'Kangra'=3, 'Nahan'=4, 'Hamirpur'=3, 'Mandi'=4, 'Chamba'=4, 'Dharamshala'=6, 'Solan'=4, 'Kullu'=4, 'Reckong Peo'=3)
+# )
+# 
+# for (v in var){
+#   sens_res$pooled$arglag$res[[v]]$best_fit <- updates[[v]]$pooled
+#   sens_res$emergency$arglag$res[[v]]$best_fit <- updates[[v]]$emergency
+#   for(l in locations){
+#     sens_res$city$arglag$res[[v]][[l]]$best_fit <- updates[[v]][[l]]
+#   }
+# }
+
+# 5. (ArgVar) Test single weather variables for shape structures ####
+
+test_argvar <- function(df, outcome, pooled){
+  
+  # Select best params from previous tests
+  if(pooled==TRUE){
+    city <- 'ALL'
+    p <- 'p_raw'
+    title <- NULL #replace_exact_matches(var, nm)
+    longterm_df <- sens_res$pooled$longterm$res$best_fit
+    autocorr_lag <- sens_res$pooled$autocorr$res$best_fit
+    arglag_tmp_df <- sens_res$pooled$arglag$res$tmp$best_fit
+    arglag_tp_df <- sens_res$pooled$arglag$res$tp$best_fit
+  } else{
+    city <- as.character(unique(df$location))
+    p <- 'p_raw'    
+    title <- city
+    longterm_df <- sens_res$city$longterm$res[[city]]$best_fit
+    autocorr_lag <- sens_res$city$autocorr$res[[city]]$best_fit
+    arglag_tmp_df <- sens_res$city$arglag$res[[city]]$tmp$best_fit
+    arglag_tp_df <- sens_res$city$arglag$res[[city]]$tp$best_fit
+  }
+  
+  fit_argvar <- function(param, meta_key, ref, col, title) {
+    
+    var_shp <- list()
+    modelfitstats <- data.frame()
+    
+    # Linear
+    args <- list(data=df, locations=locations, outcome=outcome,
+                 pooled=pooled, longterm_df=longterm_df, autocorr_lag=autocorr_lag,
+                 arglag_tmp=arglag_tmp_df, arglag_tp=arglag_tp_df)
+    args[[param]] <- 1
+    test_result <- do.call(run_model, args)
+    modelfitstats <- rbind(modelfitstats, data.frame(
+      model=  'Linear',
+      AIC    = test_result$meta_comp$sum_aic,
+      avg_tmp= test_result$meta_comp$avg_tmp,
+      avg_tp = test_result$meta_comp$avg_tp
+    ))
+    var_shp[['Linear']] <- city_exp_res(city=city, lag=NULL, meta=test_result[[meta_key]], 
+                                        col=col, xlab='Percentiles (%)', title='Linear', reference=ref)[[p]]
+    
+    # NS df=3:6
+    for (i in 3:6) {
+      name <- paste0('NS df=', i)
+      args[[param]] <- i
+      test_result <- do.call(run_model, args)
+      modelfitstats <- rbind(modelfitstats, data.frame(
+        model  = name,
+        AIC    = test_result$meta_comp$sum_aic,
+        avg_tmp= test_result$meta_comp$avg_tmp,
+        avg_tp = test_result$meta_comp$avg_tp
+      ))
+      var_shp[[name]] <- city_exp_res(city=city, lag=NULL, meta=test_result[[meta_key]], 
+                                      col=col, xlab='Percentiles (%)', title=name, reference=ref)[[p]]
+    }
+    
+    best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
+    aic_plot <- plot_AIC_res(modelfitstats, title, best_fit)
+    esti_tmp_plot <- plot_ESTI_res(modelfitstats, exp='tmp')
+    esti_tp_plot  <- plot_ESTI_res(modelfitstats, exp='tp')
+    all_plot <- wrap_plots(list(aic_plot+theme(plot.title=element_blank()), esti_tmp_plot, esti_tp_plot), nrow=1) &
+      plot_annotation(title=title, theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
+    var_shp <- wrap_plots(var_shp, ncol=3) &
+      plot_annotation(title='Pooled Relationship: Variable exposure distribution, by df',
+                      theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
+    
+    modelfitstats <- modelfitstats %>% arrange(AIC)
+    num <- as.numeric(gsub("[^0-9.]", "", best_fit))
+    num[is.na(num)] <- 1
+    
+    return(list(modelfitstats=modelfitstats, best_fit=num, aic_plot=aic_plot, var_shp=var_shp))
+  }
+
+  res_argvar_tmp <- fit_argvar('argvar_tmp', 'meta_tmp', ref='50%', col='#D74B3C', replace_exact_matches('mx2t', nm))
+  # res_argvar_tp  <- fit_argvar('argvar_tp',  'meta_tp', ref='0%', col='#1D98EB', replace_exact_matches('tp',   nm))
+  
+  return(list(tmp=res_argvar_tmp))
+}
+
+# Pooled tests
+pooled_argvar_res <- test_argvar(df, outcome, pooled=TRUE)
+sens_res$pooled$argvar$res <- pooled_argvar_res
+pooled_argvar_aic <- wrap_plots(map(pooled_argvar_res, 'aic_plot'), nrow=1) &
+    plot_annotation(title='Pooled AIC: Variable shape',
+                    theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
+pooled_argvar_dis <- wrap_plots(map(pooled_argvar_res, 'var_shp'), ncol=1) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom") &
+  plot_annotation(title='Pooled AIC: Variable distribution',
+                  theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
+
+# Site specific tests
+city_argvar_res <- list()
+for (l in locations){
+  sub <- df %>% filter(location==l)
+  city_argvar_res[[l]] <- test_argvar(df=sub, outcome, pooled=FALSE)
+  print(l)
+}
+sens_res$city$argvar$res <- city_argvar_res
+city_argvar_aic_tmp <- wrap_plots(
+  imap(city_argvar_res, \(city, locations) city$tmp$aic_plot + ggtitle(locations)),
+  nrow = 2
+) &
+  plot_annotation(title = paste0('City-specific AIC: ', replace_exact_matches('mx2t', nm), ' shape'),
+                  theme = theme(plot.title = element_text(hjust = 0.5, face = 'bold')))
+
+# Get city specific distributions
+city_argvar_dis <- list()
+for (l in locations){
+  out <- city_argvar_res[[l]]
+  city_argvar_dis[[l]] <- wrap_plots(map(out, 'var_shp'), ncol=1) &
+    plot_annotation(title=paste0('City-specific shapes, by df: ', l),
+                    theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
+  
+}
+
+# EXPORT
+sens_analysis <- list('5A_pooled_argvar_AIC'=list(p=pooled_argvar_aic, w=6, h=4),
+                      '5A_pooled_argvar_DIS'=list(p=pooled_argvar_dis, w=8, h=6),
+                      '5B_city_argvar_AIC_mx2t'=list(p=city_argvar_aic_tmp, w=12, h=8))
+
+# AIC
+for (n in names(sens_analysis)) {
+  ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/SM_', n, '.png'), 
+         plot=sens_analysis[[n]]$p, width=sens_analysis[[n]]$w,height=sens_analysis[[n]]$h, dpi=300)
+  print(n)
+}
+# City distributions only
+for (n in names(city_argvar_dis)) {
+  title <- paste0('5C_city_argvar_DIS_',n)
+  ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/SM_', title, '.png'), 
+         plot=city_argvar_dis[[n]], w=8, h=6, dpi=300)
+  print(n)
+}
+
+# # Updates
+# updates <- list(
+#   'mx2t'=list('pooled'=3, 'emergency'=1, 'Una'=6, 'Kangra'=3, 'Nahan'=3, 'Hamirpur'=3, 'Mandi'=5, 'Chamba'=4, 'Dharamshala'=5, 'Solan'=3, 'Kullu'=3, 'Reckong Peo'=3),
+#   'tp'  =list('pooled'=1, 'emergency'=1, 'Una'=1, 'Kangra'=3, 'Nahan'=1, 'Hamirpur'=1, 'Mandi'=1, 'Chamba'=4, 'Dharamshala'=4, 'Solan'=3, 'Kullu'=1, 'Reckong Peo'=3),
+#   'fg10'=list('pooled'=1, 'emergency'=1, 'Una'=1, 'Kangra'=1, 'Nahan'=1, 'Hamirpur'=1, 'Mandi'=1, 'Chamba'=3, 'Dharamshala'=3, 'Solan'=3, 'Kullu'=1, 'Reckong Peo'=1)
+# )
+# 
+# for (v in var){
+#   sens_res$pooled$argvar$res[[v]]$best_fit <- updates[[v]]$pooled
+#   sens_res$emergency$argvar$res[[v]]$best_fit <- updates[[v]]$emergency
+#   for(l in locations){
+#     sens_res$city$argvar$res[[v]][[l]]$best_fit <- updates[[v]][[l]]
+#   }
+# }
+
+# -- Store parameters -- ####
+
+# Get pooled params
+final_params <- list()
+final_params$pooled$longterm <- sens_res$pooled$longterm$res$best_fit
+final_params$pooled$autocorr <- sens_res$pooled$autocorr$res$best_fit
+final_params$pooled$arglag_tmp <- sens_res$pooled$arglag$res$tmp$best_fit
+final_params$pooled$argvar_tmp <- sens_res$pooled$argvar$res$tmp$best_fit
+final_params$pooled$arglag_tp <- sens_res$pooled$arglag$res$tp$best_fit
+final_params$pooled$argvar_tp <- sens_res$pooled$argvar$res$tp$best_fit
+final_params$pooled$arglag_fg10 <- sens_res$pooled$arglag$res$fg10$best_fit
+
+# Get city params
+for (l in locations){
+  final_params[[l]]$longterm <- sens_res$city$longterm$res[[l]]$best_fit
+  final_params[[l]]$autocorr <- sens_res$city$autocorr$res[[l]]$best_fit
+  final_params[[l]]$arglag_tmp <- sens_res$city$arglag$res[[l]]$tmp$best_fit
+  final_params[[l]]$argvar_tmp <- sens_res$city$argvar$res[[l]]$tmp$best_fit
+  final_params[[l]]$arglag_tp <- sens_res$city$arglag$res[[l]]$tp$best_fit
+  final_params[[l]]$argvar_tp <- sens_res$city$argvar$res[[l]]$tp$best_fit
+  final_params[[l]]$arglag_fg10 <- sens_res$city$arglag$res[[l]]$fg10$best_fit
+  
+}
 
 # 6. (Shape) Test shape of response #####
 
-test_shape <- function(df, params, outcome, pooled=TRUE, city=NULL){
+test_shape <- function(df, params, outcome, pooled=TRUE, city='ALL'){
   
   # Get title
-  title <- if (outcome == "total_patients") {
-    if (pooled) "Pooled: " else paste0(unique(df$location), ": ")
-  } else {
-    paste0(replace_exact_matches(outcome, nm), ": ")
-  }
+  title <- if (pooled) "Pooled: " else paste0(unique(df$location), ": ")
   
   # Get params
   longterm_df <- params$longterm
   autocorr_lag <- params$autocorr
-  arglag_tmp <- params$arglag$mx2t
-  arglag_tp <- params$arglag$tp
-  arglag_fg10 <- params$arglag$fg10
-  argvar_tmp <- params$argvar$mx2t
-  argvar_tp <- params$argvar$tp
-  argvar_fg10 <- params$argvar$fg10
+  arglag_tmp <- params$arglag_tmp
+  argvar_tmp <- params$argvar_tmp
+  arglag_tp <- params$arglag_tp
+  arglag_fg10 <- params$arglag_fg10
   
   # Run models
   models <- c('quasi', 'binom')
@@ -1112,10 +1236,10 @@ test_shape <- function(df, params, outcome, pooled=TRUE, city=NULL){
     output <- run_model(df, locations, outcome, fam_type=d, pooled=pooled,
                             longterm_df=longterm_df, autocorr_lag=autocorr_lag, 
                             arglag_tmp=arglag_tmp, arglag_tp=arglag_tp, arglag_fg10=arglag_fg10,
-                            argvar_tmp=argvar_tmp, argvar_tp=argvar_tp, argvar_fg10=argvar_fg10)
-    test[[d]]$res <- format_results(output, outcome, city=city)
+                            argvar_tmp=argvar_tmp)
     test[[d]]$aic <- data.frame(model=d, AIC=output$meta_comp$sum_aic)
-    test[[d]]$dis <-  test[[d]]$res$p_er_overall
+    test[[d]]$dis <- get_results(output, city=city, lags=NULL, outcome=outcome) #$p_er_tmp$p_blup
+
     print(d)
   }
   
@@ -1124,56 +1248,53 @@ test_shape <- function(df, params, outcome, pooled=TRUE, city=NULL){
   best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
   
   # Plot dist
-  qp_plot_titled <- test$quasi$dis + plot_annotation(title=paste0(title, 'Quasipoisson')) & theme(legend.position='none')
-  nb_plot_titled <- test$binom$dis + plot_annotation(title=paste0(title, 'Negative binomial')) & theme(legend.position='none')
-  dis_plot <- wrap_elements(full=qp_plot_titled) / wrap_elements(full=nb_plot_titled)
+  qp_plot_titled <- test$quasi$dis + plot_annotation(title=paste0(title, 'Quasipoisson'), theme=theme(plot.title=element_text(hjust=0.5))) + theme(legend.position='none')
+  nb_plot_titled <- test$binom$dis + plot_annotation(title=paste0(title, 'Negative binomial'), theme=theme(plot.title=element_text(hjust=0.5))) + theme(legend.position='none')
+  dis_plot <- wrap_elements(full=qp_plot_titled) + wrap_elements(full=nb_plot_titled) 
   
   return(list(best_fit=best_fit, dis_plot=dis_plot))
 }
 
 # Get pooled results
 shape_res <- list()
-shape_res$pooled <- test_shape(df=df, params=final_params$pooled, outcome=outcome, pooled=TRUE, city=NULL)
-final_params$pooled$shape <- shape_res$pooled$best_fit
+shape_res$pooled <- test_shape(df=df, params=final_params$pooled, outcome=outcome, pooled=TRUE, city='ALL')
 shape_res$pooled$dis_plot
+final_params$pooled$shape <- shape_res$pooled$best_fit
 
-# Get city-specific results
-for (l in locations){
-  sub <- df %>% filter(location==l)
-  shape_res[[l]] <- test_shape(df=sub, params=final_params[[l]], outcome=outcome, pooled=FALSE, city=l)
-  final_params[[l]]$shape <-  shape_res[[l]]$best_fit
-  print(l)
-}
-
-# Emergency ward tests
-l <- 'Hamirpur'
-sub <- df %>% filter(location==l)
-shape_res$emergency <- test_shape(df=sub, params=final_params$emergency, outcome='emergency', pooled=FALSE, city=l)
-final_params$pooled$shape <- shape_res$emergency$best_fit
+# # Get city-specific results
+# for (l in locations){
+#   sub <- df %>% filter(location==l)
+#   shape_res[[l]] <- test_shape(df=sub, params=final_params[[l]], outcome=outcome, pooled=FALSE, city=l)
+#   final_params[[l]]$shape <-  shape_res[[l]]$best_fit
+#   print(l)
+# }
 
 # EXPORT
 for (n in names(shape_res)) {
   if(n=='pooled'){
-    title <- paste0('5A_pooled_shape')
-  } else if (n=='emergency'){
-    title <- paste0('5B_emergency_shape')
-  } else{
-    title <- paste0('5C_city_shape_', n)
-  }
-  ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/fig_', title, '.png'),
-         plot=shape_res[[n]]$dis_plot, width=8,height=6, dpi=300)
+    title <- paste0('6A_pooled_shape')
+    } else{
+    title <- paste0('6C_city_shape_', n)
+    }
+  ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/SM_', title, '.png'),
+         plot=shape_res[[n]]$dis_plot, width=8,height=4, dpi=300)
   print(n)
 }
 
 # EXPORT PARAMS ####
 
-save(sens_res, final_params, file=paste0(path_project, 'Results/ind_sens_params.RData'))
+save(sens_res, file=paste0(path_project, 'Results/ind_sens_params.RData'))
+save(final_params, file=paste0(path_project, 'Results/ind_final_params.RData'))
 
-# End timer: 1 hours 31 minutes 10 seconds (20/01/2026) ####
+# End timer: 35 minutes 10 seconds (19/06/2026) ####
 end <- Sys.time()
-dt <- round(as.numeric(end - start, units = 'secs'))
+dt <- round(as.numeric(end - start, units='secs'))
 hours   <- dt %/% 3600
 minutes <- (dt %% 3600) %/% 60
 seconds <- dt %% 60
 sprintf('%d hours %d minutes %.d seconds', hours, minutes, seconds)
 
+
+
+
+#########

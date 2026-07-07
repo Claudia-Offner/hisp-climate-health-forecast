@@ -13,7 +13,7 @@ source('2_DLNM/2_Utilities.R')
 
 # Load packages
 library(xgboost); library(dplyr); library(data.table); library(caret); 
-library(purrr)
+library(purrr); library(gridExtra); library(ggplotify)
 
 # Function to run XG Boost test on subset
 xgboost <- function(data, title, var_list, params=NULL) {
@@ -114,7 +114,15 @@ xgboost <- function(data, title, var_list, params=NULL) {
   
   # 5. Feature importance ----
   importance <- xgb.importance(model = xgb_model)
-  importance <- replace_exact_matches(importance, nm)
+  
+  # Rename variables
+  feat <- importance$Feature
+  is_lag <- grepl("lag", feat)
+  parts  <- strsplit(feat[is_lag], "_lag")
+  feat[is_lag]  <- paste0(replace_exact_matches(sapply(parts, `[`, 1), nm), " (Lag ", sapply(parts, `[`, 2), ")")
+  feat[!is_lag] <- replace_exact_matches(feat[!is_lag], nm)
+  importance$Feature <- unlist(feat)
+  
   plot <- ggplot(importance, aes(x = Gain, y = reorder(Feature, Gain))) +
     geom_col(fill = 'gray50') +
     labs(x = "Gain", y = 'Exposure', title = title) +
@@ -138,8 +146,10 @@ locations <- as.character(unique(df$location))
 m <- length(locations)
 
 # Set parameters
-control_cols <- c('location', 'time', 'season', 'weekday', 'elev', 'popu')
-lagged_cols <- grep("_lag[1-7]$", names(df), value = TRUE)
+control_cols <- c('time', 'season', 'weekday', 'location', 'lat', 'lon', controls)
+lagged_cols <- grep(paste0("(", paste(w_cols, collapse="|"), ")_lag([1-9]|1[0-4])$"), names(df), value=TRUE)
+autocorr_cols <- grep(paste0("(", paste('total_patients', collapse="|"), ")_lag([1-9]|1[0-4])$"), names(df), value=TRUE)
+
 
 # 1. Non parameter correlation test ####
 
@@ -177,12 +187,12 @@ melted_corr <- reshape2::melt(cor_matrix)
 # 2A. Lags: XG Boost feature importance test ####
 
 # Select parameters
-var_list <- c(control_cols, w_cols, lagged_cols)
+var_list <- c(w_cols, control_cols, autocorr_cols, lagged_cols)
 
 # # Get best parameters & results
 # start_time <- Sys.time()
 # xg_res <- list()
-# xg_res[['all']] <- xgboost(df, "XGBoost Feature Importance", var_list, params=NULL)
+# xg_res[['all']] <- xgboost(df, "Overall", var_list, params=NULL)
 # for (l in locations){
 #   sub <- df %>% filter(location==l)
 #   xg_res[[l]] <- xgboost(sub, l, var_list, params=NULL)
@@ -191,45 +201,60 @@ var_list <- c(control_cols, w_cols, lagged_cols)
 # # Print time & save (~80min)
 # print(difftime(end_time, start_time, units = "mins"))
 # save(xg_res, file = paste0(path_project, 'Results/ind_xgboost_params_lags.RData'))
-# 
+
 
 # 2B. Lags: Format results ####
 # Get results
 load('2_DLNM/Results/ind_xgboost_params_lags.RData')
 
-# Assessment table of feature importance consistency 
+# Feature importance overall
+imp <- map_dfr( xg_res[1], ~ as_tibble(.x$importance), .id = "subpop")
+imp_lag_all <- ggplot(imp[1:20,], aes(x = Gain, y = reorder(Feature, Gain))) +
+  geom_col(fill = 'gray50') +
+  labs(x = "Gain", y = 'Exposure', title = NULL) +
+  theme_classic() +
+  theme(plot.title = ggplot2::element_text(hjust = 0.5))
+
+# Feature importance consistency across locations
 imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
-# Assessment table of feature importance consistency 
-imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
-(imp_rank_lag <- imp %>%
+(imp_lag_loc <- imp %>%
+    # Group by location
     group_by(subpop) %>%
     arrange(desc(Gain)) %>%
     mutate(
-      top    = row_number() <= 20,
-      bottom = row_number() > (n() - 120)
+      top    = row_number() <= (n()/2),
+      bottom = row_number() > (n()/2)
     ) %>%
     ungroup() %>%
     group_by(Feature) %>%
     summarise(
-      `Top 20`    = sum(top),
-      `Bottom 120` = sum(bottom),
+      `Top Half`    = sum(top),
+      `Bottom Half` = sum(bottom),
       `Mean Gain`     = mean(Gain),
       .groups = "drop"
-    ) %>% 
-    mutate(Important= `Bottom 120` < `Top 20`) %>%
+    ) %>%
+    mutate(Important= `Bottom Half` < `Top Half`) %>%
     filter(Important==TRUE) %>%
-    arrange(desc(Important), desc(`Mean Gain`))) 
-imp_rank_lag <- replace_exact_matches(imp_rank_lag, nm)
+    arrange(desc(`Top Half`), desc(`Mean Gain`)))
+imp_lag_loc$`Mean Gain` <- round(imp_lag_loc$`Mean Gain`, 3)
+imp_lag_loc <- imp_lag_loc[1:20,-5]
+
+# Combine figure and table
+tab <- as.ggplot(tableGrob(imp_lag_loc, rows = NULL))
+imp_lag <- wrap_plots(imp_lag_all, tab, nrow = 1) + plot_annotation(tag_levels = "A")
+
+# EXPORT
+ggsave(paste0(path_report, 'II. dlnm/sensitivity/SM_imp_lag.png'), imp_lag, width = 14, height = 7, dpi = 300, bg='white')
 
 # 3A. No Lags: XG Boost feature importance test ####
 
 # Select parameters
-var_list <- c(control_cols, w_cols)
+var_list <- c(w_cols, control_cols, 'total_patients_lag7', 'total_patients_lag14')
 
 # # Get best parameters & results
 # start_time <- Sys.time()
 # xg_res <- list()
-# xg_res[['all']] <- xgboost(df, "XGBoost Feature Importance", var_list, params=NULL)
+# xg_res[['all']] <- xgboost(df, "Overall", var_list, params=NULL)
 # for (l in locations){
 #   sub <- df %>% filter(location==l)
 #   xg_res[[l]] <- xgboost(sub, l, var_list, params=NULL)
@@ -241,50 +266,26 @@ var_list <- c(control_cols, w_cols)
 
 
 # 3B. No Lags: Format results ####
+
 # Get results
 load('2_DLNM/Results/ind_xgboost_params_nolags.RData')
 
-# Re-extract with identified parameters
-re_xgboost <- list()
-re_xgboost$all <- xgboost(df, "XGBoost Feature Importance", var_list, params=xg_res$all$best_params)
-for (l in locations){
-  re_xgboost[[l]] <- xgboost(df, l, var_list[-1], params=xg_res[[l]]$best_params)
-}
+# Feature importance overall
+imp <- map_dfr( xg_res[1], ~ as_tibble(.x$importance), .id = "subpop")
+imp_all <- ggplot(imp[1:20,], aes(x = Gain, y = reorder(Feature, Gain))) +
+  geom_col(fill = 'gray50') +
+  labs(x = "Gain", y = 'Exposure', title = NULL) +
+  theme_classic() +
+  theme(plot.title = ggplot2::element_text(hjust = 0.5))
 
-# Plot all feature importance
-imp_plot <- re_xgboost$all$plot
-
-# Plot location feature importance
-imp_loc <- Map(function(p, nm) {
-  # Base theme: remove y-axis title, tight margins
-  base_theme <- theme(
-    axis.title.y = element_blank(),
-    axis.text.y = element_text(size = 8),
-    plot.margin = margin(t = 0, r = 0, b = 0, l = 0),
-    plot.title = element_text(size=10)
-  ) 
-  
-  # Conditionally remove x-axis title for everything except Solan and Una
-  x_theme <- ifelse(nm %in% c("Stamford & Rutland Hospital"),
-                    list(theme()),  # keep x-axis title
-                    list(theme(axis.title.x = element_blank())))  # remove it
-  
-  # Combine base + conditional theme
-  p + base_theme + x_theme[[1]]
-  
-}, map(re_xgboost[-1], 'plot'), names(re_xgboost[-1]))
-imp_loc_plot <- wrap_plots(imp_loc, ncol=2)
-
-# Assessment table of feature importance consistency 
-imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
-# Assessment table of feature importance consistency 
+# Feature importance consistency across locations
 imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
 (imp_rank <- imp %>%
     group_by(subpop) %>%
     arrange(desc(Gain)) %>%
     mutate(
-      top    = row_number() <= 7,
-      bottom = row_number() > (n() - 7)
+      top    = row_number() <= (n()/2),
+      bottom = row_number() > (n()/2)
     ) %>%
     ungroup() %>%
     group_by(Feature) %>%
@@ -295,26 +296,64 @@ imp <- map_dfr( xg_res[-1], ~ as_tibble(.x$importance), .id = "subpop")
       .groups = "drop"
     ) %>% 
     mutate(Important= `Bottom Half` < `Top Half`) %>%
-    arrange(desc(Important), desc(`Mean Gain`))) 
-imp_rank <- replace_exact_matches(imp_rank, nm)
+    arrange(desc(Important), desc(`Top Half`))) 
+imp_rank$`Mean Gain` <- round(imp_rank$`Mean Gain`, 3)
+imp_rank <- imp_rank[1:20,-5]
 
-#### EXPORT ####
+# Combine figure and table
+imp_rank[] <- lapply(imp_rank, function(x) ifelse(is.na(x), "", as.character(x)))
+tab <- as.ggplot(tableGrob(imp_rank, rows = NULL))
+imp_lag <- wrap_plots(imp_all, tab, nrow = 1) + plot_annotation(tag_levels = "A")
 
-# Figures
-export <- list('0A_corr_plot'=list(p=cor_matrix, w=8, h=7),
-               '0B_xgb_importance'=list(p=imp_plot, w=7, h=6),
-               '0B_xgb_importance_loc'=list(p=imp_loc_plot, w=7, h=8))
-
-for (name in names(export)){
-  e <- export[[name]]
-  ggsave(paste0(path_report, 'II. dlnm/sensitivity/fig_', name, '.png'), e$p, width = e$w, height = e$h, dpi = 300, bg='white')
-}
-
-# Table
-write.csv(imp_rank, file = paste0(path_report, 'II. dlnm/sensitivity/tab_imp_rank.csv'), row.names = FALSE)
-write.csv(imp_rank_lag, file = paste0(path_report, 'II. dlnm/sensitivity/tab_imp_rank_lags.csv'), row.names = FALSE)
+# EXPORT
+ggsave(paste0(path_report, 'II. dlnm/sensitivity/SM_imp_nolag.png'), imp_lag, width = 14, height = 7, dpi = 300, bg='white')
 
 # # Interaction strength ----
+
+
+# # Re-extract with identified parameters
+# re_xgboost <- list()
+# re_xgboost$all <- xgboost(df, "Overall", var_list, params=xg_res$all$best_params)
+# for (l in locations){
+#   re_xgboost[[l]] <- xgboost(df, l, var_list[-1], params=xg_res[[l]]$best_params)
+# }
+# 
+# # Plot all feature importance
+# imp_all_plot <- re_xgboost$all$plot
+# 
+# # Plot location feature importance
+# imp_loc <- Map(function(p, nm) {
+#   # Base theme: remove y-axis title, tight margins
+#   base_theme <- theme(
+#     axis.title.y = element_blank(),
+#     axis.text.y = element_text(size = 8),
+#     plot.margin = margin(t = 0, r = 0, b = 0, l = 0),
+#     plot.title = element_text(size=10)
+#   ) 
+#   
+#   # Conditionally remove x-axis title for everything except Solan and Una
+#   x_theme <- ifelse(nm %in% c("Stamford & Rutland Hospital"),
+#                     list(theme()),  # keep x-axis title
+#                     list(theme(axis.title.x = element_blank())))  # remove it
+#   
+#   # Combine base + conditional theme
+#   p + base_theme + x_theme[[1]]
+#   
+# }, map(re_xgboost[-1], 'plot'), names(re_xgboost[-1]))
+# imp_loc_plot <- wrap_plots(imp_loc, ncol=2)
+# 
+# imp_plot <- wrap_plots(list(imp_all_plot, imp_loc_plot), ncol=1, heights=c(1,3)) +
+#   plot_annotation(tag_levels = list(c("A", "B")))
+
+# imp_rank_tab <- get_kbl_tab( 
+#   imp_rank,
+#   title    = "Average XGBoost feature importance ranking across locations, without lagged variables",
+#   note     = "Example",
+#   colnames = names(imp_rank),
+#   label    = "SM_imp_rank",
+#   opts=c("repeat_header")
+# )
+
 # 
 # shap_interactions <- predict(xgb_model, X, predinteraction = TRUE)
 # shap_importance <- colMeans(abs(shap_interactions))

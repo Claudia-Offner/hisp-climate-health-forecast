@@ -22,22 +22,25 @@ load('2_Active_Data/203_comb/ind_5km_BigThaw-HISP-ALL_2015-2023_daily_hosp_wide.
 
 # 1. DLNM analysis ####
 
+controls <- c('elev', 'popu', "hosp_n", "hosp_teach", 'mcv1', "dtp1", "dtp3", "hsize", "anc", "insurance", "malnutrition", "pnc", "sba", "tt", "decision", "hwealth", "meducation")
+
 # Add lat/lon back into df
 loc_points <- data.frame(
-  location = c("Chamba", "Dharamshala", "Solan", "Hamirpur", "Kullu",
-               "Reckong Peo", "Kyelang", "Nahan", "Bilaspur", "Mandi",
-               "Shimla", "Una"),
-  lon = c(76.127017, 76.321482, 77.099506, 76.522135, 77.107945,
-          78.267181, 77.023559, 77.294546, 76.761165, 76.928977,
-          77.170999, 76.276997),
-  lat = c(32.554798, 32.216995, 30.906408, 31.684233, 31.956550,
-          31.539809, 32.571883, 30.564781, 31.341244, 31.712559,
-          31.104221, 31.479129)
-)
-df_dlnm <- merge(df_wide, loc_points, by='location')
+    location = c('Chamba', 'Dharamshala', 'Solan',
+                 'Hamirpur', 'Kullu', 'Kangra',
+                 'Reckong Peo', 'Kyelang', 'Nahan',
+                 'Bilaspur', 'Mandi', 'Shimla', 'Una'),
+    lat = c(76.127017, 76.321482, 77.099506,
+          76.522135, 77.107945, 76.274797,
+          78.267181, 77.023559, 77.294546,
+          76.761165, 76.928977, 77.170999, 76.276997),
+    lon = c(32.554798, 32.216995, 30.906408,
+          31.684233, 31.956550, 32.103220,
+          31.539809, 32.571883, 30.564781,
+          31.341244, 31.712559, 31.104221, 31.479129)
+  )
 
-# Filter out Bilaspur (incomplete series)
-df_dlnm <- df_dlnm %>%   filter(!location %in% c('Bilaspur')) #Nahan
+df_dlnm <- merge(df_wide, loc_points, by='location')
 
 # Filter out COVID years
 startdate <- as.Date('2015-01-01')
@@ -60,15 +63,17 @@ df_dlnm <- df_dlnm %>%
   ungroup() %>%
   # Select cols of interest
   dplyr::select(location, lat, lon, time, date, year, season, month, week, 
-                weekday, doy, closed, holiday, elev, popu, all_of(h_cols), 
+                weekday, doy, closed, holiday, all_of(controls), all_of(h_cols), 
                 all_of(w_cols))
 
 # PRECIPITATION: Create 7-day rolling sum & log transform
 df_dlnm <- df_dlnm %>%
   group_by(location) %>%
-  mutate(tp_roll=rollapply(tp,   width = 7, FUN = sum,  align = "right", fill = NA)) %>%
+  mutate(tp_roll=rollapply(tp,   width = 7, FUN = sum,  align = "right", fill = NA),
+         mx2t_roll=rollapply(mx2t,   width = 7, FUN = mean,  align = "right", fill = NA)) %>%
   ungroup()
 df_dlnm$tp_roll_log <- log(df_dlnm$tp_roll+10)
+df_dlnm$tp_log <- log(df_dlnm$tp+2)
 
 # Check
 p1 <- ggplot(df_dlnm, aes(x = tp)) + 
@@ -79,17 +84,23 @@ p1 <- ggplot(df_dlnm, aes(x = tp)) +
 
 p2 <- ggplot(df_dlnm, aes(x = tp_roll)) +
   geom_histogram(binwidth = 75, fill = 'gray50', color = "black") +
-  labs(title = "Rolling (7-day)") + 
+  labs(title = "Rolling (7-day)") +
   theme_minimal() +
   theme(axis.title.x=element_blank())
 
-p3 <- ggplot(df_dlnm, aes(x = tp_roll_log)) +
+p3 <- ggplot(df_dlnm, aes(x = tp_log)) +
   geom_histogram(binwidth = 1, fill = 'gray50', color = "black") +
-  labs(title = "Rolling + 10 with log") + 
+  labs(title = "Log + 1 (raw)") +
+  theme_minimal() +
+  theme(axis.title.x=element_blank())
+
+p4 <- ggplot(df_dlnm, aes(x = tp_roll_log)) +
+  geom_histogram(binwidth =1, fill = 'gray50', color = "black") +
+  labs(title = "Log rolling + 1 (7-day)") + 
   theme_minimal()+
   theme(axis.title.x=element_blank())
 
-tp_dist <- wrap_plots(list(p1, p2, p3), nrow = 1) +
+tp_dist <- wrap_plots(list(p1, p2, p3, p4), nrow = 1) +
   plot_annotation(
     title = "Distribution of precipitation variables",
     theme = theme(
@@ -97,9 +108,8 @@ tp_dist <- wrap_plots(list(p1, p2, p3), nrow = 1) +
     )
   )
 
-df_dlnm$tp <- df_dlnm$tp_roll_log
-df_dlnm$tp_roll <- NULL
-df_dlnm$tp_roll_log <- NULL
+# Select tp exposure
+df_dlnm$tp <- df_dlnm$tp_log
 
 # LAGS: Add lags for outcome & w_col
 lag_cols <- c(h_cols, w_cols)
@@ -120,14 +130,13 @@ df_dlnm <- df_dlnm %>%
   fill(all_of(lagged_vars), .direction = "down") %>%
   ungroup()
 
-
-# 2. Forecasting analysis ####
+# 2. Ensemble analysis ####
 
 # Remove Bilaspur
 df_ensm <- df_wide %>% filter(location != 'Bilaspur')
 
 # Identify locations
-locations <- as.character(df_ensm %>% distinct(location, elev) %>% arrange(elev) %>% pull(location))
+locations <- as.character(df_ensm %>% distinct(location, elev) %>% filter(!is.na(elev)) %>% arrange(elev) %>% pull(location))
 
 # Select year of interest
 startdate <- as.Date('2015-02-14')

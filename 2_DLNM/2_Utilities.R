@@ -21,6 +21,28 @@ library(splines); library(ggplot2); library(patchwork); library(psychrolib);
 
 #### FUNCTIONS ####
 
+## LaTeX table builder
+get_kbl_tab <- function(dat, title, note, colnames, label, opts=c("repeat_header", "hold_position"),
+                        spanning_header  = NULL,
+                        bold_rows        = NULL,
+                        italic_rows      = NULL,
+                        hline_after_rows = NULL) {
+  k <- kbl(dat, format = "latex", booktabs = TRUE, longtable = TRUE,
+           linesep = "", col.names = colnames, escape = FALSE,
+           caption = title, label = label) |>
+    kable_styling(latex_options = c("repeat_header"), 
+                  font_size = 9, full_width = FALSE, position = "center")
+  
+  if (!is.null(spanning_header))  k <- k |> add_header_above(spanning_header, escape = FALSE)
+  if (!is.null(bold_rows))        k <- k |> row_spec(bold_rows,   bold   = TRUE)
+  if (!is.null(italic_rows))      k <- k |> row_spec(italic_rows, italic = TRUE)
+  if (!is.null(hline_after_rows))
+    for (r in hline_after_rows)   k <- k |> row_spec(r, extra_latex_after = "\\midrule")
+  
+  k |> footnote(general = note, general_title = "",
+                footnote_as_chunk = TRUE, escape = FALSE)
+}
+
 # Function to replace exact matches in df from a dictionary
 replace_exact_matches <- function(df, dict) {
   df[] <- lapply(df, function(col) {
@@ -51,10 +73,11 @@ comp_metrics <- function(model, cb=NULL, cen=NULL) {
   if(!is.null(cb)){
     
     # Get average of estimates (lag 4)
-    pred <- crosspred(cb, model, cen=cen)
+    pred <- crosspred(cb, model, cen)
+    
     res[['esti']] <- pred$coef[4]  
     
-  }
+  } 
   
   return(res) 
 }
@@ -79,18 +102,15 @@ get_meta_analysis <- function(pooled=TRUE, ymat, Slist, arg_var, arg_lag, ranges
 }
 
 # Function to run model with static formula
-run_model <- function(data, locations, outcome, fam_type='quasi',
-                      pooled=TRUE, longterm_df=longterm_df, autocorr_lag=autocorr_lag, 
-                      arglag_tmp=arglag_tmp, arglag_tp=arglag_tp, arglag_fg10=arglag_fg10,
-                      argvar_tmp=argvar_tmp, argvar_tp=argvar_tp, argvar_fg10=argvar_fg10){
+run_model <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE, 
+                      control_test=NULL, var_test=NULL, 
+                      longterm_df=10, autocorr_lag=0, lag_window=c(0,10),
+                      arglag_tmp=4, arglag_tp=4, arglag_fg10=4,
+                      argvar_tmp=1, argvar_tp=1){
   
   # 1. Data and dependency prep ----
   
   # LIST OF DATAFRAMES FOR ALL SITES
-  datalist <- lapply(locations, function(region) data[data$location==region,])
-  names(datalist) <- locations
-  
-  # Build datalist
   datalist <- lapply(locations, function(region) data[data$location == region, ])
   names(datalist) <- locations
   
@@ -110,6 +130,7 @@ run_model <- function(data, locations, outcome, fam_type='quasi',
   arglag_tmp <- list(fun='ns', df=arglag_tmp)
   argvar_tmp <- if (argvar_tmp == 1) list(fun="lin") else list(fun="ns", df=argvar_tmp)
   df_tmp <- prod(arglag_tmp$df, argvar_tmp$df)
+  # df_tmp <- if (argvar_tmp$fun == 'lin') arglag_tmp$df else prod(arglag_tmp$df, argvar_tmp$df)
   
   # TP
   ranges_tp <- t(sapply(datalist,function(x) range(x$tp,na.rm=T)))
@@ -119,40 +140,16 @@ run_model <- function(data, locations, outcome, fam_type='quasi',
   arglag_tp <- list(fun='ns', df=arglag_tp)
   argvar_tp <- if (argvar_tp == 1) list(fun="lin") else list(fun="ns", df=argvar_tp)
   df_tp <- prod(arglag_tp$df, argvar_tp$df)
-
-  # # FG10
-  # ranges_fg10 <- t(sapply(datalist,function(x) range(x$fg10,na.rm=T)))
-  # cen_fg10 <- sapply(datalist,function(x) {
-  #   quantile(x$fg10,c(0:100)/100,na.rm=T)
-  # })
-  # arglag_fg10 <- list(fun='ns', df=arglag_fg10)
-  # argvar_fg10 <- if (argvar_fg10 == 1) list(fun="lin") else list(fun="ns", df=argvar_fg10)
-  # df_fg10 <- prod(arglag_fg10$df, argvar_fg10$df)
-  #
-  # # RH
-  # ranges_rh <- t(sapply(datalist,function(x) range(x$rh,na.rm=T)))
-  # cen_rh <- sapply(datalist,function(x) {
-  #   quantile(x$rh,c(0:100)/100,na.rm=T)
-  # })
-  # arg_rh <- list(argvar=4, arglag=3)
-  # df_rh <- prod(unlist(arg_rh))
-  # 
-  # # PM25
-  # ranges_pm25 <- t(sapply(datalist,function(x) range(x$pm25,na.rm=T)))
-  # cen_pm25 <- sapply(datalist,function(x) {
-  #   quantile(x$pm25,c(0:100)/100,na.rm=T)
-  # })
-  # arg_pm25 <- list(argvar=1, arglag=3)
-  # df_pm25 <- prod(unlist(arg_pm25))
-  # 
-
+  # df_tp  <- if (argvar_tp$fun  == 'lin') arglag_tp$df  else prod(arglag_tp$df,  argvar_tp$df)
   
   # 2. Stage 1: Fit the DLNM ----
   
   # BUILT OBJECTS WHERE outputs WILL BE STORED:
   
   Slist_comp <- vector('list',m)
+  Slist_model <- vector('list', m)
   names(Slist_comp) <- locs_used
+  names(Slist_model) <- locs_used
   
   ymat_tmp <- matrix(NA,m,df_tmp,dimnames=list(locs_used,paste('spl',seq(df_tmp),sep='')))
   Slist_tmp <- vector('list',m)
@@ -162,18 +159,6 @@ run_model <- function(data, locations, outcome, fam_type='quasi',
   Slist_tp <- vector('list',m)
   names(Slist_tp) <- locs_used
   
-  # ymat_fg10 <- matrix(NA,m,df_fg10,dimnames=list(locs_used,paste('spl',seq(df_fg10),sep='')))
-  # Slist_fg10 <- vector('list',m)
-  # names(Slist_fg10) <- locs_used
-  
-  # ymat_rh <- matrix(NA,m,df_rh,dimnames=list(locations,paste('spl',seq(df_rh),sep='')))
-  # Slist_rh <- vector('list',m)
-  # names(Slist_rh) <- locations
-  # 
-  # ymat_pm25 <- matrix(NA,m,df_pm25,dimnames=list(locations,paste('spl',seq(df_pm25),sep='')))
-  # Slist_pm25 <- vector('list',m)
-  # names(Slist_pm25) <- locations
-
   # WARNING FOR PREDICTION BEYOND BOUNDARIES SUPPRESSED
   options(warn=-1)
   
@@ -194,22 +179,28 @@ run_model <- function(data, locations, outcome, fam_type='quasi',
         lags <- paste0('+ ', paste(lag_terms, collapse=' + '))
       }
       
-      # CREATE THE SPLINES
-      cb.tmp <- crossbasis(sub$mx2t, lag=c(0,10), argvar=argvar_tmp, arglag=arglag_tmp, group=sub$year)
-      cb.tp <- crossbasis(sub$tp, lag=c(0,10), argvar=argvar_tp, arglag=arglag_tp, group=sub$year)
-
-      # Get 7-day ema
-      sub$fg10_ema <- EMA(na.approx(sub$fg10, na.rm = FALSE), n = 7)
-      sub$pm25_ema <- EMA(na.approx(sub$pm25, na.rm = FALSE), n = 7)
-      sub$rh_ema   <- EMA(na.approx(sub$rh,   na.rm = FALSE),   n = 7)
+      # CREATE THE SPLINES - CUMULATIVE
+      cb.tmp <- crossbasis(sub$mx2t, lag=lag_window, argvar=argvar_tmp, arglag=arglag_tmp, group=sub$year)
+      cb.tp <- crossbasis(sub$tp, lag=lag_window, argvar=argvar_tp, arglag=arglag_tp, group=sub$year)
+      controls <- '+ weekday + holiday + rh + fg10 + pm25'
       
+      # # CREATE THE SPLINES - NOT CUMULATIVE
+      # cb.tmp <- crossbasis(sub$mx2t, lag=lag_window, argvar=argvar_tmp, arglag=arglag_tmp)#, group=sub$year
+      # cb.tp <- crossbasis(sub$tp, lag=lag_window, argvar=argvar_tp, arglag=arglag_tp)
+      # 
+      # # Set controls
+      # fg10_con <- onebasis(sub$fg10, fun='ns', df=arglag_fg10)
+      # x_rep <- TTR::EMA(na.approx(sub$pm25, na.rm = FALSE), n = lag_window[2], wilder = FALSE)
+      # pm25_con <- onebasis(x_rep, fun = 'lin')
+      # # 
+      # controls <- '+ weekday + holiday + fg10_con + pm25_con'
+
       # Set formula
       form <- as.formula(
         paste0(outcome, 
-               " ~ month + weekday + holiday + ns(time, df=", longterm_df, "*", years, ') ', 
-               lags, '+ cb.tmp + cb.tp + fg10_ema + pm25_ema + rh_ema'
+               " ~ cb.tmp + cb.tp + ns(time, df=", longterm_df, "*", years, ')', 
+               controls, lags)
         )
-      )
 
       # RUN THE MODEL
       if(fam_type=='quasi'){
@@ -232,23 +223,17 @@ run_model <- function(data, locations, outcome, fam_type='quasi',
       ymat_tp[i,] <- predtp$coef
       Slist_tp[[i]] <- predtp$vcov   
       
-      # # FG10
-      # predfg10 <- crosspred(cb.fg10, model, cen=cen_fg10['0%',i])
-      # ymat_fg10[i,] <- predfg10$coef
-      # Slist_fg10[[i]] <- predfg10$vcov
-      # 
-      # # RH
-      # predrh <- crosspred(cb.rh, model, cen=cen_rh[reference,i])
-      # ymat_rh[i,] <- predrh$coef
-      # Slist_rh[[i]] <- predrh$vcov
-      # 
-      # # PM25
-      # predpm25 <- crosspred(cb.pm25, model, cen=cen_pm25['0%',i])
-      # ymat_pm25[i,] <- predpm25$coef
-      # Slist_pm25[[i]] <- predpm25$vcov
-
+      # FG10
+      predtp <- crosspred(cb.tp, model, cen=cen_tp['0%',i])
+      ymat_tp[i,] <- predtp$coef
+      Slist_tp[[i]] <- predtp$vcov  
+      
       # EXTRACT COMPARATIVE METRICS
       Slist_comp[[i]] <- comp_metrics(model)
+      Slist_model[[i]] <- model
+      
+      Slist_comp[[i]]$esti_tmp <- unname(predtmp$coefficients[1])
+      Slist_comp[[i]]$esti_tp <- unname(predtp$coefficients[1])
       
     })
   
@@ -259,89 +244,84 @@ run_model <- function(data, locations, outcome, fam_type='quasi',
   meta_comp <- list()
   meta_comp[['avg_tmp']] <- mean(sapply(Slist_comp, function(x) x$esti_tmp))
   meta_comp[['avg_tp']] <- mean(sapply(Slist_comp, function(x) x$esti_tp))
-  # meta_comp[['avg_fg10']] <- mean(sapply(Slist_comp, function(x) x$esti_fg10))
-  # meta_comp[['avg_rh']] <- mean(sapply(Slist_comp, function(x) x$esti_rh))
-  # meta_comp[['avg_pm25']] <- mean(sapply(Slist_comp, function(x) x$esti_pm25))
   meta_comp[['sum_aic']] <- sum(sapply(Slist_comp, function(x) x$aic))
-  meta_comp[['sum_pacf']] <- rowSums(sapply(Slist_comp, function(x) as.numeric(x$pacf)))
+  meta_comp[['sum_pacf']] <- rowMeans(sapply(Slist_comp, function(x) as.numeric(x$pacf)))
+  meta_comp[['sum_acf']] <- rowMeans(sapply(Slist_comp, function(x) as.numeric(x$acf)))
   
   # Meta coefs
   meta_tmp <- get_meta_analysis(pooled=pooled, ymat=ymat_tmp,  Slist=Slist_tmp, arg_var=argvar_tmp, arg_lag=arglag_tmp, ranges=ranges_tmp, cen=cen_tmp)
   meta_tp <- get_meta_analysis(pooled=pooled, ymat=ymat_tp,  Slist=Slist_tp, arg_var=argvar_tp, arg_lag=arglag_tp, ranges=ranges_tp, cen=cen_tp)
-  # meta_fg10 <- get_meta_analysis(pooled=pooled, ymat=ymat_fg10,  Slist=Slist_fg10, arg_var=argvar_fg10, arg_lag=arglag_fg10, ranges=ranges_fg10, cen=cen_fg10)
-  # meta_rh <- get_meta_analysis(ymat=ymat_rh,  Slist=Slist_rh, arg=arg_rh, ranges=ranges_rh, cen=cen_rh)
-  # meta_pm25 <- get_meta_analysis(ymat=ymat_pm25,  Slist=Slist_pm25, arg=arg_pm25, ranges=ranges_pm25, cen=cen_pm25)
 
   # RESET WARNING
   options(warn=0)
   
-  return(list(meta_comp=meta_comp, meta_tmp=meta_tmp, meta_tp=meta_tp))
-              # meta_fg10=meta_fg10, meta_rh=meta_rh, meta_pm25=meta_pm25))
+  return(list(models=Slist_model, meta_comp=meta_comp, meta_tmp=meta_tmp, meta_tp=meta_tp))
+
+}
+
+# Function to get usable tables and figures
+get_results <- function(output, city='ALL', lags=NULL, probs='50%', outcome){
+  
+  # Function to extract model comparison criteria
+  ftab <- function(m, mref=NULL) {
+    
+    # RETURN NOTHING IF m IS NULL
+    if (is.null(m)) return(rep(NA_real_, 12))
+    
+    # HETEROGENEITY AND IC STATS
+    q <- qtest(m)
+    het <- c(q$Q[1],q$df[1],q$pvalue[1],(q$Q[1]-q$df[1])/q$Q[1]*100,AIC(m),BIC(m))
+    # LR TEST (ONLY FOR META-REGRESSION)
+    if(!is.null(mref)) {
+      lrstat <- -2*(logLik(mref)-logLik(m))[1]
+      df <- attr(logLik(m),'df')-attr(logLik(mref),'df')
+      pvalue <- 1-pchisq(lrstat,df)
+      lr <- c(lrstat,df,pvalue)
+    }
+    # WALD TEST (ONLY FOR META-REGRESSION)
+    if(!is.null(mref)) {
+      coef <- coef(m)[-grep('Int',names(coef(m)))]
+      vcov <- vcov(m)[-grep('Int',names(coef(m))),-grep('Int',names(coef(m)))]
+      waldstat <- coef%*%solve(vcov)%*%coef
+      df <- length(coef)
+      pvalue <- 1-pchisq(waldstat,df)
+      wald <- c(waldstat,df,pvalue)
+    }
+    # outputS
+    if(!is.null(mref)) {
+      return(c(het,lr,wald))
+    } else return(c(het,rep(NA,6))) 
+  }
+  
+  meta_tmp <- output$meta_tmp
+  meta_tp <- output$meta_tp
+  
+  # Model selection criteria
+  tab <- matrix(NA,2,12)
+  colnames(tab) <- c('Q','df','p','I-square','AIC','BIC','stat','df','p','stat','df','p')
+  rownames(tab) <- c('tmp','tp') #, 'fg10', 'rh', 'fg10', 'pm25')
+  tab[1,] <- ftab(m=meta_tmp$mv)
+  tab[2,] <- ftab(m=meta_tp$mv)
+  
+  # Exposure response (with city specs) by lag
+  p_er_tmp <- city_exp_res(city=city, lag=lags, meta=meta_tmp, col='#D74B3C', xlab='Max. Temperature (%)', title=NULL)
+  p_er_tp <- city_exp_res(city=city, lag=lags, meta=meta_tp, col='#1D98EB', xlab='Precipitation (%)', title=NULL, reference='0%')
+  
+  # Lag response (with city specs) by percentile
+  q_tmp <- rowMeans(meta_tmp$cen)[probs]
+  q_tp <- rowMeans(meta_tp$cen)[probs]
+  p_lr_tmp <- city_lag_res(city=city, quant_v=q_tmp, meta=meta_tmp, col='#D74B3C', xlab='Max. Temperature (%)', title=NULL)
+  p_lr_tp <- city_lag_res(city=city, quant_v=q_tp, meta=meta_tp, col='#1D98EB', xlab='Precipitation (%)', title=NULL, reference='0%')
+  
+  return(list(tab=tab, 
+              p_er_tmp=p_er_tmp, p_er_tp=p_er_tp, #p_er_fg10=p_er_fg10, p_er_rh=p_er_rh, p_er_pm25=p_er_pm25, 
+              p_lr_tmp=p_lr_tmp, p_lr_tp=p_lr_tp)) #, p_lr_fg10=p_lr_fg10, p_lr_rh=p_lr_rh, p_lr_pm25=p_lr_pm25)) 
   
 }
 
+
 # Function to extract and format relevant results and figures
 format_results <- function(output, outcome, city=NULL){
-  
-  # Function to get usable tables and figures
-  get_results <- function(output, city='ALL', lags=NULL, probs='50%', outcome){
-    
-    # Function to extract model comparison criteria
-    ftab <- function(m, mref=NULL) {
-      
-      # RETURN NOTHING IF m IS NULL
-      if (is.null(m)) return(rep(NA_real_, 12))
-      
-      # HETEROGENEITY AND IC STATS
-      q <- qtest(m)
-      het <- c(q$Q[1],q$df[1],q$pvalue[1],(q$Q[1]-q$df[1])/q$Q[1]*100,AIC(m),BIC(m))
-      # LR TEST (ONLY FOR META-REGRESSION)
-      if(!is.null(mref)) {
-        lrstat <- -2*(logLik(mref)-logLik(m))[1]
-        df <- attr(logLik(m),'df')-attr(logLik(mref),'df')
-        pvalue <- 1-pchisq(lrstat,df)
-        lr <- c(lrstat,df,pvalue)
-      }
-      # WALD TEST (ONLY FOR META-REGRESSION)
-      if(!is.null(mref)) {
-        coef <- coef(m)[-grep('Int',names(coef(m)))]
-        vcov <- vcov(m)[-grep('Int',names(coef(m))),-grep('Int',names(coef(m)))]
-        waldstat <- coef%*%solve(vcov)%*%coef
-        df <- length(coef)
-        pvalue <- 1-pchisq(waldstat,df)
-        wald <- c(waldstat,df,pvalue)
-      }
-      # outputS
-      if(!is.null(mref)) {
-        return(c(het,lr,wald))
-      } else return(c(het,rep(NA,6))) 
-    }
-    
-    meta_tmp <- output$meta_tmp
-    meta_tp <- output$meta_tp
-
-    # Model selection criteria
-    tab <- matrix(NA,2,12)
-    colnames(tab) <- c('Q','df','p','I-square','AIC','BIC','stat','df','p','stat','df','p')
-    rownames(tab) <- c('tmp','tp') #, 'fg10', 'rh', 'fg10', 'pm25')
-    tab[1,] <- ftab(m=meta_tmp$mv)
-    tab[2,] <- ftab(m=meta_tp$mv)
-    
-    # Exposure response (with city specs) by lag
-    p_er_tmp <- city_exp_res(city=city, lag=lags, meta=meta_tmp, col='#D74B3C', xlab='Max. Temperature (%)', title=NULL)
-    p_er_tp <- city_exp_res(city=city, lag=lags, meta=meta_tp, col='#1D98EB', xlab='Precipitation (%)', title=NULL, reference='0%')
- 
-    # Lag response (with city specs) by percentile
-    q_tmp <- rowMeans(meta_tmp$cen)[probs]
-    q_tp <- rowMeans(meta_tp$cen)[probs]
-    p_lr_tmp <- city_lag_res(city=city, quant_v=q_tmp, meta=meta_tmp, col='#D74B3C', xlab='Max. Temperature (%)', title=NULL)
-    p_lr_tp <- city_lag_res(city=city, quant_v=q_tp, meta=meta_tp, col='#1D98EB', xlab='Precipitation (%)', title=NULL, reference='0%')
-
-    return(list(tab=tab, 
-                p_er_tmp=p_er_tmp, p_er_tp=p_er_tp, #p_er_fg10=p_er_fg10, p_er_rh=p_er_rh, p_er_pm25=p_er_pm25, 
-                p_lr_tmp=p_lr_tmp, p_lr_tp=p_lr_tp)) #, p_lr_fg10=p_lr_fg10, p_lr_rh=p_lr_rh, p_lr_pm25=p_lr_pm25)) 
-    
-  }
   
   # OVERALL
   overall <- get_results(output, city='ALL', lags=NULL, outcome=outcome)
@@ -446,8 +426,8 @@ format_results <- function(output, outcome, city=NULL){
     return(list(overall=overall, p_er_overall=p_er_overall, 
                 quant=quant, p_lr=p_lr, lags=lags, p_er=p_er,
                 city=city, city_er=city_er, city_lr=city_lr,
-                p_er_tmp_city=p_er_tmp_city, p_er_tp_city=p_er_tp_city, #p_er_fg10_city=p_er_fg10_city, p_er_rh_city=p_er_rh_city, p_er_pm25_city=p_er_pm25_city,
-                p_lr_tmp_city=p_lr_tmp_city, p_lr_tp_city=p_lr_tp_city)) #, p_lr_fg10_city=p_lr_fg10_city, p_lr_rh_city=p_lr_rh_city, p_lr_pm25_city=p_lr_pm25_city))
+                p_er_tmp_city=p_er_tmp_city, p_er_tp_city=p_er_tp_city, # p_er_fg10_city=p_er_fg10_city, #p_er_rh_city=p_er_rh_city, p_er_pm25_city=p_er_pm25_city,
+                p_lr_tmp_city=p_lr_tmp_city, p_lr_tp_city=p_lr_tp_city)) #p_lr_fg10_city=p_lr_fg10_city)) #p_lr_rh_city=p_lr_rh_city, p_lr_pm25_city=p_lr_pm25_city))
   
     } else {
   
@@ -871,15 +851,14 @@ city_lag_res <- function(city='ALL', meta, col, xlab=NULL, quant_v=NULL, title=N
 }
 
 # Function to extract and plot overall & city specific 2D contour plots
-city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL, 
-                         reference='50%', sig=FALSE, shared_lims=NULL, shared_brks=NULL) {
-  
-  make_dlnm_plot <- function(df, xlab="", title="", ncol=300, nbreaks=15, contour_size=0.35, 
+city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL, reference='50%', 
+                         sig=FALSE, shared_lims=NULL, shared_brks=NULL, dx_spacer=6.5) {
+
+  make_dlnm_plot <- function(df, xlab="", title="", ncol=300, nbreaks=15, contour_size=0.35, dx_spacer=6.5,
                              sig=FALSE, shared_lims=NULL, shared_brks=NULL) {
     pal <- colorRampPalette(c('#1D98EB', 'white', '#D74B3C'))(ncol)
     brks <- pretty(range(df$z, na.rm=TRUE), n=nbreaks)
     
-    # Use shared limits if provided, otherwise compute from data
     if (!is.null(shared_lims) && !is.null(shared_brks)) {
       lims <- shared_lims
       brks <- shared_brks
@@ -889,36 +868,15 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL,
       brks <- pretty(lims, n=nbreaks)
     }
     
-    if (sig == TRUE) {
-      df$z <- ifelse(df$z_low <= 1 & df$z_high >= 1, NA, df$z)
-      # If all NA, add a single dummy non-NA value outside limits to anchor the scale
-      if (all(is.na(df$z))) {
-        df$z[1] <- lims[1]
-      }
-    }
-    # if (sig == TRUE) {
-    #   z_masked <- ifelse(df$z_low <= 1 & df$z_high >= 1, NA, df$z)
-    #   df$z <- if (all(is.na(z_masked))) {
-    #     message("Nothing significant in '", title, "' — skipping mask")
-    #     df$z
-    #   } else {
-    #     z_masked
-    #   }
-    # }
-    # 
-
-    ggplot(df, aes(x=x, y=y, fill=z)) +
+    # Binary mask: 1 = significant, 0 = not
+    df$sig_mask <- as.numeric(!(df$z_low <= 1 & df$z_high >= 1))
+    
+    p <- ggplot(df, aes(x=x, y=y, fill=z)) +
       geom_raster(interpolate=TRUE) +
-      geom_contour(aes(z=z, colour=..level..),
-                   breaks=brks, size=contour_size, show.legend=FALSE) +
       scale_fill_gradient2(
         low='#1D98EB', mid='white', high='#D74B3C',
         midpoint=1, limits=lims, breaks=brks, name="RR",
         na.value="grey85",
-        # guide=guide_colorbar(
-        #   barwidth=unit(0.6, "lines"), barheight=unit(12, "lines"),
-        #   ticks=TRUE, frame.colour="black", ticks.colour="black"
-        # )
         guide=guide_colorbar(
           barwidth=unit(12, "lines"),
           barheight=unit(0.6, "lines"),
@@ -930,8 +888,6 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL,
           direction="horizontal"
         )
       ) +
-      scale_colour_gradientn(colours=pal, limits=range(brks), breaks=brks, guide="none") +
-      geom_contour(aes(z=z), breaks=brks, colour="white", size=0.7, alpha=0.6) +
       scale_x_continuous(breaks=pretty(df$x, n=5)) +
       scale_y_continuous(breaks=pretty(df$y, n=6)) +
       labs(x=xlab, y="Lag (days)", title=title) +
@@ -948,6 +904,84 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL,
         legend.position='bottom',
         plot.title=element_text(size=14, face="plain", hjust=0.5)
       )
+    
+    # Overlay significance boundary if requested
+    if (sig) {
+
+    df_sig <- df[!(df$z_low <= 1 & df$z_high >= 1), ]
+
+    if (nrow(df_sig) > 0) {
+      dx <- diff(sort(unique(df$x)))[1] / 2
+      dy <- diff(sort(unique(df$y)))[1] / 2
+
+      spacing <- dx * dx_spacer
+
+      x_range <- range(df$x)
+      y_range <- range(df$y)
+      # slope   <- diff(y_range) / diff(x_range)
+      aspect <- 1  # adjust this single number to control diagonal angle
+      slope <- aspect * diff(y_range) / diff(x_range)
+      intercepts <- seq(
+        y_range[1] - diff(x_range) * slope,
+        y_range[2] + diff(x_range) * slope,
+        by=spacing * slope * 2
+      )
+
+      make_segs <- function(df_sub, intercepts, sign=1) {
+        if (nrow(df_sub) == 0) return(NULL)
+        do.call(rbind, lapply(intercepts, function(b) {
+          xs <- seq(x_range[1], x_range[2], by=dx/3)
+          ys <- sign * slope * xs + b
+          pts <- data.frame(x=xs, y=ys)
+          pts <- pts[pts$y >= y_range[1] & pts$y <= y_range[2], ]
+          if (nrow(pts) < 2) return(NULL)
+
+          pts$keep <- mapply(function(px, py)
+            any(px >= (df_sub$x - dx) & px <= (df_sub$x + dx) &
+                  py >= (df_sub$y - dy) & py <= (df_sub$y + dy)),
+            pts$x, pts$y)
+
+          idx <- which(pts$keep[-nrow(pts)] & pts$keep[-1])
+          if (length(idx) == 0) return(NULL)
+
+          data.frame(
+            x    = pts$x[idx],
+            xend = pts$x[idx + 1],
+            y    = pts$y[idx],
+            yend = pts$y[idx + 1]
+          )
+        }))
+      }
+
+      df_sig_high <- df_sig[df_sig$z > 1, ]  # RR > 1
+      df_sig_low  <- df_sig[df_sig$z < 1, ]  # RR < 1
+
+      segs_high <- rbind(make_segs(df_sig_high, intercepts, sign=1),
+                         make_segs(df_sig_high, intercepts, sign=-1))
+
+      segs_low  <- rbind(make_segs(df_sig_low,  intercepts, sign=1),
+                         make_segs(df_sig_low,  intercepts, sign=-1))
+
+      if (!is.null(segs_high) && nrow(segs_high) > 0) {
+        p <- p + geom_segment(
+          data=segs_high,
+          aes(x=x, y=y, xend=xend, yend=yend),
+          colour="#a0392e", alpha=0.4, linewidth=0.4,
+          inherit.aes=FALSE
+        )
+      }
+
+      if (!is.null(segs_low) && nrow(segs_low) > 0) {
+        p <- p + geom_segment(
+          data=segs_low,
+          aes(x=x, y=y, xend=xend, yend=yend),
+          colour="#12669e", alpha=0.4, linewidth=0.4,
+          inherit.aes=FALSE
+        )
+      }
+    }
+    }
+    p
   }
   
   make_df <- function(cp, perc) {
@@ -958,7 +992,6 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL,
     df
   }
   
-  # ── Unlist meta ──────────────────────────────────────────────────────────────
   list2env(meta, envir=environment())
   
   if (city == 'ALL') {
@@ -973,7 +1006,7 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL,
                     cen=rowMeans(cen)[reference])
     df_overall <- make_df(cp, perc)
     
-    p <- make_dlnm_plot(df_overall, xlab=xlab, title=title, sig=sig, shared_lims=shared_lims, shared_brks=shared_brks)
+    p <- make_dlnm_plot(df_overall, xlab=xlab, title=title, sig=sig, shared_lims=shared_lims, shared_brks=shared_brks, dx_spacer=dx_spacer)
     
     return(list(df=df_overall, p=p))
     
@@ -991,11 +1024,16 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL,
                     at=cen[, i], cen=cen[reference, i])
     df_city <- make_df(cp, perc)
     
-    p <- make_dlnm_plot(df_city, xlab=xlab, title=city, sig=sig, shared_lims=shared_lims, shared_brks=shared_brks)
+    p <- make_dlnm_plot(df_city, xlab=xlab, title=city, sig=sig, shared_lims=shared_lims, shared_brks=shared_brks, dx_spacer=dx_spacer)
     
     return(list(df=df_city, p=p))
   }
 }
+
+# x <- city_con_res(city='ALL', output$meta_tp, xlab=NULL, title=NULL, reference='60%', sig=TRUE, shared_lims=NULL, shared_brks=NULL, dx_spacer=1)
+# ggsave(paste0(path_report, 'II. dlnm/test.png'), x$p, width = 5, height = 5, dpi = 300, bg = 'white')
+
+
 
 #### DEPENDENCIES ####
 
@@ -1009,9 +1047,9 @@ h_cols <- c('total_patients',
             'gynaecology', 'orthopaedics', 'dermatology', 'surgery',
             'psychiatry', 'pulmonary', 'disability', 'dentistry', 'oncology',
             'ncd', 'antiretroviral', 'substance_counselling', 'physiotherapy')
+controls <- c('elev', 'popu', "hosp_n", "hosp_teach", 'mcv1', "dtp1", "dtp3", "hsize", "anc", "insurance", "malnutrition", "pnc", "sba", "tt", "decision", "hwealth", "meducation")
 
-location_levels <- c('Bilaspur','Chamba', 'Dharamshala', 'Hamirpur', 'Kullu', 'Kyelang', 
-                     'Mandi', 'Nahan', 'Reckong Peo', 'Shimla', 'Solan', 'Una')
+location_levels <- c("Una", 'Kangra', "Nahan", "Hamirpur", 'Mandi', "Chamba", "Dharamshala", "Solan", "Kullu",  "Reckong Peo")
 season_levels   <- c('Winter (Jan-Feb)', 'Pre-Monsoon (Mar-May)', 'Monsoon (Jun-Sep)', 'Post-Monsoon (Oct-Dec)')
 month_levels    <- c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
 weekday_levels  <- c('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
@@ -1026,7 +1064,6 @@ ward_levels     <- c('general', 'emergency', 'ophthalmology', 'ent', 'paediatric
 nm <- c(season='Season', closed='Closed', holiday='Holiday', total_patients='Total patients', 
         location='Location', weekday='Weekday', time='Time', 
         patients_lag1='Total Patients (Lag=1)', patients_lag7='Total Patients (Lag=7)',
-        elev='Elevation', popu='Population density', 
         # POPULATION GROUPS
         M='Men', F='Women',
         under_5='Under 5', age5_14='Ages 5-14', age15_24='Ages15-24', age25_64='Ages 25-64', over_65='Ages 65+', 
@@ -1040,13 +1077,24 @@ nm <- c(season='Season', closed='Closed', holiday='Holiday', total_patients='Tot
         physiotherapy='Physiotherapy', 
         # CONTINUOUS WEATHER
         t2m='Mean temp. (\u00B0C)', mx2t='Max temp. (\u00B0C)', mn2t='Min temp. (\u00B0C)',
-        rh='Rel. humidity (%)', tp='Precipitation (mm)', fg10='Windspeed (km/hr)', pm25='PM$^2.5$ (µg/m³)',
+        rh='Rel. humidity (%)', tp='Precipitation (mm)', fg10='Windspeed (km/hr)', pm25='PM 2.5 (µg/m³)',
         dt="Diurnal range (\u00B0C)", wb="Wet-bulb temp. (\u00B0C)",
-        # IMD DEFINITIONS
-        mx2t_IMD='IMD: Mx temp. >30\u00B0C', mn2t_IMD='IMD: Min temp. <0\u00B0C', 
-        tp_IMD='IMD: Precipitation >15mm', fg10_IMD='IMD: Wind speed >40km/h', pm25_IMD='IMD: PM2.5 >60 µg/m³', 
-        rh_low_IMD='IMD: Humidity <30%', rh_hig_IMD='IMD: Humidity >60%',
-        # CLIM. DEFINITIONS
-        mx2t_p90='Clim: Max temp. >90th', mn2t_p10='Clim: Min temp. <10th', 
-        tp_p90='Clim: Precipitation >90th', fg10_p90='Clim: Wind speed >90th', pm25_p90='Clim: PM2.5 >90th', 
-        rh_mean_p10 ='Clim: Humidity <10th', rh_mean_p90='Clim: Humidity >90th') 
+        # Controls
+        lat= 'Latitude', lon= 'Longitude',elev= "Altitude",
+        popu= "Population density",hosp_n= "Number of hospitals",hosp_teach= "Teaching hospital",
+        insurance= "Health insurance coverage",decision= "Healthcare decision-making",
+        meducation= "Maternal education",hsize= "Household size",
+        hwealth= "Household wealth", mcv1= "MCV1 vaccination coverage",
+        dtp1= "DTP1 vaccination coverage",dtp3= "DTP3 vaccination coverage",
+        anc= "Antenatal care coverage",malnutrition = "Malnutrition prevalence",
+        pnc= "Postnatal care coverage",sba= "Skilled birth attendance",
+        tt= "Tetanus toxoid coverage"
+        )
+        # # IMD DEFINITIONS
+        # mx2t_IMD='IMD: Mx temp. >30\u00B0C', mn2t_IMD='IMD: Min temp. <0\u00B0C', 
+        # tp_IMD='IMD: Precipitation >15mm', fg10_IMD='IMD: Wind speed >40km/h', pm25_IMD='IMD: PM2.5 >60 µg/m³', 
+        # rh_low_IMD='IMD: Humidity <30%', rh_hig_IMD='IMD: Humidity >60%',
+        # # CLIM. DEFINITIONS
+        # mx2t_p90='Clim: Max temp. >90th', mn2t_p10='Clim: Min temp. <10th', 
+        # tp_p90='Clim: Precipitation >90th', fg10_p90='Clim: Wind speed >90th', pm25_p90='Clim: PM2.5 >90th', 
+        # rh_mean_p10 ='Clim: Humidity <10th', rh_mean_p90='Clim: Humidity >90th') 

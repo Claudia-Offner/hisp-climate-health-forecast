@@ -23,11 +23,15 @@ load(paste0('2_Active_Data/202_weat/', weat_import, '.RData'))
 load(paste0('2_Active_Data/201_heal/', heal_import, '.RData'))
 load(paste0('2_Active_Data/204_misc/', pop_import, '.RData'))
 
+# Fix pop
+
+# Controls
+controls <- c('elev', 'popu', "hosp_n", "hosp_teach", 'mcv1', "dtp1", "dtp3", "hsize", "anc", "insurance", "malnutrition", "pnc", "sba", "tt", "decision", "hwealth", "meducation")
+
 # Add population information to weat
 df_weat <- df_weat %>%
   left_join(pop_res, b=c('location', 'year')) %>%
   arrange(date, location) %>%
-  rename(popu=population_density) %>%
   dplyr::select(location, date, year, season, month, week, 
          weekday, day, elev, popu, everything())
 
@@ -40,7 +44,7 @@ df_heal_l$weekday <- NULL
 check <- df_weat[, !grepl('lag|_c|_p|IMD', names(df_weat))]
 names(check)
 df_weat_sub <- df_weat %>% dplyr::select(location, date, year, season, month, week, 
-                                  weekday, day, elev, popu,
+                                  weekday, day, any_of(controls),
                                   t2m_day, mn2t_day, mx2t_day, 
                                   t2m_night, mn2t_night, mx2t_night, 
                                   any_of(w_cols), 
@@ -48,7 +52,7 @@ df_weat_sub <- df_weat %>% dplyr::select(location, date, year, season, month, we
 
 # 1. Merge weather-health-control data sets ####
 
-con <- dbConnect(duckdb())
+con <- dbConnect(duckdb(), array = "matrix")
 duckdb::duckdb_register(con, 'weat_sub', df_weat_sub)
 duckdb::duckdb_register(con, 'weat', df_weat)
 duckdb::duckdb_register(con, 'heal_w', df_heal_w)
@@ -85,7 +89,7 @@ df_all <- dbGetQuery(con, '
 
 
 # Set column order
-order <- c('location', 'date', 'year', 'season', 'month', 'week', 'weekday', 'day', 'closed', 'holiday', 'elev', 'popu')
+order <- c('location', 'date', 'year', 'season', 'month', 'week', 'weekday', 'day', 'closed', 'holiday')
 setcolorder(df_wide,  c(order, setdiff(names(df_wide),  order)))
 setcolorder(df_long,  c(order, setdiff(names(df_long),  order)))
 setcolorder(df_all,   c(order, setdiff(names(df_all),   order)))
@@ -114,7 +118,7 @@ df_wide <- df_wide %>%
 
 # Select the desired columns
 df_wide <- df_wide %>%
-  dplyr::select(location, date, year, season, month, week, weekday, closed, holiday, elev, popu,
+  dplyr::select(any_of(order), any_of(controls),
          any_of(c(h_cols, grep('_c$', names(df_wide), value = TRUE),
                   w_cols, matched_cols)))%>%
   arrange(location, date)
@@ -126,6 +130,7 @@ df_all$month <- factor(df_all$month, levels = month_levels)
 df_all$season <- factor(df_all$season, levels = season_levels)
 df_all$age_group <- factor(df_all$age_group, levels = age_levels)
 df_all$gender <- factor(df_all$gender, levels = gender_levels)
+
 
 #### EXPORT ####
 

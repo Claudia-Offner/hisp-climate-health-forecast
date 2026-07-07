@@ -502,7 +502,6 @@ w_cols <- c(w_cols[!grepl("^sh_", w_cols)],
             'rh_low_IMD_b', 'rh_hig_IMD_b', 'pm25_IMD_b',
             'mx2t_p90', 'mn2t_p10', 'tp_p90', 'fg10_p90', 
             'rh_mean_p10', 'rh_mean_p90', 'pm25_p90')
-location_levels <- unique(df_wide$location)
 
 # GENERAL CHARACTERISTICS ####
 
@@ -723,7 +722,7 @@ plots_by_location <- lapply(location_levels, function(loc) {
   
   return(p)
 })
-(hist_tota_loc <- wrap_plots(plots_by_location, ncol = 3))
+(hist_tota_loc <- wrap_plots(plots_by_location, nrow = 2))
 
 # Weather only
 cols_to_plot <- colnames(sub1[, -c(1)])
@@ -797,7 +796,7 @@ plots_by_location <- lapply(location_levels, function(loc) {
     ggtitle(loc) +  
     xlab('Ward') + 
     ylab('Count') + 
-    scale_y_continuous(limits = c(0, 750000), labels = scales::comma) +  # Remove scientific notation (comma format)
+    scale_y_continuous(labels = scales::comma) +  #limits = c(0, 900000),  Remove scientific notation (comma format)
     scale_x_discrete(labels = function(x) {
       sapply(x, function(lbl) if (lbl %in% names(nm)) nm[[lbl]] else lbl)
     }) +
@@ -816,7 +815,7 @@ plots_by_location <- lapply(location_levels, function(loc) {
   
   return(p)
 })
-(cat_ward_loc <- wrap_plots(plots_by_location, ncol = 3))
+(cat_ward_loc <- wrap_plots(plots_by_location, nrow=2))
 
 # REMOVE wards with daily average < 50
 
@@ -1230,12 +1229,12 @@ row.names(CLIM_interaction_tests) <- NULL
 
 # Figures
 figs <- list('1_study_area'=list(p=study_area, w=8, h=7*0.8),
-             '2A_hist_tota_loc'=list(p=hist_tota_loc, w=10, h=7),
-             '2B_cat_ward_loc'=list(p=cat_ward_loc, w=10, h=7),
+             '2A_hist_tota_loc'=list(p=hist_tota_loc, w=14, h=7),
+             '2B_cat_ward_loc'=list(p=cat_ward_loc, w=14, h=7) ,
              '2C_ts_heal_all_loc'=list(p=ts_heal_all_loc, w=8, h=5),
              '2D_ts_heal_ward'=list(p=ts_heal_ward, w=8, h=5),
              '2E_ts_emergency'=list(p=ts_emergency, w=8, h=5),
-             '3A_hist_weat'=list(p=hist_weat,  w=10, h=7), 
+             '3A_hist_weat'=list(p=hist_weat,  w=10, h=7),
              '3B_ts_mx2t'=list(p=ts_mx2t, w=8, h=5),
              '3C_ts_tp'=list(p=ts_tp, w=8, h=5),
              '3C_ts_fg10'=list(p=ts_fg10, w=8, h=5)
@@ -1246,7 +1245,7 @@ for (f in names(figs)){
 }
 
 # TABLES
-tabs <- c('base', 'base_loc', 'weat_loc_tab', 'IMD_anova', 'IMD_interaction_tests', 'CLIM_anova', 'CLIM_interaction_tests')
+tabs <- c('base', 'base_loc', 'IMD_anova', 'IMD_interaction_tests', 'CLIM_anova', 'CLIM_interaction_tests')
 for (t in tabs){
   write.csv(get(t), paste0(path_git, '0_Reporting/I. desc/tab_', t, '.csv'), row.names = FALSE)
   

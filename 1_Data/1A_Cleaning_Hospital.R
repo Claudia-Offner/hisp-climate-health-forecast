@@ -4,7 +4,7 @@
 
 # Prep environment
 rm(list = ls()); graphics.off(); gc()
-setwd('C:/Users/offne/Documents/GitHub/hisp-climate-health-forecast/')
+setwd('C:/Users/claer14/Documents/GitHub/hisp-climate-health-forecast/')
 
 
 ####  DEPENDENCIES  ####
@@ -69,6 +69,7 @@ hols <- read.csv('2_Active_Data/204_misc/glo_Adm0_WorldPop_2010-2019_public-scho
 hols_hp <- read.csv('2_Active_Data/204_misc/ind_Adm2_OfficeHolidays_2015-2023_HP_holidays_daily.csv', check.names = FALSE, fileEncoding = 'UTF-8')
 
 # Set data types
+unique(df_heal$location)
 (column_types <- sapply(df_heal, class))
 df_heal$date <- as.Date(df_heal$date)
 df_heal$age <- as.numeric(gsub('[^0-9.]', '', df_heal$age))
@@ -139,7 +140,7 @@ ward_patterns <- c(
   'FEMALE|MALE' = 'general',
   'birth and death' = 'remove',
   'anaesthetist' = 'remove',
-  'patholo' = 'removed',
+  'patholo' = 'remove',
   'nlep' = 'remove',
   'tb-dot' = 'pulmonary',
   'ecg|blood'= 'general'
@@ -157,7 +158,6 @@ df_heal$ward_group <- NULL
 
 # Remove irrelevant wards
 df_heal <- df_heal %>% filter(ward_name != 'remove')
-
 unique(df_heal$ward_name)
 
 # How many are shared across all sites
@@ -406,6 +406,7 @@ account_not_tables
 
 # 4. B: Checks across wards ####
 ward_levels <- unique(df_heal_l$ward_name)[-1]
+
 # Combine location names and corresponding all missing days
 filtered_list <- mapply(function(loc, days) {
   df_heal_w %>%
