@@ -47,9 +47,6 @@ startdate <- as.Date('2015-01-01')
 enddate <- as.Date('2020-02-14')  
 df_dlnm <- df_dlnm[df_dlnm$date >= startdate & df_dlnm$date <= enddate,]
 
-# !!! Remove Sundays for now !!!
-# df_dlnm <- df_dlnm %>% filter(weekday != 'Sun')
-
 # Select variables of interest
 names(df_dlnm) <- gsub("rh_mean", "rh", names(df_dlnm))
 names(df_dlnm) <- gsub("sh_mean", "sh", names(df_dlnm))
@@ -66,69 +63,184 @@ df_dlnm <- df_dlnm %>%
                 weekday, doy, closed, holiday, all_of(controls), all_of(h_cols), 
                 all_of(w_cols))
 
-# PRECIPITATION: Create 7-day rolling sum & log transform
+# Create weekly df
+df_weekly <- df_dlnm %>%
+  group_by(location, year, week) %>%
+  summarise(
+    # --- identifiers / constants (take first value in the week) ---
+    lat        = first(lat),
+    lon        = first(lon),
+    elev       = first(elev),
+    week_start = min(date),
+    season     = first(season),   # a week could span two seasons/months at the boundary;
+    month      = first(month),    # `first()` just takes whichever comes first in the week
+    
+    # --- daily 0/1 indicators -> count of days in the week ---
+    n_days     = n(),
+    n_closed   = sum(closed, na.rm = TRUE),
+    n_holiday  = sum(holiday, na.rm = TRUE),
+    
+    # --- slow-moving covariates (essentially constant within location/time) -> mean ---
+    across(c(popu, mcv1, dtp1, dtp3, hsize, anc, insurance, malnutrition,
+             pnc, sba, tt, decision, hwealth, meducation),
+           ~ mean(.x, na.rm = TRUE)),
+    
+    # --- facility indicators -> first (assumed constant per location) ---
+    hosp_n     = first(hosp_n),
+    hosp_teach = first(hosp_teach),
+    
+    # --- patient visit counts -> sum across the week ---
+    across(c(total_patients, F, M, under_5, age5_14, age15_24, age25_64,
+             over_65, general, emergency, ophthalmology, ent, paediatrics,
+             gynaecology, orthopaedics, dermatology, surgery, psychiatry,
+             pulmonary, disability, dentistry, oncology, ncd,
+             antiretroviral, substance_counselling, physiotherapy),
+           ~ sum(.x, na.rm = TRUE)),
+    
+    # --- climate variables -> mean for temperature/humidity/wind types ---
+    across(c(t2m, mn2t, mx2t, wb, dt, fg10, rh, sh, pm25),
+           ~ mean(.x, na.rm = TRUE)),
+    
+    # --- precipitation -> sum (it's an accumulated quantity, not an instantaneous one) ---
+    tp = sum(tp, na.rm = TRUE),
+    
+    .groups = "drop"
+  ) %>%
+  arrange(location, week_start) %>%
+  group_by(location) %>%
+  mutate(time = row_number()) %>%
+  ungroup()
+
+# Create cumulative measures (windows 1-14) for w_cols
+windows <- 1:14
+
 df_dlnm <- df_dlnm %>%
   group_by(location) %>%
-  mutate(tp_roll=rollapply(tp,   width = 7, FUN = sum,  align = "right", fill = NA),
-         mx2t_roll=rollapply(mx2t,   width = 7, FUN = mean,  align = "right", fill = NA)) %>%
-  ungroup()
-df_dlnm$tp_roll_log <- log(df_dlnm$tp_roll+10)
-df_dlnm$tp_log <- log(df_dlnm$tp+2)
-
-# Check
-p1 <- ggplot(df_dlnm, aes(x = tp)) + 
-  geom_histogram(binwidth = 25, fill = 'gray50', color = "black") +
-  labs(title = "Raw") + 
-  theme_minimal() +
-  theme(axis.title.x=element_blank())
-
-p2 <- ggplot(df_dlnm, aes(x = tp_roll)) +
-  geom_histogram(binwidth = 75, fill = 'gray50', color = "black") +
-  labs(title = "Rolling (7-day)") +
-  theme_minimal() +
-  theme(axis.title.x=element_blank())
-
-p3 <- ggplot(df_dlnm, aes(x = tp_log)) +
-  geom_histogram(binwidth = 1, fill = 'gray50', color = "black") +
-  labs(title = "Log + 1 (raw)") +
-  theme_minimal() +
-  theme(axis.title.x=element_blank())
-
-p4 <- ggplot(df_dlnm, aes(x = tp_roll_log)) +
-  geom_histogram(binwidth =1, fill = 'gray50', color = "black") +
-  labs(title = "Log rolling + 1 (7-day)") + 
-  theme_minimal()+
-  theme(axis.title.x=element_blank())
-
-tp_dist <- wrap_plots(list(p1, p2, p3, p4), nrow = 1) +
-  plot_annotation(
-    title = "Distribution of precipitation variables",
-    theme = theme(
-      plot.title = element_text(hjust = 0.5, face='bold')
+  mutate(
+    across(
+      all_of(w_cols),
+      .fns = setNames(
+        lapply(windows, function(w) {
+          function(x) {
+            rollapply(
+              x,
+              width = w,
+              FUN = if (cur_column() %in% c("tp", "pm25")) sum else mean,
+              align = "right",
+              fill = NA
+            )
+          }
+        }),
+        paste0("roll", windows)
+      )
     )
-  )
-
-# Select tp exposure
-df_dlnm$tp <- df_dlnm$tp_log
+  ) %>%
+  ungroup()
 
 # LAGS: Add lags for outcome & w_col
 lag_cols <- c(h_cols, w_cols)
 for (col in lag_cols) {
-  for (i in 1:30) {
+  for (i in windows) {
     df_dlnm <- df_dlnm %>%
       group_by(location) %>%
       mutate("{col}_lag{i}" := lag(.data[[col]], i)) %>%
       ungroup()
   }
 }
+# LAGS: Add lags for outcome & w_col
+for (col in lag_cols) {
+  for (i in windows) {
+    df_weekly <- df_weekly %>%
+      group_by(location) %>%
+      mutate("{col}_lag{i}" := lag(.data[[col]], i)) %>%
+      ungroup()
+  }
+}
+
+
+# Log transform tp variables
+df_dlnm$tp_log <- log(df_dlnm$tp+2)
+df_dlnm <- df_dlnm %>%
+  mutate(
+    across(
+      matches("^tp.*roll"),
+      ~ log(.x + 10),
+      .names = "{.col}_log"
+    ),
+    across(
+      matches("^tp.*lag"),
+      ~ log(.x + 2),
+      .names = "{.col}_log"
+    )
+  )
+
+
+# Log transform tp variables
+df_weekly$tp_log <- log(df_weekly$tp+2)
+df_weekly <- df_weekly %>%
+  mutate(
+    across(
+      matches("^tp.*roll"),
+      ~ log(.x + 10),
+      .names = "{.col}_log"
+    ),
+    across(
+      matches("^tp.*lag"),
+      ~ log(.x + 2),
+      .names = "{.col}_log"
+    )
+  )
 
 # Forward-fill ONLY the lagged variables
 lagged_vars <- grep("_lag\\d+$", names(df_dlnm), value = TRUE)
+lagged_vars <- grep("_lag\\d+$", names(df_weekly), value = TRUE)
 
 df_dlnm <- df_dlnm %>%
   group_by(location) %>%
   fill(all_of(lagged_vars), .direction = "down") %>%
   ungroup()
+df_weekly <- df_weekly %>%
+  group_by(location) %>%
+  fill(all_of(lagged_vars), .direction = "down") %>%
+  ungroup()
+
+
+# # Check
+# p1 <- ggplot(df_dlnm, aes(x = tp)) + 
+#   geom_histogram(binwidth = 25, fill = 'gray50', color = "black") +
+#   labs(title = "Raw") + 
+#   theme_minimal() +
+#   theme(axis.title.x=element_blank())
+# 
+# p2 <- ggplot(df_dlnm, aes(x = tp_roll)) +
+#   geom_histogram(binwidth = 75, fill = 'gray50', color = "black") +
+#   labs(title = "Rolling (7-day)") +
+#   theme_minimal() +
+#   theme(axis.title.x=element_blank())
+# 
+# p3 <- ggplot(df_dlnm, aes(x = tp_log)) +
+#   geom_histogram(binwidth = 1, fill = 'gray50', color = "black") +
+#   labs(title = "Log + 1 (raw)") +
+#   theme_minimal() +
+#   theme(axis.title.x=element_blank())
+# 
+# p4 <- ggplot(df_dlnm, aes(x = tp_roll_log)) +
+#   geom_histogram(binwidth =1, fill = 'gray50', color = "black") +
+#   labs(title = "Log rolling + 1 (7-day)") + 
+#   theme_minimal()+
+#   theme(axis.title.x=element_blank())
+# 
+# tp_dist <- wrap_plots(list(p1, p2, p3, p4), nrow = 1) +
+#   plot_annotation(
+#     title = "Distribution of precipitation variables",
+#     theme = theme(
+#       plot.title = element_text(hjust = 0.5, face='bold')
+#     )
+#   )
+# 
+# # Select tp exposure
+# df_dlnm$tp <- df_dlnm$tp_log
+# df_dlnm$tp_roll <- df_dlnm$tp_roll_log
 
 # 2. Ensemble analysis ####
 
@@ -195,7 +307,7 @@ table(df_ensm $cold20_lag0)
 table(df_ensm $prec80_lag0)
 
 #### EXPORT ####
-ggsave(paste0(path_report, 'I. desc/fig_4_tp_dist.png'), tp_dist, width=8, height=4, dpi = 300, bg='white')
-save(df_dlnm, file = paste0(path_git, '2_DLNM/', file_export, '_dlnm.RData'))
+# ggsave(paste0(path_report, 'I. desc/fig_4_tp_dist.png'), tp_dist, width=8, height=4, dpi = 300, bg='white')
+save(df_dlnm, df_weekly, file = paste0(path_git, '2_DLNM/', file_export, '_dlnm.RData'))
 save(df_ensm , file = paste0(path_git, '3_Ensemble/', file_export, '_ensemble.RData'))
 

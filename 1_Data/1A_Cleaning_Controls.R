@@ -39,6 +39,14 @@ loc_points <- st_as_sf(
                  'Hamirpur', 'Kullu', 'Kangra',
                  'Reckong Peo', 'Kyelang', 'Nahan',
                  'Bilaspur', 'Mandi', 'Shimla', 'Una'),
+    fclass = c('District head', 'District head', 'District head', 
+               'District head', 'District head', 'City',
+               'District head', 'District head', 'District head',
+               'District head', 'District head', 'District head', 'District head'),
+    `Study Area` = c(1, 1, 1,
+                     1, 1, 1, 
+                     1, 0, 1, 
+                     0, 1, 0, 1),
     lon = c(76.127017, 76.321482, 77.099506,
             76.522135, 77.107945, 76.274797,
             78.267181, 77.023559, 77.294546,
@@ -55,6 +63,11 @@ loc_points_sf <- st_as_sf(loc_points, coords = c("lon", "lat"), crs = 4326) |>
   st_transform(crs = 3857) |>
   st_buffer(dist = 5000) |>
   st_transform(crs = 4326)
+
+
+# plot(loc_points)
+# path <- paste0(path_data, '2_Active_Data/200_admn/ind_admn_gps_pt_s1_GADM_pp_study_sites.shp')
+# st_write(loc_points, path, append=FALSE)
 
 
 # 1. Air pollution (LongPMInd via zendo.org) ####

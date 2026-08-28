@@ -1,47 +1,11 @@
 ### ------------------------------------------------------------------------ ### 
-### DLNM - Dependencies
+### DLNM - Utilities
 ### ------------------------------------------------------------------------ ### 
 # NB COLOURS: https://r-charts.com/colors/
 
-# Turn off scientific notation and set seed
-options(scipen=999)
-set.seed(123)
-
-#### PATHS ####
-user <- 'claer14'
-path_data <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
-path_git <- paste0('C:/Users/', user, '/Documents/GitHub/hisp-climate-health-forecast/')
-path_project <- paste0(path_git, '2_DLNM/')
-path_report <- paste0(path_git, '0_Reporting/')
-
-#### PACKAGES ####
-
-library(dplyr); library(tidyr); library(lubridate); library(zoo); library(dlnm);
-library(splines); library(ggplot2); library(patchwork); library(psychrolib);
 
 #### FUNCTIONS ####
 
-## LaTeX table builder
-get_kbl_tab <- function(dat, title, note, colnames, label, opts=c("repeat_header", "hold_position"),
-                        spanning_header  = NULL,
-                        bold_rows        = NULL,
-                        italic_rows      = NULL,
-                        hline_after_rows = NULL) {
-  k <- kbl(dat, format = "latex", booktabs = TRUE, longtable = TRUE,
-           linesep = "", col.names = colnames, escape = FALSE,
-           caption = title, label = label) |>
-    kable_styling(latex_options = c("repeat_header"), 
-                  font_size = 9, full_width = FALSE, position = "center")
-  
-  if (!is.null(spanning_header))  k <- k |> add_header_above(spanning_header, escape = FALSE)
-  if (!is.null(bold_rows))        k <- k |> row_spec(bold_rows,   bold   = TRUE)
-  if (!is.null(italic_rows))      k <- k |> row_spec(italic_rows, italic = TRUE)
-  if (!is.null(hline_after_rows))
-    for (r in hline_after_rows)   k <- k |> row_spec(r, extra_latex_after = "\\midrule")
-  
-  k |> footnote(general = note, general_title = "",
-                footnote_as_chunk = TRUE, escape = FALSE)
-}
 
 # Function to replace exact matches in df from a dictionary
 replace_exact_matches <- function(df, dict) {
@@ -60,30 +24,22 @@ comp_metrics <- function(model, cb=NULL, cen=NULL) {
   
   res <- list()
   
-  # Get sum aic
+  # Get sum aic/ACF/PACF
   res[['aic']] <- summary(model)$deviance + 2* summary(model)$df[1] * summary(model)$dispersion
-  
-  # Get sum of ACF
   res[['acf']] <- acf(residuals(model, type='pearson'), plot=FALSE, lag.max=30)$acf
-  
-  # Get sum of PACF
   res[['pacf']] <- pacf(residuals(model, type='pearson'), plot=FALSE, lag.max=30)$acf
   
-  
   if(!is.null(cb)){
-    
     # Get average of estimates (lag 4)
     pred <- crosspred(cb, model, cen)
-    
     res[['esti']] <- pred$coef[4]  
-    
   } 
   
   return(res) 
 }
 
 # Function to get reference meta-analysis
-get_meta_analysis <- function(pooled=TRUE, ymat, Slist, arg_var, arg_lag, ranges, cen){
+get_meta_analysis <- function(pooled=TRUE, ymat, Slist, arg_var, arg_lag, ranges, cen, lag_window){
   
   # Meta-analysis w/ prediction basis
   if(pooled==TRUE){
@@ -94,7 +50,7 @@ get_meta_analysis <- function(pooled=TRUE, ymat, Slist, arg_var, arg_lag, ranges
   
   bound <- c(colMeans(ranges))
   mean <- seq(bound[1],bound[2],length=30)
-  b_mean <- crossbasis(mean, lag=c(0,10), argvar=arg_var, arglag=arg_lag)
+  b_mean <- crossbasis(mean, lag=lag_window, argvar=arg_var, arglag=arg_lag)
   
   return(list(ymat=ymat, Slist=Slist, arg_var=arg_var, arg_lag=arg_lag, ranges=ranges, mv=mv, 
               bound=bound, b_mean=b_mean, cen=cen))
@@ -102,11 +58,9 @@ get_meta_analysis <- function(pooled=TRUE, ymat, Slist, arg_var, arg_lag, ranges
 }
 
 # Function to run model with static formula
-run_model <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE, 
-                      control_test=NULL, var_test=NULL, 
-                      longterm_df=10, autocorr_lag=0, lag_window=c(0,10),
-                      arglag_tmp=4, arglag_tp=4, arglag_fg10=4,
-                      argvar_tmp=1, argvar_tp=1){
+run_model <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE,
+                      longterm_df=8, autocorr_lag=14, lag_window=c(0,14),
+                      arglag_tmp=4, arglag_tp=4,argvar_tmp=1, argvar_tp=1){
   
   # 1. Data and dependency prep ----
   
@@ -121,16 +75,15 @@ run_model <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE,
   locs_used <- names(datalist)
   m <- length(datalist)
   years <- length(unique(data$year))
-
+  
   # TMP
-  ranges_tmp <- t(sapply(datalist,function(x) range(x$mx2t,na.rm=T)))
+  ranges_tmp <- t(sapply(datalist,function(x) range(x$tmp,na.rm=T)))
   cen_tmp <- sapply(datalist,function(x) {
-    quantile(x$mx2t,c(0:100)/100,na.rm=T)
+    quantile(x$tmp,c(0:100)/100,na.rm=T)
   })
   arglag_tmp <- list(fun='ns', df=arglag_tmp)
   argvar_tmp <- if (argvar_tmp == 1) list(fun="lin") else list(fun="ns", df=argvar_tmp)
   df_tmp <- prod(arglag_tmp$df, argvar_tmp$df)
-  # df_tmp <- if (argvar_tmp$fun == 'lin') arglag_tmp$df else prod(arglag_tmp$df, argvar_tmp$df)
   
   # TP
   ranges_tp <- t(sapply(datalist,function(x) range(x$tp,na.rm=T)))
@@ -140,7 +93,7 @@ run_model <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE,
   arglag_tp <- list(fun='ns', df=arglag_tp)
   argvar_tp <- if (argvar_tp == 1) list(fun="lin") else list(fun="ns", df=argvar_tp)
   df_tp <- prod(arglag_tp$df, argvar_tp$df)
-  # df_tp  <- if (argvar_tp$fun  == 'lin') arglag_tp$df  else prod(arglag_tp$df,  argvar_tp$df)
+  
   
   # 2. Stage 1: Fit the DLNM ----
   
@@ -180,28 +133,17 @@ run_model <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE,
       }
       
       # CREATE THE SPLINES - CUMULATIVE
-      cb.tmp <- crossbasis(sub$mx2t, lag=lag_window, argvar=argvar_tmp, arglag=arglag_tmp, group=sub$year)
+      cb.tmp <- crossbasis(sub$tmp, lag=lag_window, argvar=argvar_tmp, arglag=arglag_tmp, group=sub$year)
       cb.tp <- crossbasis(sub$tp, lag=lag_window, argvar=argvar_tp, arglag=arglag_tp, group=sub$year)
-      controls <- '+ weekday + holiday + rh + fg10 + pm25'
+      controls <- '+ weekday + holiday + rh_lag1 + fg10_lag1 + pm25_lag1' 
       
-      # # CREATE THE SPLINES - NOT CUMULATIVE
-      # cb.tmp <- crossbasis(sub$mx2t, lag=lag_window, argvar=argvar_tmp, arglag=arglag_tmp)#, group=sub$year
-      # cb.tp <- crossbasis(sub$tp, lag=lag_window, argvar=argvar_tp, arglag=arglag_tp)
-      # 
-      # # Set controls
-      # fg10_con <- onebasis(sub$fg10, fun='ns', df=arglag_fg10)
-      # x_rep <- TTR::EMA(na.approx(sub$pm25, na.rm = FALSE), n = lag_window[2], wilder = FALSE)
-      # pm25_con <- onebasis(x_rep, fun = 'lin')
-      # # 
-      # controls <- '+ weekday + holiday + fg10_con + pm25_con'
-
       # Set formula
       form <- as.formula(
-        paste0(outcome, 
-               " ~ cb.tmp + cb.tp + ns(time, df=", longterm_df, "*", years, ')', 
+        paste0(outcome,
+               " ~ cb.tmp + cb.tp + ns(time, df=", longterm_df, "*", years, ')',
                controls, lags)
-        )
-
+      )
+      
       # RUN THE MODEL
       if(fam_type=='quasi'){
         model <- glm(formula=form, family=quasipoisson(), data=sub)
@@ -221,12 +163,7 @@ run_model <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE,
       # TP
       predtp <- crosspred(cb.tp, model, cen=cen_tp['0%',i])
       ymat_tp[i,] <- predtp$coef
-      Slist_tp[[i]] <- predtp$vcov   
-      
-      # FG10
-      predtp <- crosspred(cb.tp, model, cen=cen_tp['0%',i])
-      ymat_tp[i,] <- predtp$coef
-      Slist_tp[[i]] <- predtp$vcov  
+      Slist_tp[[i]] <- predtp$vcov
       
       # EXTRACT COMPARATIVE METRICS
       Slist_comp[[i]] <- comp_metrics(model)
@@ -249,214 +186,14 @@ run_model <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE,
   meta_comp[['sum_acf']] <- rowMeans(sapply(Slist_comp, function(x) as.numeric(x$acf)))
   
   # Meta coefs
-  meta_tmp <- get_meta_analysis(pooled=pooled, ymat=ymat_tmp,  Slist=Slist_tmp, arg_var=argvar_tmp, arg_lag=arglag_tmp, ranges=ranges_tmp, cen=cen_tmp)
-  meta_tp <- get_meta_analysis(pooled=pooled, ymat=ymat_tp,  Slist=Slist_tp, arg_var=argvar_tp, arg_lag=arglag_tp, ranges=ranges_tp, cen=cen_tp)
-
+  meta_tmp <- get_meta_analysis(pooled=pooled, ymat=ymat_tmp,  Slist=Slist_tmp, arg_var=argvar_tmp, arg_lag=arglag_tmp, ranges=ranges_tmp, cen=cen_tmp, lag_window=lag_window)
+  meta_tp <- get_meta_analysis(pooled=pooled, ymat=ymat_tp,  Slist=Slist_tp, arg_var=argvar_tp, arg_lag=arglag_tp, ranges=ranges_tp, cen=cen_tp, lag_window=lag_window)
+  
   # RESET WARNING
   options(warn=0)
   
   return(list(models=Slist_model, meta_comp=meta_comp, meta_tmp=meta_tmp, meta_tp=meta_tp))
-
-}
-
-# Function to get usable tables and figures
-get_results <- function(output, city='ALL', lags=NULL, probs='50%', outcome){
   
-  # Function to extract model comparison criteria
-  ftab <- function(m, mref=NULL) {
-    
-    # RETURN NOTHING IF m IS NULL
-    if (is.null(m)) return(rep(NA_real_, 12))
-    
-    # HETEROGENEITY AND IC STATS
-    q <- qtest(m)
-    het <- c(q$Q[1],q$df[1],q$pvalue[1],(q$Q[1]-q$df[1])/q$Q[1]*100,AIC(m),BIC(m))
-    # LR TEST (ONLY FOR META-REGRESSION)
-    if(!is.null(mref)) {
-      lrstat <- -2*(logLik(mref)-logLik(m))[1]
-      df <- attr(logLik(m),'df')-attr(logLik(mref),'df')
-      pvalue <- 1-pchisq(lrstat,df)
-      lr <- c(lrstat,df,pvalue)
-    }
-    # WALD TEST (ONLY FOR META-REGRESSION)
-    if(!is.null(mref)) {
-      coef <- coef(m)[-grep('Int',names(coef(m)))]
-      vcov <- vcov(m)[-grep('Int',names(coef(m))),-grep('Int',names(coef(m)))]
-      waldstat <- coef%*%solve(vcov)%*%coef
-      df <- length(coef)
-      pvalue <- 1-pchisq(waldstat,df)
-      wald <- c(waldstat,df,pvalue)
-    }
-    # outputS
-    if(!is.null(mref)) {
-      return(c(het,lr,wald))
-    } else return(c(het,rep(NA,6))) 
-  }
-  
-  meta_tmp <- output$meta_tmp
-  meta_tp <- output$meta_tp
-  
-  # Model selection criteria
-  tab <- matrix(NA,2,12)
-  colnames(tab) <- c('Q','df','p','I-square','AIC','BIC','stat','df','p','stat','df','p')
-  rownames(tab) <- c('tmp','tp') #, 'fg10', 'rh', 'fg10', 'pm25')
-  tab[1,] <- ftab(m=meta_tmp$mv)
-  tab[2,] <- ftab(m=meta_tp$mv)
-  
-  # Exposure response (with city specs) by lag
-  p_er_tmp <- city_exp_res(city=city, lag=lags, meta=meta_tmp, col='#D74B3C', xlab='Max. Temperature (%)', title=NULL)
-  p_er_tp <- city_exp_res(city=city, lag=lags, meta=meta_tp, col='#1D98EB', xlab='Precipitation (%)', title=NULL, reference='0%')
-  
-  # Lag response (with city specs) by percentile
-  q_tmp <- rowMeans(meta_tmp$cen)[probs]
-  q_tp <- rowMeans(meta_tp$cen)[probs]
-  p_lr_tmp <- city_lag_res(city=city, quant_v=q_tmp, meta=meta_tmp, col='#D74B3C', xlab='Max. Temperature (%)', title=NULL)
-  p_lr_tp <- city_lag_res(city=city, quant_v=q_tp, meta=meta_tp, col='#1D98EB', xlab='Precipitation (%)', title=NULL, reference='0%')
-  
-  return(list(tab=tab, 
-              p_er_tmp=p_er_tmp, p_er_tp=p_er_tp, #p_er_fg10=p_er_fg10, p_er_rh=p_er_rh, p_er_pm25=p_er_pm25, 
-              p_lr_tmp=p_lr_tmp, p_lr_tp=p_lr_tp)) #, p_lr_fg10=p_lr_fg10, p_lr_rh=p_lr_rh, p_lr_pm25=p_lr_pm25)) 
-  
-}
-
-
-# Function to extract and format relevant results and figures
-format_results <- function(output, outcome, city=NULL){
-  
-  # OVERALL
-  overall <- get_results(output, city='ALL', lags=NULL, outcome=outcome)
-  # LAG
-  quant_test <- c('10%', '25%', '75%', '90%')
-  quant <- list()
-  for (q in quant_test){
-    quant[[q]] <- get_results(output, city='ALL', lags=NULL, probs=q, outcome=outcome)
-  }
-  # EXPOSURE
-  lag_test <- c(0, 3, 7, 10)
-  lags <- list()
-  for (l in lag_test){
-    lags[[as.character(l)]] <- get_results(output, city='ALL', lags=l, outcome=outcome)
-  }
-  
-  if(!is.null(output$meta_tmp$mv)){
-    
-    # Format overall plots
-    all <- overall[!names(overall) %in% 'tab']
-    p_blup_all <- lapply(all, function(x) x[['p_blup']])
-    p_blup_er <- p_blup_all[grepl('er', names(p_blup_all))] #|> head(-2)
-    p_blup_lr <- p_blup_all[grepl('lr', names(p_blup_all))] #|> head(-2)
-    p_er_overall <- wrap_plots(p_blup_er, nrow=1)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-    
-    # Format lag plots
-    p_lr_tmp <- wrap_plots(lapply(quant, function(x) x$p_lr_tmp$p_blup), ncol=4) & theme(legend.position='none')
-    p_lr_tp <- wrap_plots(lapply(quant, function(x) x$p_lr_tp$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    p_lr <- wrap_plots(p_lr_tmp, p_lr_tp, nrow=2)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-    
-    # Format exposure plots
-    p_er_tmp <- wrap_plots(lapply(lags, function(x) x$p_er_tmp$p_blup), ncol=4) & theme(legend.position='none')
-    p_er_tp <- wrap_plots(lapply(lags, function(x) x$p_er_tp$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    p_er <- wrap_plots(p_er_tmp, p_er_tp, nrow=2)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-    
-    if(!is.null(city)){
-      
-      locations <- city
-      city <- list()
-      city_er <- list()
-      city_lr <- list()
-      for (i in locations) {
-        city_er[[i]] <- list()
-        city_lr[[i]] <- list()
-        for (l in lag_test) {
-          city_er[[i]][[as.character(l)]] <- get_results(output, city=i, lags=l, outcome=outcome)
-          print(paste0(i, ' ', l))
-        }
-        for (q in quant_test) {
-          city_lr[[i]][[as.character(q)]] <- get_results(output, city=i, probs=q, outcome=outcome)
-          print(paste0(i, ' ', q))
-        }
-        
-        p_er_tmp_city <- wrap_plots(lapply(city_er[[i]], function(x) x$p_er_tmp$p_city + theme(legend.position="none")), ncol=4)+
-          plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-        p_er_tp_city <- wrap_plots(lapply(city_er[[i]], function(x) x$p_er_tp$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
-          plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-        # p_er_fg10_city <- wrap_plots(lapply(city_er[[i]], function(x) x$p_er_fg10$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
-        #   plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
- 
-        p_lr_tmp_city <- wrap_plots(lapply(city_lr[[i]], function(x) x$p_lr_tmp$p_city + theme(legend.position="none")), ncol=4)+
-          plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-        p_lr_tp_city <- wrap_plots(lapply(city_lr[[i]], function(x) x$p_lr_tp$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
-          plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-        # p_lr_fg10_city <- wrap_plots(lapply(city_lr[[i]], function(x) x$p_lr_fg10$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
-        #   plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-  
-      }
-      
-    } else {
-      
-      city <- list()
-      city_er <- list()
-      city_lr <- list()
-      for (i in locations){
-        city[[i]] <- get_results(output, city=i, lag=NULL, probs='50%', outcome=outcome)
-      }
-      p_er_tmp_city <- wrap_plots(lapply(city, function(x) x$p_er_tmp$p_city + theme(legend.position="none")), ncol=4)+
-        plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-      p_er_tp_city  <- wrap_plots(lapply(city, function(x) x$p_er_tp$p_city + theme(legend.position="none")), ncol=4)+
-        plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-      # p_er_fg10_city  <- wrap_plots(lapply(city, function(x) x$p_er_fg10$p_city + theme(legend.position="none")), ncol=4)+
-      #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-      # p_er_rh_city <- wrap_plots(lapply(city, function(x) x$p_er_rh$p_city + theme(legend.position="none")), ncol=4)+
-      #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-      # p_er_pm25_city  <- wrap_plots(lapply(city, function(x) x$p_er_pm25$p_city + theme(legend.position="none")), ncol=4)+
-      #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-      
-      p_lr_tmp_city  <- wrap_plots(lapply(city, function(x) x$p_lr_tmp$p_city + theme(legend.position="none")), ncol=4)+
-        plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-      p_lr_tp_city <- wrap_plots(lapply(city, function(x) x$p_lr_tp$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
-        plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-      # p_lr_fg10_city <- wrap_plots(lapply(city, function(x) x$p_lr_fg10$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
-      #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-      # p_lr_rh_city  <- wrap_plots(lapply(city, function(x) x$p_lr_rh$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
-      #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-      # p_lr_pm25_city <- wrap_plots(lapply(city, function(x) x$p_lr_pm25$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
-      #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-      
-    }
-  
-    return(list(overall=overall, p_er_overall=p_er_overall, 
-                quant=quant, p_lr=p_lr, lags=lags, p_er=p_er,
-                city=city, city_er=city_er, city_lr=city_lr,
-                p_er_tmp_city=p_er_tmp_city, p_er_tp_city=p_er_tp_city, # p_er_fg10_city=p_er_fg10_city, #p_er_rh_city=p_er_rh_city, p_er_pm25_city=p_er_pm25_city,
-                p_lr_tmp_city=p_lr_tmp_city, p_lr_tp_city=p_lr_tp_city)) #p_lr_fg10_city=p_lr_fg10_city)) #p_lr_rh_city=p_lr_rh_city, p_lr_pm25_city=p_lr_pm25_city))
-  
-    } else {
-  
-    # Format overall plots
-    all <- overall[!names(overall) %in% 'tab']
-    p_raw_all <- lapply(all, function(x) x[['p_raw']])
-    p_raw_er <- p_raw_all[grepl('er', names(p_raw_all))] #|> head(-2)
-    p_raw_lr <- p_raw_all[grepl('lr', names(p_raw_all))] #|> head(-2)
-    p_er_overall <- wrap_plots(p_raw_er, nrow=1)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-    
-    # Format lag plots
-    p_lr_tmp <- wrap_plots(lapply(quant, function(x) x$p_lr_tmp$p_raw), nrow=1) & theme(legend.position='none')
-    p_lr_tp <- wrap_plots(lapply(quant, function(x) x$p_lr_tp$p_raw), nrow=1) & theme(legend.position='none', plot.title=element_blank())
-    # p_lr_fg10 <- wrap_plots(lapply(quant, function(x) x$p_lr_fg10$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    # p_lr_rh <- wrap_plots(lapply(quant, function(x) x$p_lr_rh$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    # p_lr_pm25 <- wrap_plots(lapply(quant, function(x) x$p_lr_pm25$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    p_lr <- wrap_plots(p_lr_tmp, p_lr_tp, nrow=2)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-    
-    # Format exposure plots
-    p_er_tmp <- wrap_plots(lapply(lags, function(x) x$p_er_tmp$p_raw), nrow=1) & theme(legend.position='none')
-    p_er_tp <- wrap_plots(lapply(lags, function(x) x$p_er_tp$p_raw), nrow=1) & theme(legend.position='none', plot.title=element_blank())
-    # p_er_fg10 <- wrap_plots(lapply(lags, function(x) x$p_er_fg10$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    # p_er_rh <- wrap_plots(lapply(lags, function(x) x$p_er_rh$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    # p_er_pm25 <- wrap_plots(lapply(lags, function(x) x$p_er_pm25$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
-    p_er <- wrap_plots(p_er_tmp, p_er_tp, nrow=2)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
-  
-    return(list(overall=overall, quant=quant, lags=lags, 
-                p_er_overall=p_er_overall, p_lr=p_lr, p_er=p_er))
-  }
 }
 
 # Function to extract and plot overall & city specific exposure-response relationships
@@ -852,10 +589,11 @@ city_lag_res <- function(city='ALL', meta, col, xlab=NULL, quant_v=NULL, title=N
 
 # Function to extract and plot overall & city specific 2D contour plots
 city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL, reference='50%', 
-                         sig=FALSE, shared_lims=NULL, shared_brks=NULL, dx_spacer=6.5) {
+                         sig=TRUE, shared_lims=NULL, shared_brks=NULL) {
 
-  make_dlnm_plot <- function(df, xlab="", title="", ncol=300, nbreaks=15, contour_size=0.35, dx_spacer=6.5,
-                             sig=FALSE, shared_lims=NULL, shared_brks=NULL) {
+  make_dlnm_plot <- function(df, xlab="", title="", ncol=300, nbreaks=15, contour_size=0.35, 
+                             sig=TRUE, shared_lims=NULL, shared_brks=NULL) {
+    
     pal <- colorRampPalette(c('#1D98EB', 'white', '#D74B3C'))(ncol)
     brks <- pretty(range(df$z, na.rm=TRUE), n=nbreaks)
     
@@ -867,9 +605,6 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL, reference='50%
       lims <- c(1 - max_dev, 1 + max_dev)
       brks <- pretty(lims, n=nbreaks)
     }
-    
-    # Binary mask: 1 = significant, 0 = not
-    df$sig_mask <- as.numeric(!(df$z_low <= 1 & df$z_high >= 1))
     
     p <- ggplot(df, aes(x=x, y=y, fill=z)) +
       geom_raster(interpolate=TRUE) +
@@ -902,84 +637,30 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL, reference='50%
         legend.title=element_text(size=12),
         legend.text=element_text(size=10, angle=45, hjust=1),
         legend.position='bottom',
-        plot.title=element_text(size=14, face="plain", hjust=0.5)
+        plot.title=element_text(size=12, face="bold", hjust=0.5)
       )
+    
     
     # Overlay significance boundary if requested
     if (sig) {
-
-    df_sig <- df[!(df$z_low <= 1 & df$z_high >= 1), ]
-
-    if (nrow(df_sig) > 0) {
-      dx <- diff(sort(unique(df$x)))[1] / 2
-      dy <- diff(sort(unique(df$y)))[1] / 2
-
-      spacing <- dx * dx_spacer
-
-      x_range <- range(df$x)
-      y_range <- range(df$y)
-      # slope   <- diff(y_range) / diff(x_range)
-      aspect <- 1  # adjust this single number to control diagonal angle
-      slope <- aspect * diff(y_range) / diff(x_range)
-      intercepts <- seq(
-        y_range[1] - diff(x_range) * slope,
-        y_range[2] + diff(x_range) * slope,
-        by=spacing * slope * 2
-      )
-
-      make_segs <- function(df_sub, intercepts, sign=1) {
-        if (nrow(df_sub) == 0) return(NULL)
-        do.call(rbind, lapply(intercepts, function(b) {
-          xs <- seq(x_range[1], x_range[2], by=dx/3)
-          ys <- sign * slope * xs + b
-          pts <- data.frame(x=xs, y=ys)
-          pts <- pts[pts$y >= y_range[1] & pts$y <= y_range[2], ]
-          if (nrow(pts) < 2) return(NULL)
-
-          pts$keep <- mapply(function(px, py)
-            any(px >= (df_sub$x - dx) & px <= (df_sub$x + dx) &
-                  py >= (df_sub$y - dy) & py <= (df_sub$y + dy)),
-            pts$x, pts$y)
-
-          idx <- which(pts$keep[-nrow(pts)] & pts$keep[-1])
-          if (length(idx) == 0) return(NULL)
-
-          data.frame(
-            x    = pts$x[idx],
-            xend = pts$x[idx + 1],
-            y    = pts$y[idx],
-            yend = pts$y[idx + 1]
-          )
-        }))
-      }
-
-      df_sig_high <- df_sig[df_sig$z > 1, ]  # RR > 1
-      df_sig_low  <- df_sig[df_sig$z < 1, ]  # RR < 1
-
-      segs_high <- rbind(make_segs(df_sig_high, intercepts, sign=1),
-                         make_segs(df_sig_high, intercepts, sign=-1))
-
-      segs_low  <- rbind(make_segs(df_sig_low,  intercepts, sign=1),
-                         make_segs(df_sig_low,  intercepts, sign=-1))
-
-      if (!is.null(segs_high) && nrow(segs_high) > 0) {
-        p <- p + geom_segment(
-          data=segs_high,
-          aes(x=x, y=y, xend=xend, yend=yend),
-          colour="#a0392e", alpha=0.4, linewidth=0.4,
-          inherit.aes=FALSE
+      
+      p <- p +
+        geom_tile_pattern(
+          data = subset(df, sig_dir == 'neg'),
+          aes(x = x, y = y), pattern = "crosshatch", pattern_fill = "#12669e",
+          pattern_colour = '#12669e', fill = NA, color = NA, 
+          pattern_density = 0.05, pattern_spacing = 0.05,
+          pattern_angle = 45, pattern_alpha = 0.2, pattern_res = 200,
+          width = 1, height = 1
+        ) +
+        geom_tile_pattern(
+          data = subset(df, sig_dir == 'pos'),
+          aes(x = x, y = y), pattern = "crosshatch", pattern_fill = "#a0392e",
+          pattern_colour = "#a0392e", fill = NA, color = NA, 
+          pattern_density = 0.05, pattern_spacing = 0.05,
+          pattern_angle = 45, pattern_alpha = 0.2, pattern_res = 200,
+          width = 1, height = 1 
         )
-      }
-
-      if (!is.null(segs_low) && nrow(segs_low) > 0) {
-        p <- p + geom_segment(
-          data=segs_low,
-          aes(x=x, y=y, xend=xend, yend=yend),
-          colour="#12669e", alpha=0.4, linewidth=0.4,
-          inherit.aes=FALSE
-        )
-      }
-    }
     }
     p
   }
@@ -1005,8 +686,11 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL, reference='50%
                     model.link='log', at=rowMeans(cen),
                     cen=rowMeans(cen)[reference])
     df_overall <- make_df(cp, perc)
+    # Binary mask: 1 = significant, 0 = not
+    # df_overall$sig_dir <- with(df_overall, ifelse(z_low > 1 | z_high < 1, ifelse(z > 1, "pos", "neg"), "none"))
+    df_overall$sig_dir <- with(df_overall, ifelse((z_low > 1 | z_high < 1) & abs(z - 1) > 0.01, ifelse(z > 1, "pos", "neg"), "none"))
     
-    p <- make_dlnm_plot(df_overall, xlab=xlab, title=title, sig=sig, shared_lims=shared_lims, shared_brks=shared_brks, dx_spacer=dx_spacer)
+    p <- make_dlnm_plot(df=df_overall, xlab=xlab, title=title, sig=sig, shared_lims=shared_lims, shared_brks=shared_brks)
     
     return(list(df=df_overall, p=p))
     
@@ -1023,16 +707,16 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL, reference='50%
                     from=ranges[i, 1], to=ranges[i, 2],
                     at=cen[, i], cen=cen[reference, i])
     df_city <- make_df(cp, perc)
+    # Binary mask: 1 = significant, 0 = not
+    # df_city$sig_dir <- with(df_city, ifelse(z_low > 1 | z_high < 1, ifelse(z > 1, "pos", "neg"), "none"))
+    df_city$sig_dir <- with(df_city, ifelse((z_low > 1 | z_high < 1) & abs(z - 1) > 0.01, ifelse(z > 1, "pos", "neg"), "none"))
     
-    p <- make_dlnm_plot(df_city, xlab=xlab, title=city, sig=sig, shared_lims=shared_lims, shared_brks=shared_brks, dx_spacer=dx_spacer)
+    
+    p <- make_dlnm_plot(df=df_city, xlab=xlab, title=city, sig=sig, shared_lims=shared_lims, shared_brks=shared_brks)
     
     return(list(df=df_city, p=p))
   }
 }
-
-# x <- city_con_res(city='ALL', output$meta_tp, xlab=NULL, title=NULL, reference='60%', sig=TRUE, shared_lims=NULL, shared_brks=NULL, dx_spacer=1)
-# ggsave(paste0(path_report, 'II. dlnm/test.png'), x$p, width = 5, height = 5, dpi = 300, bg = 'white')
-
 
 
 #### DEPENDENCIES ####
@@ -1047,7 +731,7 @@ h_cols <- c('total_patients',
             'gynaecology', 'orthopaedics', 'dermatology', 'surgery',
             'psychiatry', 'pulmonary', 'disability', 'dentistry', 'oncology',
             'ncd', 'antiretroviral', 'substance_counselling', 'physiotherapy')
-controls <- c('elev', 'popu', "hosp_n", "hosp_teach", 'mcv1', "dtp1", "dtp3", "hsize", "anc", "insurance", "malnutrition", "pnc", "sba", "tt", "decision", "hwealth", "meducation")
+p_cols <- c('elev', 'popu', 'hosp_n', 'insurance', 'decision', 'meducation', 'hsize', 'hwealth')
 
 location_levels <- c("Una", 'Kangra', "Nahan", "Hamirpur", 'Mandi', "Chamba", "Dharamshala", "Solan", "Kullu",  "Reckong Peo")
 season_levels   <- c('Winter (Jan-Feb)', 'Pre-Monsoon (Mar-May)', 'Monsoon (Jun-Sep)', 'Post-Monsoon (Oct-Dec)')
@@ -1076,15 +760,15 @@ nm <- c(season='Season', closed='Closed', holiday='Holiday', total_patients='Tot
         antiretroviral='HIV Treatment', substance_counselling='Substance counselling',
         physiotherapy='Physiotherapy', 
         # CONTINUOUS WEATHER
-        t2m='Mean temp. (\u00B0C)', mx2t='Max temp. (\u00B0C)', mn2t='Min temp. (\u00B0C)',
+        tmp='Temperature (\u00B0C)', t2m='Mean temp. (\u00B0C)', mx2t='Max temp. (\u00B0C)', mn2t='Min temp. (\u00B0C)',
         rh='Rel. humidity (%)', tp='Precipitation (mm)', fg10='Windspeed (km/hr)', pm25='PM 2.5 (µg/m³)',
         dt="Diurnal range (\u00B0C)", wb="Wet-bulb temp. (\u00B0C)",
         # Controls
-        lat= 'Latitude', lon= 'Longitude',elev= "Altitude",
-        popu= "Population density",hosp_n= "Number of hospitals",hosp_teach= "Teaching hospital",
-        insurance= "Health insurance coverage",decision= "Healthcare decision-making",
-        meducation= "Maternal education",hsize= "Household size",
-        hwealth= "Household wealth", mcv1= "MCV1 vaccination coverage",
+        lat= 'Latitude', lon= 'Longitude',elev= "Altitude (m)",
+        popu= "Population count (per 1km)",hosp_n= "Number of hospitals", #hosp_teach= "Teaching hospital",
+        insurance= "No health insurance (%)",decision= "No female decision-making (%)",
+        meducation= "No maternal education (%)",hsize= "Large household size (%)",
+        hwealth= "Poorest households (%)", mcv1= "MCV1 vaccination coverage",
         dtp1= "DTP1 vaccination coverage",dtp3= "DTP3 vaccination coverage",
         anc= "Antenatal care coverage",malnutrition = "Malnutrition prevalence",
         pnc= "Postnatal care coverage",sba= "Skilled birth attendance",
@@ -1098,3 +782,206 @@ nm <- c(season='Season', closed='Closed', holiday='Holiday', total_patients='Tot
         # mx2t_p90='Clim: Max temp. >90th', mn2t_p10='Clim: Min temp. <10th', 
         # tp_p90='Clim: Precipitation >90th', fg10_p90='Clim: Wind speed >90th', pm25_p90='Clim: PM2.5 >90th', 
         # rh_mean_p10 ='Clim: Humidity <10th', rh_mean_p90='Clim: Humidity >90th') 
+
+
+
+
+# # Function to get usable tables and figures
+# get_results <- function(output, city='ALL', lags=NULL, probs='50%', outcome){
+#   
+#   # Function to extract model comparison criteria
+#   ftab <- function(m, mref=NULL) {
+#     
+#     # RETURN NOTHING IF m IS NULL
+#     if (is.null(m)) return(rep(NA_real_, 12))
+#     
+#     # HETEROGENEITY AND IC STATS
+#     q <- qtest(m)
+#     het <- c(q$Q[1],q$df[1],q$pvalue[1],(q$Q[1]-q$df[1])/q$Q[1]*100,AIC(m),BIC(m))
+#     # LR TEST (ONLY FOR META-REGRESSION)
+#     if(!is.null(mref)) {
+#       lrstat <- -2*(logLik(mref)-logLik(m))[1]
+#       df <- attr(logLik(m),'df')-attr(logLik(mref),'df')
+#       pvalue <- 1-pchisq(lrstat,df)
+#       lr <- c(lrstat,df,pvalue)
+#     }
+#     # WALD TEST (ONLY FOR META-REGRESSION)
+#     if(!is.null(mref)) {
+#       coef <- coef(m)[-grep('Int',names(coef(m)))]
+#       vcov <- vcov(m)[-grep('Int',names(coef(m))),-grep('Int',names(coef(m)))]
+#       waldstat <- coef%*%solve(vcov)%*%coef
+#       df <- length(coef)
+#       pvalue <- 1-pchisq(waldstat,df)
+#       wald <- c(waldstat,df,pvalue)
+#     }
+#     # outputS
+#     if(!is.null(mref)) {
+#       return(c(het,lr,wald))
+#     } else return(c(het,rep(NA,6))) 
+#   }
+#   
+#   meta_tmp <- output$meta_tmp
+#   meta_tp <- output$meta_tp
+#   
+#   # Model selection criteria
+#   tab <- matrix(NA,2,12)
+#   colnames(tab) <- c('Q','df','p','I-square','AIC','BIC','stat','df','p','stat','df','p')
+#   rownames(tab) <- c('tmp','tp') #, 'fg10', 'rh', 'fg10', 'pm25')
+#   tab[1,] <- ftab(m=meta_tmp$mv)
+#   tab[2,] <- ftab(m=meta_tp$mv)
+#   
+#   # Exposure response (with city specs) by lag
+#   p_er_tmp <- city_exp_res(city=city, lag=lags, meta=meta_tmp, col='#D74B3C', xlab='Max. Temperature (%)', title=NULL)
+#   p_er_tp <- city_exp_res(city=city, lag=lags, meta=meta_tp, col='#1D98EB', xlab='Precipitation (%)', title=NULL, reference='0%')
+#   
+#   # Lag response (with city specs) by percentile
+#   q_tmp <- rowMeans(meta_tmp$cen)[probs]
+#   q_tp <- rowMeans(meta_tp$cen)[probs]
+#   p_lr_tmp <- city_lag_res(city=city, quant_v=q_tmp, meta=meta_tmp, col='#D74B3C', xlab='Max. Temperature (%)', title=NULL)
+#   p_lr_tp <- city_lag_res(city=city, quant_v=q_tp, meta=meta_tp, col='#1D98EB', xlab='Precipitation (%)', title=NULL, reference='0%')
+#   
+#   return(list(tab=tab, 
+#               p_er_tmp=p_er_tmp, p_er_tp=p_er_tp, #p_er_fg10=p_er_fg10, p_er_rh=p_er_rh, p_er_pm25=p_er_pm25, 
+#               p_lr_tmp=p_lr_tmp, p_lr_tp=p_lr_tp)) #, p_lr_fg10=p_lr_fg10, p_lr_rh=p_lr_rh, p_lr_pm25=p_lr_pm25)) 
+#   
+# }
+# 
+# 
+# # Function to extract and format relevant results and figures
+# format_results <- function(output, outcome, city=NULL){
+#   
+#   # OVERALL
+#   overall <- get_results(output, city='ALL', lags=NULL, outcome=outcome)
+#   # LAG
+#   quant_test <- c('10%', '25%', '75%', '90%')
+#   quant <- list()
+#   for (q in quant_test){
+#     quant[[q]] <- get_results(output, city='ALL', lags=NULL, probs=q, outcome=outcome)
+#   }
+#   # EXPOSURE
+#   # lag_test <- c(0, 3, 7, 10)
+#   # lags <- list()
+#   # for (l in lag_test){
+#   #   lags[[as.character(l)]] <- get_results(output, city='ALL', lags=l, outcome=outcome)
+#   # }
+#   # 
+#   if(!is.null(output$meta_tmp$mv)){
+#     
+#     # Format overall plots
+#     all <- overall[!names(overall) %in% 'tab']
+#     p_blup_all <- lapply(all, function(x) x[['p_blup']])
+#     p_blup_er <- p_blup_all[grepl('er', names(p_blup_all))] #|> head(-2)
+#     p_blup_lr <- p_blup_all[grepl('lr', names(p_blup_all))] #|> head(-2)
+#     p_er_overall <- wrap_plots(p_blup_er, nrow=1)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#     
+#     # Format lag plots
+#     p_lr_tmp <- wrap_plots(lapply(quant, function(x) x$p_lr_tmp$p_blup), ncol=4) & theme(legend.position='none')
+#     p_lr_tp <- wrap_plots(lapply(quant, function(x) x$p_lr_tp$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
+#     p_lr <- wrap_plots(p_lr_tmp, p_lr_tp, nrow=2)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#     
+#     # Format exposure plots
+#     # p_er_tmp <- wrap_plots(lapply(lags, function(x) x$p_er_tmp$p_blup), ncol=4) & theme(legend.position='none')
+#     # p_er_tp <- wrap_plots(lapply(lags, function(x) x$p_er_tp$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
+#     # p_er <- wrap_plots(p_er_tmp, p_er_tp, nrow=2)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#     
+#     if(!is.null(city)){
+#       
+#       locations <- city
+#       city <- list()
+#       city_er <- list()
+#       city_lr <- list()
+#       for (i in locations) {
+#         city_er[[i]] <- list()
+#         city_lr[[i]] <- list()
+#         for (l in lag_test) {
+#           city_er[[i]][[as.character(l)]] <- get_results(output, city=i, lags=l, outcome=outcome)
+#           print(paste0(i, ' ', l))
+#         }
+#         for (q in quant_test) {
+#           city_lr[[i]][[as.character(q)]] <- get_results(output, city=i, probs=q, outcome=outcome)
+#           print(paste0(i, ' ', q))
+#         }
+#         
+#         p_er_tmp_city <- wrap_plots(lapply(city_er[[i]], function(x) x$p_er_tmp$p_city + theme(legend.position="none")), ncol=4)+
+#           plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#         p_er_tp_city <- wrap_plots(lapply(city_er[[i]], function(x) x$p_er_tp$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
+#           plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#         # p_er_fg10_city <- wrap_plots(lapply(city_er[[i]], function(x) x$p_er_fg10$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
+#         #   plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#  
+#         p_lr_tmp_city <- wrap_plots(lapply(city_lr[[i]], function(x) x$p_lr_tmp$p_city + theme(legend.position="none")), ncol=4)+
+#           plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#         p_lr_tp_city <- wrap_plots(lapply(city_lr[[i]], function(x) x$p_lr_tp$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
+#           plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#         # p_lr_fg10_city <- wrap_plots(lapply(city_lr[[i]], function(x) x$p_lr_fg10$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
+#         #   plot_annotation(title=city, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#   
+#       }
+#       
+#     } else {
+#       
+#       city <- list()
+#       city_er <- list()
+#       city_lr <- list()
+#       for (i in locations){
+#         city[[i]] <- get_results(output, city=i, lag=NULL, probs='50%', outcome=outcome)
+#       }
+#       p_er_tmp_city <- wrap_plots(lapply(city, function(x) x$p_er_tmp$p_city + theme(legend.position="none")), ncol=4)+
+#         plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#       p_er_tp_city  <- wrap_plots(lapply(city, function(x) x$p_er_tp$p_city + theme(legend.position="none")), ncol=4)+
+#         plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#       # p_er_fg10_city  <- wrap_plots(lapply(city, function(x) x$p_er_fg10$p_city + theme(legend.position="none")), ncol=4)+
+#       #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#       # p_er_rh_city <- wrap_plots(lapply(city, function(x) x$p_er_rh$p_city + theme(legend.position="none")), ncol=4)+
+#       #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#       # p_er_pm25_city  <- wrap_plots(lapply(city, function(x) x$p_er_pm25$p_city + theme(legend.position="none")), ncol=4)+
+#       #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#       
+#       p_lr_tmp_city  <- wrap_plots(lapply(city, function(x) x$p_lr_tmp$p_city + theme(legend.position="none")), ncol=4)+
+#         plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#       p_lr_tp_city <- wrap_plots(lapply(city, function(x) x$p_lr_tp$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
+#         plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#       # p_lr_fg10_city <- wrap_plots(lapply(city, function(x) x$p_lr_fg10$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
+#       #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#       # p_lr_rh_city  <- wrap_plots(lapply(city, function(x) x$p_lr_rh$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
+#       #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#       # p_lr_pm25_city <- wrap_plots(lapply(city, function(x) x$p_lr_pm25$p_city + theme(legend.position="none", plot.title=element_blank())), ncol=4)+
+#       #   plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#       
+#     }
+#   
+#     return(list(overall=overall, p_er_overall=p_er_overall, 
+#                 quant=quant, p_lr=p_lr, lags=lags, p_er=p_er))
+#                 # city=city, city_er=city_er, city_lr=city_lr,
+#                 # p_er_tmp_city=p_er_tmp_city, p_er_tp_city=p_er_tp_city, # p_er_fg10_city=p_er_fg10_city, #p_er_rh_city=p_er_rh_city, p_er_pm25_city=p_er_pm25_city,
+#                 # p_lr_tmp_city=p_lr_tmp_city, p_lr_tp_city=p_lr_tp_city)) #p_lr_fg10_city=p_lr_fg10_city)) #p_lr_rh_city=p_lr_rh_city, p_lr_pm25_city=p_lr_pm25_city))
+#                 # 
+#     } else {
+#   
+#     # Format overall plots
+#     all <- overall[!names(overall) %in% 'tab']
+#     p_raw_all <- lapply(all, function(x) x[['p_raw']])
+#     p_raw_er <- p_raw_all[grepl('er', names(p_raw_all))] #|> head(-2)
+#     p_raw_lr <- p_raw_all[grepl('lr', names(p_raw_all))] #|> head(-2)
+#     p_er_overall <- wrap_plots(p_raw_er, nrow=1)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#     
+#     # Format lag plots
+#     p_lr_tmp <- wrap_plots(lapply(quant, function(x) x$p_lr_tmp$p_raw), nrow=1) & theme(legend.position='none')
+#     p_lr_tp <- wrap_plots(lapply(quant, function(x) x$p_lr_tp$p_raw), nrow=1) & theme(legend.position='none', plot.title=element_blank())
+#     # p_lr_fg10 <- wrap_plots(lapply(quant, function(x) x$p_lr_fg10$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
+#     # p_lr_rh <- wrap_plots(lapply(quant, function(x) x$p_lr_rh$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
+#     # p_lr_pm25 <- wrap_plots(lapply(quant, function(x) x$p_lr_pm25$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
+#     p_lr <- wrap_plots(p_lr_tmp, p_lr_tp, nrow=2)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#     
+#     # Format exposure plots
+#     p_er_tmp <- wrap_plots(lapply(lags, function(x) x$p_er_tmp$p_raw), nrow=1) & theme(legend.position='none')
+#     p_er_tp <- wrap_plots(lapply(lags, function(x) x$p_er_tp$p_raw), nrow=1) & theme(legend.position='none', plot.title=element_blank())
+#     # p_er_fg10 <- wrap_plots(lapply(lags, function(x) x$p_er_fg10$p_raw), ncol=4) & theme(legend.position='none', plot.title=element_blank())
+#     # p_er_rh <- wrap_plots(lapply(lags, function(x) x$p_er_rh$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
+#     # p_er_pm25 <- wrap_plots(lapply(lags, function(x) x$p_er_pm25$p_blup), ncol=4) & theme(legend.position='none', plot.title=element_blank())
+#     p_er <- wrap_plots(p_er_tmp, p_er_tp, nrow=2)+plot_annotation(title=outcome, theme=theme(plot.title=element_text(hjust=0.5, size=16, face='bold')))
+#   
+#     return(list(overall=overall, quant=quant, lags=lags, 
+#                 p_er_overall=p_er_overall, p_lr=p_lr, p_er=p_er))
+#   }
+# }

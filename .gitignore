@@ -5,6 +5,8 @@
 *.pptx
 *.html
 *.bib
+*.png
+*.tex
 
 
 # Ignore specific files
