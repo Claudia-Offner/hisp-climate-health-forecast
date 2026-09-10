@@ -6,7 +6,6 @@
 
 #### FUNCTIONS ####
 
-
 # Function to replace exact matches in df from a dictionary
 replace_exact_matches <- function(df, dict) {
   df[] <- lapply(df, function(col) {
@@ -19,48 +18,48 @@ replace_exact_matches <- function(df, dict) {
   df
 }
 
-# Function to calculate comparative metrics for meta-DLNM
-comp_metrics <- function(model, cb=NULL, cen=NULL) {
+# Function to run model with static formula
+run_model <- function(data, locations, outcome, fam_type='binom', pooled=TRUE,
+                      longterm_df=8, autocorr_lag=14, lag_window=c(0,10),
+                      arglag_tmp=3, arglag_tp=4,argvar_tmp=3, argvar_tp=1){
   
-  res <- list()
-  
-  # Get sum aic/ACF/PACF
-  res[['aic']] <- summary(model)$deviance + 2* summary(model)$df[1] * summary(model)$dispersion
-  res[['acf']] <- acf(residuals(model, type='pearson'), plot=FALSE, lag.max=30)$acf
-  res[['pacf']] <- pacf(residuals(model, type='pearson'), plot=FALSE, lag.max=30)$acf
-  
-  if(!is.null(cb)){
-    # Get average of estimates (lag 4)
-    pred <- crosspred(cb, model, cen)
-    res[['esti']] <- pred$coef[4]  
-  } 
-  
-  return(res) 
-}
-
-# Function to get reference meta-analysis
-get_meta_analysis <- function(pooled=TRUE, ymat, Slist, arg_var, arg_lag, ranges, cen, lag_window){
-  
-  # Meta-analysis w/ prediction basis
-  if(pooled==TRUE){
-    mv <- mvmeta(ymat, Slist, method='ml')
-  } else {
-    mv <- NULL
+  # Function to calculate comparative metrics for meta-DLNM
+  comp_metrics <- function(model, cb=NULL, cen=NULL) {
+    
+    res <- list()
+    
+    # Get sum aic/ACF/PACF
+    res[['aic']] <- summary(model)$deviance + 2* summary(model)$df[1] * summary(model)$dispersion
+    res[['acf']] <- acf(residuals(model, type='pearson'), plot=FALSE, lag.max=30)$acf
+    res[['pacf']] <- pacf(residuals(model, type='pearson'), plot=FALSE, lag.max=30)$acf
+    
+    if(!is.null(cb)){
+      # Get average of estimates (lag 4)
+      pred <- crosspred(cb, model, cen)
+      res[['esti']] <- pred$coef[4]  
+    } 
+    
+    return(res) 
   }
   
-  bound <- c(colMeans(ranges))
-  mean <- seq(bound[1],bound[2],length=30)
-  b_mean <- crossbasis(mean, lag=lag_window, argvar=arg_var, arglag=arg_lag)
-  
-  return(list(ymat=ymat, Slist=Slist, arg_var=arg_var, arg_lag=arg_lag, ranges=ranges, mv=mv, 
-              bound=bound, b_mean=b_mean, cen=cen))
-  
-}
-
-# Function to run model with static formula
-run_model <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE,
-                      longterm_df=8, autocorr_lag=14, lag_window=c(0,14),
-                      arglag_tmp=4, arglag_tp=4,argvar_tmp=1, argvar_tp=1){
+  # Function to get reference meta-analysis
+  meta_analysis <- function(pooled=TRUE, ymat, Slist, arg_var, arg_lag, ranges, cen, lag_window){
+    
+    # Meta-analysis w/ prediction basis
+    if(pooled==TRUE){
+      mv <- mvmeta(ymat, Slist, method='ml')
+    } else {
+      mv <- NULL
+    }
+    
+    bound <- c(colMeans(ranges))
+    mean <- seq(bound[1],bound[2],length=30)
+    b_mean <- crossbasis(mean, lag=lag_window, argvar=arg_var, arglag=arg_lag)
+    
+    return(list(ymat=ymat, Slist=Slist, arg_var=arg_var, arg_lag=arg_lag, ranges=ranges, mv=mv, 
+                bound=bound, b_mean=b_mean, cen=cen))
+    
+  }
   
   # 1. Data and dependency prep ----
   
@@ -133,9 +132,9 @@ run_model <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE,
       }
       
       # CREATE THE SPLINES - CUMULATIVE
-      cb.tmp <- crossbasis(sub$tmp, lag=lag_window, argvar=argvar_tmp, arglag=arglag_tmp, group=sub$year)
-      cb.tp <- crossbasis(sub$tp, lag=lag_window, argvar=argvar_tp, arglag=arglag_tp, group=sub$year)
-      controls <- '+ weekday + holiday + rh_lag1 + fg10_lag1 + pm25_lag1' 
+      cb.tmp <- crossbasis(sub$tmp, lag=lag_window, argvar=argvar_tmp, arglag=arglag_tmp)
+      cb.tp <- crossbasis(sub$tp, lag=lag_window, argvar=argvar_tp, arglag=arglag_tp)
+      controls <- '+ weekday + holiday + rh + fg10 + pm25' 
       
       # Set formula
       form <- as.formula(
@@ -154,7 +153,7 @@ run_model <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE,
       }
       
       # EXTRACT AND SAVE THE RELATED COEF AND VCOV
-      
+
       # TMP
       predtmp <- crosspred(cb.tmp, model, cen=cen_tmp['50%',i])
       ymat_tmp[i,] <- predtmp$coef
@@ -168,12 +167,10 @@ run_model <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE,
       # EXTRACT COMPARATIVE METRICS
       Slist_comp[[i]] <- comp_metrics(model)
       Slist_model[[i]] <- model
-      
       Slist_comp[[i]]$esti_tmp <- unname(predtmp$coefficients[1])
       Slist_comp[[i]]$esti_tp <- unname(predtp$coefficients[1])
       
-    })
-  
+      })
   
   # 3. Stage 2: Multivariate Meta-analysis ----
   
@@ -186,8 +183,8 @@ run_model <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE,
   meta_comp[['sum_acf']] <- rowMeans(sapply(Slist_comp, function(x) as.numeric(x$acf)))
   
   # Meta coefs
-  meta_tmp <- get_meta_analysis(pooled=pooled, ymat=ymat_tmp,  Slist=Slist_tmp, arg_var=argvar_tmp, arg_lag=arglag_tmp, ranges=ranges_tmp, cen=cen_tmp, lag_window=lag_window)
-  meta_tp <- get_meta_analysis(pooled=pooled, ymat=ymat_tp,  Slist=Slist_tp, arg_var=argvar_tp, arg_lag=arglag_tp, ranges=ranges_tp, cen=cen_tp, lag_window=lag_window)
+  meta_tmp <- meta_analysis(pooled=pooled, ymat=ymat_tmp,  Slist=Slist_tmp, arg_var=argvar_tmp, arg_lag=arglag_tmp, ranges=ranges_tmp, cen=cen_tmp, lag_window=lag_window)
+  meta_tp <- meta_analysis(pooled=pooled, ymat=ymat_tp,  Slist=Slist_tp, arg_var=argvar_tp, arg_lag=arglag_tp, ranges=ranges_tp, cen=cen_tp, lag_window=lag_window)
   
   # RESET WARNING
   options(warn=0)
@@ -196,11 +193,41 @@ run_model <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE,
   
 }
 
-# Function to extract and plot overall & city specific exposure-response relationships
-city_exp_res <- function(city='ALL', meta, col, xlab=NULL, lag=NULL, title=NULL, reference='50%'){
+# Function to extract predictions
+meta_predict <- function(meta, city='ALL', reference='50%', blup=FALSE){
+  
+  # Unlist meta-analysis w/ prediction basis
+  list2env(meta, envir=environment())
+  
+  cen  <- cen[!apply(cen, 1, function(row) any(duplicated(row))), ] # remove duplicates
+  perc <- as.numeric(sub("%", "", names(rowMeans(cen))))
+  reference <- if(reference=='0%') paste0(min(perc), '%') else reference # set reference
+  
+  if (city=='ALL') {
+    cp <- crosspred(b_mean, coef=coef(mv), vcov=vcov(mv), model.link='log', 
+                    at=rowMeans(cen), cen=rowMeans(cen)[reference])
+  } else {
+    i <- which(rownames(ymat) == city)
+    if(blup==TRUE){
+      blup <- blup(mv, vcov=TRUE)
+      coef=blup[[i]]$blup; vcov=blup[[i]]$vcov
+    } else{
+      coef=ymat[i, ]; vcov=Slist[[i]]
+    }
+    
+    cp <- crosspred(b_mean, coef=coef, vcov=vcov, model.link='log', from=ranges[i, 1], to=ranges[i, 2], 
+                    at=cen[, i], cen=cen[reference, i])
+  }
+
+  return(list(cp=cp, perc=perc))
+
+}
+
+# Function to plot pooled & city specific exposure-response relationships, cumulatively and by lag
+city_exp_res <- function(city='ALL', meta, col='lightblue', xlab=NULL, lag=NULL, title=NULL, reference='50%'){
   
   # FUNCTION: Formatting for multi-city plots
-  plot_estimates <- function(city=city, df_overall, df_specific1=NULL, df_specific2=NULL, xlab, col, title=NULL, legend='City-specific') {
+  plot_rr_curve <- function(city=city, df_overall, df_specific1=NULL, df_specific2=NULL, xlab, col, title=NULL, legend='City-specific') {
     
     if (is.null(df_specific1) && is.null(df_specific2)) {
       
@@ -223,7 +250,7 @@ city_exp_res <- function(city='ALL', meta, col, xlab=NULL, lag=NULL, title=NULL,
           plot.title=element_text(face='bold', hjust=0.5, size=12),
           legend.position='bottom'
         )
-
+      
     } else {
       
       if(city=='ALL'){
@@ -254,12 +281,12 @@ city_exp_res <- function(city='ALL', meta, col, xlab=NULL, lag=NULL, title=NULL,
         if (is.null(df_specific2)) {
           df_all <- rbind(
             data.frame(pred=df_overall$pred, RR=df_overall$RR, low=df_overall$low, high=df_overall$high, type='Pooled'),
-            data.frame(pred=df_specific1$pred, RR=df_specific1$RR, low=df_specific1$low, high=df_specific1$high, type='Raw')
+            data.frame(pred=df_specific1$pred, RR=df_specific1$RR, low=df_specific1$low, high=df_specific1$high, type='BLUP')
           )
           
-          color_vals <- c('Pooled'='black', 'Raw'=col)
-          linetype_vals <- c('Pooled'='dashed', 'Raw'='solid')
-          size_vals <- c('Pooled'=0.7, 'Raw'=1.2)
+          color_vals <- c('Pooled'='black', 'BLUP'=col)
+          linetype_vals <- c('Pooled'='dashed', 'BLUP'='solid')
+          size_vals <- c('Pooled'=0.7, 'BLUP'=1.2)
           
         } else {
           df_all <- rbind(
@@ -296,306 +323,54 @@ city_exp_res <- function(city='ALL', meta, col, xlab=NULL, lag=NULL, title=NULL,
       }
       
     }
-   
+    
   }
   
-  # Unlist meta-analysis w/ prediction basis
-  list2env(meta, envir=environment())
+  # Make all predictions (pooled, city-raw, city-blup)
+  all       <- meta_predict(meta, city = 'ALL', reference = reference)
+  city_raw  <- map(locations, ~ meta_predict(meta, city = .x, reference = reference)) %>% setNames(locations)
+  city_blup <- map(locations, ~ meta_predict(meta, city = .x, reference = reference, blup = TRUE)) %>% setNames(locations)
+  
+  # Get appropriate data frame
+  if (!is.null(lag)) {
+    df_overall <- data.frame(pred = all$perc, RR = all$cp$matRRfit[, lag + 1],low = all$cp$matRRlow[, lag + 1], high = all$cp$matRRhigh[, lag + 1], row.names = NULL)
+    df_city_raw <- map_dfr(city_raw, function(x) {data.frame(pred = x$perc, RR = x$cp$matRRfit[, lag + 1],low = x$cp$matRRlow[, lag + 1], high = x$cp$matRRhigh[, lag + 1], row.names = NULL)}, .id = "city")
+    df_city_blup <- map_dfr(city_blup, function(x) {data.frame(pred = x$perc, RR = x$cp$matRRfit[, lag + 1],low = x$cp$matRRlow[, lag + 1], high = x$cp$matRRhigh[, lag + 1], row.names = NULL)}, .id = "city")
+  } else {
+    df_overall <- data.frame(pred = all$perc, RR = all$cp$allRRfit,low = all$cp$allRRlow, high = all$cp$allRRhigh, row.names = NULL)
+    df_city_raw <- map_dfr(city_raw, function(x) {data.frame(pred = x$perc, RR = x$cp$allRRfit, low = x$cp$allRRlow, high = x$cp$allRRhigh, row.names = NULL)}, .id = "city")
+    df_city_blup <- map_dfr(city_blup, function(x) {data.frame(pred = x$perc, RR = x$cp$allRRfit, low = x$cp$allRRlow, high = x$cp$allRRhigh, row.names = NULL)}, .id = "city")
+  }
+  
+  # Plot pooled and city specific (raw + blup) estimates
+  if(city=='ALL'){
 
-  if (!is.null(meta$mv)) {
-    coef <- coef(mv)
-    vcov <- vcov(mv)
-    # Remove duplicates row wise
-    rows_with_dup <- apply(cen, 1, function(row) any(duplicated(row)))
-    cen <- as.data.frame(cen[!rows_with_dup, ])
-    perc <- as.numeric(sub("%", "", names(rowMeans(cen))))
-    reference <- if(reference=='0%') paste0(min(perc), '%') else reference
-  } else {
-    city <- names(Slist)
-    coef <- as.numeric(ymat[city, ])
-    vcov <- Slist[[city]]
-    m <- 1
-    # Handle duplicates col wise
-    cols_with_dup <- duplicated(cen) | duplicated(cen, fromLast=TRUE)
-    cen <- cen[!cols_with_dup, , drop=FALSE]
-    perc <- as.numeric(sub("%", "", names(rowMeans(cen))))
-    reference <- if(reference=='0%') paste0(min(perc), '%') else reference
-  }
-  
-  # Get overall estimates (for specific lag, if applicable)
-  cp <- crosspred(b_mean, coef=coef, vcov=vcov, model.link='log', at=rowMeans(cen), cen=rowMeans(cen)[reference])
-  
-  if(!is.null(lag)){
-    df_overall <- data.frame(pred=perc, RR=cp$matRRfit[, lag + 1], low=cp$matRRlow[, lag + 1], high=cp$matRRhigh[, lag + 1], row.names=NULL)
-  } else {
-    df_overall <- data.frame(pred=perc, RR=cp$allRRfit, low=cp$allRRlow, high=cp$allRRhigh, row.names=NULL)
-  }
-  
-  # if (grepl('Precipitation', xlab)) {
-  #   df_overall$pred <- round(exp(df_overall$pred)-10, 2)
-  # }
-  
-  if (!is.null(meta$mv)) {
-    
-    # Get city specific estimates (for specific lag, if applicable)
-    df_city <- map_dfr(seq_len(m), function(i) {
-      cp_city <- crosspred(b_mean, coef=ymat[i,], vcov=Slist[[i]], model.link='log', 
-                           from=ranges[i, 1], to=ranges[i, 2], at=cen[,i], cen=cen[reference,i])
-      if(!is.null(lag)){
-        data.frame(city=rownames(ymat)[i], pred=perc, RR=cp_city$matRRfit[, lag + 1], low=cp_city$matRRlow[, lag + 1], high=cp_city$matRRhigh[, lag + 1], row.names=NULL)
-      } else {
-        data.frame(city=rownames(ymat)[i], pred=perc, RR=cp_city$allRRfit, low=cp_city$allRRlow, high=cp_city$allRRhigh, row.names=NULL)
-      }
-    })
-    
-    # Get BLUP estimates (for specific lag, if applicable)
-    blup <- blup(mv, vcov=TRUE)
-    df_blup <- map_dfr(seq_len(m), function(i) {
-      cp_city <- crosspred(b_mean, coef=blup[[i]]$blup, vcov=blup[[i]]$vcov, model.link='log', 
-                           from=ranges[i, 1], to=ranges[i, 2], at=cen[,i], cen=cen[reference,i])
-      if(!is.null(lag)){
-        data.frame(city=names(blup)[i], pred=perc, RR=cp_city$matRRfit[, lag + 1], low=cp_city$matRRlow[, lag + 1], high=cp_city$matRRhigh[, lag + 1], row.names=NULL)
-      } else {
-        data.frame(city=names(blup)[i], pred=perc, RR=cp_city$allRRfit, low=cp_city$allRRlow, high=cp_city$allRRhigh, row.names=NULL)
-      }
-    })
-    
-    
-    # Get city specific Raw AND BLUP estimates
-    if(city=='ALL'){
-      
-      # # Set title based on lags
-      # if(!is.null(lag)){
-      #   title <- paste0(title, ' (Lag=', lag, ')')
-      # } 
-      
-      # Plot average vs city estimates
-      p_raw  <- plot_estimates(city=city, df_specific1=df_city, df_overall=df_overall, xlab=xlab, col=col, title=title, legend='City-specific (Raw)')
-      # Plot average vs BLUP estimates
-      p_blup <- plot_estimates(city=city, df_specific1=df_blup, df_overall=df_overall, xlab=xlab, col=col, title=title, legend='City-specific (BLUP)')
-      p_city <- NULL
-      
-    } else{
-      
-      # Set title based on lags
-      if(!is.null(lag)){
-        title <- paste0('Lag=', lag)
-      } else {
-        title <- city
-      }
-      df_city <- df_city[df_city$city==city,]
-      df_blup <- df_blup[df_blup$city==city,]
-      
-      # Plot average vs specific city estimates
-      p_raw <- NULL
-      p_blup <- plot_estimates(city=city, df_specific1=df_city, df_overall=df_overall, xlab=xlab, col=col, title=title, legend='City-specific (BLUP)')
-      p_city  <- plot_estimates(city=city, df_specific1=df_city, df_specific2=df_blup, df_overall=df_overall, xlab=xlab, col=col, title=title)
-      
-    }
-    
-    return(list(df_overall=df_overall, df_city=df_city, df_blup=df_blup,
-                p_raw=p_raw, p_blup=p_blup, p_city=p_city))
-    
-  } else {
-    
-    # Set title based on lags
-    # Set title based on lags
-    if(!is.null(lag)){
-      title <- paste0('Lag=', lag)
-    } 
-    
-    p_raw  <- plot_estimates(city=city, df_overall=df_overall, df_specific1=NULL, df_specific2=NULL, xlab=xlab, col=col, title=title, legend='City-specific (Raw)')
-    
-    return(list(df_overall=df_overall, p_raw=p_raw))  
+    p_raw  <- plot_rr_curve(city=city, df_specific1=df_city_raw, df_overall=df_overall, xlab=xlab, col=col, title=title, legend='City-specific (Raw)')
+    p_blup <- plot_rr_curve(city=city, df_specific1=df_city_blup, df_overall=df_overall, xlab=xlab, col=col, title=title, legend='City-specific (BLUP)')
 
-  }
-}
-
-# Function to extract and plot overall & city specific lag-response relationships
-city_lag_res <- function(city='ALL', meta, col, xlab=NULL, quant_v=NULL, title=NULL, reference='50%'){
-  
-  # FUNCTION: Formatting for multi-city plots
-  plot_estimates <- function(city=city, df_overall, df_specific1=NULL, df_specific2=NULL, xlab, col, title=NULL, legend='City-specific') {
-    
-    if (is.null(df_specific1) && is.null(df_specific2)) {
-      
-      ylim <- c(min(df_overall$low)-0.01, max(df_overall$high)+0.01)
-      
-      ggplot() +
-        geom_hline(yintercept=1, color='gray20') +
-        geom_line(data=df_overall, aes(x=lag, y=RR, color='City-specific', linetype='City-specific'), size=1.2) +
-        geom_errorbar(data=df_overall, aes(x=lag, ymin=low, ymax=high, color='City-specific'), width=0.2, size=0.7) +
-        geom_point(data=df_overall, aes(x=lag, y=RR, color='City-specific'), size=2) +
-        scale_color_manual(name=NULL, values=c('City-specific'=col)) +
-        scale_linetype_manual(name=NULL, values=c('City-specific'='solid')) +
-        scale_x_continuous(breaks=seq(min(df_overall$lag), max(df_overall$lag), by=2)) +
-        scale_y_continuous(breaks=pretty(ylim, n=6)) +
-        coord_cartesian(ylim=ylim, xlim=range(df_overall$lag)) +
-        labs(x='Lag (days)', y='RR', title=title) +
-        theme_classic() +
-        theme(
-          axis.line=element_line(color='gray20'),
-          axis.text=element_text(color='gray20'),
-          axis.ticks=element_line(color='gray20'),
-          plot.title=element_text(face='bold', hjust=0.5, size=12),
-          legend.position='bottom'
-        )
-      
-    } else {
-      
-      if(city=='ALL'){
-        
-        ylim <- c(min(df_overall$low)-0.01, max(df_overall$high)+0.01)
-        
-        ggplot() +
-          geom_hline(yintercept=1, color='gray20') +
-          geom_line(data=df_specific1, aes(x=lag, y=RR, group=city, color=legend, linetype=legend), size=0.7) +
-          geom_line(data=df_overall, aes(x=lag, y=RR, color='Pooled', linetype='Pooled'), size=1.2) +
-          geom_errorbar(data=df_overall, aes(x=lag, ymin=low, ymax=high, color='Pooled'), width=0.2, size=0.7) +
-          geom_point(data=df_overall, aes(x=lag, y=RR, color='Pooled'), size=2) +
-          scale_color_manual(name=NULL, values=setNames(c('grey70', col), c(legend, 'Pooled'))) +
-          scale_linetype_manual(name=NULL, values=setNames(c('dashed', 'solid'), c(legend, 'Pooled'))) +
-          scale_x_continuous(breaks=seq(min(df_overall$lag), max(df_overall$lag), by=2)) +
-          scale_y_continuous(breaks=pretty(ylim, n=6)) +
-          coord_cartesian(ylim=ylim, xlim=range(df_overall$lag)) +
-          labs(x='Lag (days)', y='RR', title=title) +
-          theme_classic() +
-          theme(
-            axis.line=element_line(color='gray20'),
-            axis.text=element_text(color='gray20'),
-            axis.ticks=element_line(color='gray20'),
-            plot.title=element_text(face='bold', hjust=0.5, size=12),
-            legend.position='bottom'
-          )
-        
-      } else{
-        
-        ylim <- c(min(df_specific1$low)-0.01, max(df_specific1$high)+0.01)
-        
-        ggplot() +
-          geom_hline(yintercept=1, color='gray20') +
-          geom_line(data=df_overall, aes(x=lag, y=RR, color='Pooled', linetype='Pooled'), size=0.7) +
-          geom_line(data=df_specific1, aes(x=lag, y=RR, group=city, color='Raw', linetype='Raw'), size=1.2) +
-          geom_line(data=df_specific2, aes(x=lag, y=RR, group=city, color='BLUP', linetype='BLUP'), size=0.7) +
-          geom_errorbar(data=df_specific1, aes(x=lag, ymin=low, ymax=high, color='Raw'), width=0.2, size=0.7) +
-          geom_point(data=df_specific1, aes(x=lag, y=RR, color='Raw'), size=2) +
-          scale_color_manual(name=NULL, breaks= c('Pooled', 'BLUP', 'Raw'), values=c('Pooled'='black', 'Raw'=col, 'BLUP'='black')) +
-          scale_linetype_manual(name=NULL, breaks= c('Pooled', 'BLUP', 'Raw'), values=c('Pooled'='solid', 'Raw'='solid', 'BLUP'='dashed')) +
-          scale_x_continuous(breaks=seq(min(df_specific1$lag), max(df_specific1$lag), by=2)) +
-          scale_y_continuous(breaks=pretty(ylim, n=6)) +
-          coord_cartesian(ylim=ylim, xlim=range(df_specific1$lag)) +
-          labs(x='Lag (days)', y='RR', title=title) +
-          theme_classic() +
-          theme(
-            axis.line=element_line(color='gray20'),
-            axis.text=element_text(color='gray20'),
-            axis.ticks=element_line(color='gray20'),
-            plot.title=element_text(face='bold', hjust=0.5, size=12),
-            legend.position='bottom'
-          )
-        
-      }
-      
-    }
+  } else{
+    title <- if (!is.null(lag)) paste0('Lag=', lag) else city
+    df_city_raw <- df_city_raw[df_city_raw$city==city,]
+    df_city_blup <- df_city_blup[df_city_blup$city==city,]
+    p_raw  <- plot_rr_curve(city=city, df_specific1=df_city_raw, df_specific2=df_city_blup, df_overall=df_overall, xlab=xlab, col=col, title=title)
+    p_blup <- plot_rr_curve(city=city, df_specific1=df_city_blup, df_overall=df_overall, xlab=xlab, col=col, title=title, legend='City-specific (BLUP)')
     
   }
   
-  # Unlist meta-analysis w/ prediction basis
-  list2env(meta, envir=environment())
-  
-  if (!is.null(meta$mv)) {
-    coef <- coef(mv)
-    vcov <- vcov(mv)
-    # Remove duplicates row wise
-    rows_with_dup <- apply(cen, 1, function(row) any(duplicated(row)))
-    cen <- as.data.frame(cen[!rows_with_dup, ])
-    perc <- as.numeric(sub("%", "", names(rowMeans(cen))))
-    reference <- if(reference=='0%') paste0(min(perc), '%') else reference
-  } else {
-    city <- names(Slist)
-    coef <- as.numeric(ymat[city, ])
-    vcov <- Slist[[city]]
-    m <- 1
-    # Handle duplicates col wise
-    cols_with_dup <- duplicated(cen) | duplicated(cen, fromLast=TRUE)
-    cen <- cen[!cols_with_dup, , drop=FALSE]
-    perc <- as.numeric(sub("%", "", names(rowMeans(cen))))
-    reference <- if(reference=='0%') paste0(min(perc), '%') else reference
-  }
-  
-  # Get overall estimates (for specific lag, if applicable)
-  cp <- crosspred(b_mean, coef=coef,vcov=vcov, model.link='log', cen=rowMeans(cen)[reference], at=quant_v)
-  df_overall <- data.frame(lag=seq(cp$lag[1], cp$lag[2]), RR=t(cp$matRRfit), low=t(cp$matRRlow), high=t(cp$matRRhigh), row.names=NULL)
-  names(df_overall) <- c('lag', 'RR', 'low','high')
-  
-  # Pooled results only ...
-  if (!is.null(meta$mv)) {
-    
-    # Get city specific estimates (for specific lag, if applicable)
-    df_city <- map_dfr(seq_len(m), function(i) {
-      cp_city <- crosspred(b_mean, coef=ymat[i,], vcov=Slist[[i]], model.link='log', 
-                           from=ranges[i, 1], to=ranges[i, 2], cen=cen[reference,i], at=quant_v)
-      data.frame(city=rownames(ymat)[i], lag=seq(cp_city$lag[1], cp_city$lag[2]), RR=t(cp_city$matRRfit), low=t(cp_city$matRRlow), high=t(cp_city$matRRhigh), row.names=NULL)
-    })
-    names(df_city) <- c('city', 'lag', 'RR', 'low','high')
-    
-    # Get BLUP estimates (for specific lag, if applicable)
-    blup <- blup(mv, vcov=TRUE)
-    df_blup <- map_dfr(seq_len(m), function(i) {
-      cp_city <- crosspred(b_mean, coef=blup[[i]]$blup, vcov=blup[[i]]$vcov,
-                           model.link='log', from=ranges[i, 1], to=ranges[i, 2], cen=cen[reference,i], at=quant_v)
-      data.frame(city=names(blup)[i], lag=seq(cp_city$lag[1], cp_city$lag[2]), RR=t(cp_city$matRRfit), low=t(cp_city$matRRlow), high=t(cp_city$matRRhigh), row.names=NULL)
-    })
-    names(df_blup) <- c('city', 'lag', 'RR', 'low','high')
-    
-    # Get city specific Raw AND BLUP estimates
-    if(city=='ALL'){
-      
-      p_raw  <- plot_estimates(city=city, df_specific1=df_city, df_overall=df_overall, xlab=xlab, col=col, title=names(quant_v), legend='City-specific (Raw)')
-      p_blup  <- plot_estimates(city=city, df_specific1=df_blup, df_overall=df_overall, xlab=xlab, col=col, title=names(quant_v), legend='City-specific (BLUP)')
-      p_city <- NULL
-      
-    } else{
-      
-      # Set title based on lags
-      if(names(quant_v) != '50%'){
-        title <- names(quant_v)
-      } else {
-        title <- city
-      }
-      
-      df_city <- df_city[df_city$city==city,]
-      df_blup <- df_blup[df_blup$city==city,]
-      
-      # Plot average vs specific city estimates
-      p_raw <- NULL
-      p_blup <- NULL
-      p_city  <- plot_estimates(city=city, df_specific1=df_city, df_specific2=df_blup, df_overall=df_overall, xlab=xlab, col=col, title=title)
-      
-    }
-    
-    return(list(df_overall=df_overall, df_city=df_city, df_blup=df_blup,
-                p_raw=p_raw, p_blup=p_blup, p_city=p_city))
-  
-  } else {
-    
-    # Plot average vs specific city estimates
-    p_raw  <- plot_estimates(city=city, df_overall=df_overall, df_specific1=NULL, df_specific2=NULL, xlab=xlab, col=col, title=names(quant_v), legend='City-specific (Raw)')
-
-    return(list(df_overall=df_overall, p_raw=p_raw))  
-  }
+  return(list(df_overall=df_overall, df_city_raw=df_city_raw, df_city_blup=df_city_blup,
+              p_raw=p_raw, p_blup=p_blup))
   
 }
 
-# Function to extract and plot overall & city specific 2D contour plots
+# Function to plot overall & city specific 2D contour plots
 city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL, reference='50%', 
                          sig=TRUE, shared_lims=NULL, shared_brks=NULL) {
-
-  make_dlnm_plot <- function(df, xlab="", title="", ncol=300, nbreaks=15, contour_size=0.35, 
+  
+  plot_contour <- function(df, xlab="", title="", ncol=300, nbreaks=15, contour_size=0.35, 
                              sig=TRUE, shared_lims=NULL, shared_brks=NULL) {
     
     pal <- colorRampPalette(c('#1D98EB', 'white', '#D74B3C'))(ncol)
-    brks <- pretty(range(df$z, na.rm=TRUE), n=nbreaks)
+    brks <- pretty(range(df$RR, na.rm=TRUE), n=nbreaks)
     
     if (!is.null(shared_lims) && !is.null(shared_brks)) {
       lims <- shared_lims
@@ -606,7 +381,7 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL, reference='50%
       brks <- pretty(lims, n=nbreaks)
     }
     
-    p <- ggplot(df, aes(x=x, y=y, fill=z)) +
+    p <- ggplot(df, aes(x=pred, y=lag, fill=RR)) +
       geom_raster(interpolate=TRUE) +
       scale_fill_gradient2(
         low='#1D98EB', mid='white', high='#D74B3C',
@@ -623,8 +398,8 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL, reference='50%
           direction="horizontal"
         )
       ) +
-      scale_x_continuous(breaks=pretty(df$x, n=5)) +
-      scale_y_continuous(breaks=pretty(df$y, n=6)) +
+      scale_x_continuous(breaks=pretty(df$pred, n=5)) +
+      scale_y_continuous(breaks=pretty(df$lag, n=6)) +
       labs(x=xlab, y="Lag (days)", title=title) +
       coord_cartesian(expand=FALSE) +
       theme_classic(base_size=13) +
@@ -647,7 +422,7 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL, reference='50%
       p <- p +
         geom_tile_pattern(
           data = subset(df, sig_dir == 'neg'),
-          aes(x = x, y = y), pattern = "crosshatch", pattern_fill = "#12669e",
+          aes(x = pred, y = lag), pattern = "crosshatch", pattern_fill = "#12669e",
           pattern_colour = '#12669e', fill = NA, color = NA, 
           pattern_density = 0.05, pattern_spacing = 0.05,
           pattern_angle = 45, pattern_alpha = 0.2, pattern_res = 200,
@@ -655,7 +430,7 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL, reference='50%
         ) +
         geom_tile_pattern(
           data = subset(df, sig_dir == 'pos'),
-          aes(x = x, y = y), pattern = "crosshatch", pattern_fill = "#a0392e",
+          aes(x = pred, y = lag), pattern = "crosshatch", pattern_fill = "#a0392e",
           pattern_colour = "#a0392e", fill = NA, color = NA, 
           pattern_density = 0.05, pattern_spacing = 0.05,
           pattern_angle = 45, pattern_alpha = 0.2, pattern_res = 200,
@@ -665,57 +440,26 @@ city_con_res <- function(city='ALL', meta, xlab=NULL, title=NULL, reference='50%
     p
   }
   
-  make_df <- function(cp, perc) {
-    df <- expand.grid(x=perc, y=seq(cp$lag[1], cp$lag[2]))
-    df$z      <- as.vector(cp$matRRfit)
-    df$z_low  <- as.vector(cp$matRRlow)
-    df$z_high <- as.vector(cp$matRRhigh)
+  get_df <- function(cp, perc) {
+    df <- expand.grid(pred=perc, lag=seq(cp$lag[1], cp$lag[2]))
+    df$RR      <- as.vector(cp$matRRfit)
+    df$low  <- as.vector(cp$matRRlow)
+    df$high <- as.vector(cp$matRRhigh)
+    df$sig_dir <- with(df, ifelse((low > 1 | high < 1) & abs(RR - 1) > 0.01, ifelse(RR > 1, "pos", "neg"), "none"))
     df
   }
-  
-  list2env(meta, envir=environment())
+
+  pred <- meta_predict(meta, city=city, reference=reference)
+  plot_df <- get_df(pred$cp, pred$perc)
   
   if (city == 'ALL') {
-    
-    # Pooled estimate from mv
-    rows_with_dup <- apply(cen, 1, function(row) any(duplicated(row)))
-    cen  <- cen[!rows_with_dup, ]
-    perc <- as.numeric(sub("%", "", names(rowMeans(cen))))
-    
-    cp <- crosspred(b_mean, coef=coef(mv), vcov=vcov(mv),
-                    model.link='log', at=rowMeans(cen),
-                    cen=rowMeans(cen)[reference])
-    df_overall <- make_df(cp, perc)
-    # Binary mask: 1 = significant, 0 = not
-    # df_overall$sig_dir <- with(df_overall, ifelse(z_low > 1 | z_high < 1, ifelse(z > 1, "pos", "neg"), "none"))
-    df_overall$sig_dir <- with(df_overall, ifelse((z_low > 1 | z_high < 1) & abs(z - 1) > 0.01, ifelse(z > 1, "pos", "neg"), "none"))
-    
-    p <- make_dlnm_plot(df=df_overall, xlab=xlab, title=title, sig=sig, shared_lims=shared_lims, shared_brks=shared_brks)
-    
-    return(list(df=df_overall, p=p))
-    
+    p <- plot_contour(df=plot_df, xlab=xlab, title=title, sig=sig, shared_lims=shared_lims, shared_brks=shared_brks)
   } else {
-    
-    # City-specific raw estimate
-    rows_with_dup <- apply(cen, 1, function(row) any(duplicated(row)))
-    cen  <- cen[!rows_with_dup, ]
-    perc <- as.numeric(sub("%", "", names(rowMeans(cen))))
-    
-    i <- which(rownames(ymat) == city)
-    cp <- crosspred(b_mean, coef=ymat[i, ], vcov=Slist[[i]],
-                    model.link='log',
-                    from=ranges[i, 1], to=ranges[i, 2],
-                    at=cen[, i], cen=cen[reference, i])
-    df_city <- make_df(cp, perc)
-    # Binary mask: 1 = significant, 0 = not
-    # df_city$sig_dir <- with(df_city, ifelse(z_low > 1 | z_high < 1, ifelse(z > 1, "pos", "neg"), "none"))
-    df_city$sig_dir <- with(df_city, ifelse((z_low > 1 | z_high < 1) & abs(z - 1) > 0.01, ifelse(z > 1, "pos", "neg"), "none"))
-    
-    
-    p <- make_dlnm_plot(df=df_city, xlab=xlab, title=city, sig=sig, shared_lims=shared_lims, shared_brks=shared_brks)
-    
-    return(list(df=df_city, p=p))
+    p <- plot_contour(df=plot_df, xlab=xlab, title=city, sig=sig, shared_lims=shared_lims, shared_brks=shared_brks)
   }
+  
+  return(list(df=plot_df, p=p))
+  
 }
 
 

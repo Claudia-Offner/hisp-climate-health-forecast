@@ -86,37 +86,36 @@ source('2_DLNM/2_Utilities.R')
 
 # 3. Parameter selection ####
 
-# s <- '2B_Parameter_selection'
-# 
-# analyses <- list(
-#   t2m       = list(data       = data,
-#                    immediate  = list(tmp = 't2m',         tp = 'tp_log'),
-#                    cumulative = list(tmp = 't2m_roll7',   tp = 'tp_roll7_log')),
-#   mn2t      = list(data       = data,
-#                    immediate  = list(tmp = 'mn2t',        tp = 'tp_log'),
-#                    cumulative = list(tmp = 'mn2t_roll7',  tp = 'tp_roll7_log')),
-#   mx2t      = list(data       = data,
-#                    immediate  = list(tmp = 'mx2t',        tp = 'tp_log'),
-#                    cumulative = list(tmp = 'mx2t_roll7',  tp = 'tp_roll7_log'))
-# )
-# 
-# for (a in names(analyses)) {
-#   # Load model specifications and data
-#   model_specs <- analyses[[a]]
-#   df <- analyses[[a]]$data
-#   for (model in names(model_specs[-1])) {
-#     # Load parameters
-#     spec <- model_specs[[model]]
-#     df$tmp <- df[[spec$tmp]]
-#     df$tp   <- df[[spec$tp]]
-#     tp_ref  <- get_tp_ref(df, locations)
-# 
-#     source('2_DLNM/2_Utilities.R')
-#     source(paste0(path_project, s, '.R'), echo = TRUE)
-# 
-#     rm(list = setdiff(ls(), c(keep_vars, 'keep_vars', 's', 'analyses', 'a', 'df', 'model_specs', 'model')))
-#   }
-# }
+s <- '2B_Parameter_selection'
+
+analyses <- list(
+  t2m       = list(data       = data,
+                   immediate  = list(tmp = 't2m',         tp = 'tp_log'),
+                   cumulative = list(tmp = 't2m_roll7',   tp = 'tp_roll7_log')),
+  mn2t      = list(data       = data,
+                   immediate  = list(tmp = 'mn2t',        tp = 'tp_log'),
+                   cumulative = list(tmp = 'mn2t_roll7',  tp = 'tp_roll7_log')),
+  mx2t      = list(data       = data,
+                   immediate  = list(tmp = 'mx2t',        tp = 'tp_log'),
+                   cumulative = list(tmp = 'mx2t_roll7',  tp = 'tp_roll7_log'))
+)
+
+for (a in names(analyses)) {
+  # Load model specifications and data
+  model_specs <- analyses[[a]]
+  df <- analyses[[a]]$data
+  for (model in names(model_specs[-1])) {
+    # Load parameters
+    spec <- model_specs[[model]]
+    df$tmp <- df[[spec$tmp]]
+    df$tp   <- df[[spec$tp]]
+    tp_ref  <- get_tp_ref(df, locations)
+
+    source('2_DLNM/2_Utilities.R')
+    # source(paste0(path_project, s, '.R'), echo = TRUE)
+    rm(list = setdiff(ls(), c(keep_vars, 'keep_vars', 's', 'analyses', 'a', 'df', 'model_specs', 'model')))
+  }
+}
 
 
 # 4. Run models ####
@@ -124,7 +123,7 @@ source('2_DLNM/2_Utilities.R')
 analyses <- list(
   t2m       = list(data       = data,
                    immediate  = list(tmp = 't2m',         tp = 'tp_log',        file = 't2m_immediate_final_params.RData'),
-  cumulative = list(tmp = 't2m_roll7',   tp = 'tp_roll7_log',  file = 't2m_cumulative_final_params.RData'))#,
+                   cumulative = list(tmp = 't2m_roll7',   tp = 'tp_roll7_log',  file = 't2m_cumulative_final_params.RData')) #,
   # mx2t      = list(data       = data,
   #                  immediate  = list(tmp = 'mx2t',        tp = 'tp_log',        file = 'mx2t_immediate_final_params.RData'),
   #                  cumulative = list(tmp = 'mx2t_roll7',  tp = 'tp_roll7_log',  file = 'mx2t_cumulative_final_params.RData')),
@@ -158,8 +157,7 @@ for (a in names(analyses)) {
     spec <- model_specs[[model]]
     if (is.character(spec$file)) {
       load(paste0(path_project, 'Results/', spec$file))
-      final_params$shape <- 'quasi'
-      if( a !='mx2t'){final_params$argvar_tmp <- 3}
+      # if(a=='t2m'){final_params$pooled$shape <- 'quasi'}
     } else{
       final_params <- list()
       final_params$pooled <- spec$file
@@ -167,13 +165,18 @@ for (a in names(analyses)) {
     df$tmp <- df[[spec$tmp]]
     df$tp   <- df[[spec$tp]]
     tp_ref  <- get_tp_ref(df, locations)
-
+    df <- df %>%
+      mutate(season2 = case_when(
+        season %in% c("Winter (Jan-Feb)", "Post-Monsoon (Oct-Dec)") ~ "Winter",
+        season %in% c("Pre-Monsoon (Mar-May)", "Monsoon (Jun-Sep)")  ~ "Summer",
+        TRUE ~ NA_character_
+      ))
     source('2_DLNM/2_Utilities.R')
-    # source(paste0(path_project, s, '.R'), echo = TRUE)
-
+    source(paste0(path_project, s, '.R'), echo = TRUE)
     # rm(list = setdiff(ls(), c(keep_vars, 'keep_vars', 's', 'analyses', 'a', 'df', 'model_specs', 'model')))
   }
 }
+
 
 # Export figures
 s <- '2D_Figures_and_Tables'

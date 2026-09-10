@@ -519,7 +519,7 @@ test_var <- function (df, outcome, exp, pooled=TRUE, tmp_title='tmp'){
 
 }
 
-controls <- c('tmp', 'tp', 'pm25', 'fg10', 'rh')
+controls <- c('tmp', 'tp') #, 'pm25', 'fg10', 'rh')
 results <- list()
 for (c in controls){
   
@@ -533,13 +533,13 @@ sens_res$pooled$confound$res <- results
 plots <- map(results, 'aic_plot')
 controls[1] <- a
 titles <- replace_exact_matches(controls, nm)
-pool_confound_aic <- wrap_plots(map2(plots, titles, \(p, t) p + ggtitle(t)), nrow=2) &
+pool_confound_aic <- wrap_plots(map2(plots, titles, \(p, t) p + ggtitle(t)), nrow=1) &
   plot_annotation(title='Pooled AIC: Time-varying exposures',
                   theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
 
 
 # EXPORT
-sens_analysis <- list('3A_pooled_confound_ALL'=list(p=pool_confound_aic, w=15, h=5))
+sens_analysis <- list('3A_pooled_confound_ALL'=list(p=pool_confound_aic, w=9, h=3))
 for (n in names(sens_analysis)) {
   ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/', export,'/SM_', n, '.png'), 
          plot=sens_analysis[[n]]$p, width=sens_analysis[[n]]$w,height=sens_analysis[[n]]$h, dpi=300)

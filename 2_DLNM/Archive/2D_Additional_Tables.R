@@ -178,141 +178,74 @@ for (i in seq_along(nms)) {
   )), paste0(path_report, "II. dlnm/ST_loc_desc_", nms[i], ".tex"))
 }
 
-# ST: Percentile lookup ####
+# ST: Meta-regression results ----
 
-datalist <- lapply(locations, function(region) df_dlnm[df_dlnm$location == region, ])
-
-cen_tmp <- sapply(datalist,function(x) {
-  round(quantile(x$mx2t,c(0:100)/100,na.rm=T), 5)
-})
-cen_tmp <- as.data.frame(cen_tmp)
-names(cen_tmp) <- locations
-cen_tp <- sapply(datalist,function(x) {
-  q <- quantile(x$tp,c(0:100)/100,na.rm=T)
-  round(exp(q)-2,5)
-})
-cen_tp <- as.data.frame(cen_tp)
-names(cen_tp) <- locations#
-
-wb <- createWorkbook()
-addWorksheet(wb, "Temperature")
-addWorksheet(wb, "Precipitation")
-writeData(wb, "Temperature", cen_tmp, rowNames = TRUE)
-writeData(wb, "Precipitation", cen_tp, rowNames = TRUE)
-saveWorkbook(wb, paste0(path_report, "II. dlnm/ST_percentiles.xlsx"), overwrite = TRUE)
-
-# ST: RR tables (Excel) ----
-
-make_stacked_excel <- function(tab_list_tmp, tab_list_tp, filepath) {
-  wb <- createWorkbook()
-  
-  write_sheet <- function(tab_list, sheet_name) {
-    addWorksheet(wb, sheet_name)
-    current_row <- 1
-    
-    for (nm in names(tab_list)) {
-      df      <- as.data.frame(tab_list[[nm]]$tab)
-      sig_mat <- as.data.frame(tab_list[[nm]]$sig)
-      
-      writeData(wb, sheet_name, x = nm, startRow = current_row, startCol = 1)
-      addStyle(wb, sheet_name,
-               style = createStyle(textDecoration = "bold", fgFill = "grey30", fontColour = "white"),
-               rows = current_row, cols = 1:ncol(df))
-      current_row <- current_row + 1
-      
-      writeData(wb, sheet_name, x = df, startRow = current_row, startCol = 1,
-                headerStyle = createStyle(textDecoration = "bold",
-                                          border = "TopBottom", borderStyle = "medium"))
-      addStyle(wb, sheet_name,
-               style = createStyle(halign = "center"),
-               rows  = (current_row + 1):(current_row + nrow(df)),
-               cols  = 2:ncol(df), gridExpand = TRUE)
-      
-      for (r in seq_len(nrow(sig_mat))) {
-        for (c in which(sig_mat[r, ] == TRUE)) {
-          addStyle(wb, sheet_name,
-                   style = createStyle(halign = "center", textDecoration = "bold"),
-                   rows = current_row + r, cols = c, stack = TRUE)
-        }
-      }
-      current_row <- current_row + nrow(df) + 1
-    }
-    setColWidths(wb, sheet_name, cols = 1,     widths = 10)
-    setColWidths(wb, sheet_name, cols = 2:13,  widths = 18)
-  }
-  
-  write_sheet(tab_list_tmp, "Temperature")
-  write_sheet(tab_list_tp,  "Precipitation")
-  saveWorkbook(wb, filepath, overwrite = TRUE)
+prep_display <- function(df) {
+  data.frame(
+    `Meta-predictors` = df[["Meta-predictors"]],
+    `Stat`   = fmt_num(df$LR_stat), `df`  = fmt_int(df$LR_df),  `p`    = fmt_p(df$LR_p),
+    `AIC`    = fmt_num(df$AIC),
+    `Stat `  = fmt_num(df$Q_stat),  `df ` = fmt_int(df$Q_df),   `p `   = fmt_p(df$Q_p),
+    `I2 (%)` = fmt_num(df$I2),
+    check.names = FALSE, stringsAsFactors = FALSE
+  )
 }
 
-get_rr_table <- function(meta, city = "ALL", reference = "50%") {
-  res <- city_con_res(meta = meta, city = city, reference = reference, xlab = "", title = "")$df
-  
-  list2env(meta, envir = environment())
-  
-  if (!is.null(meta$mv)) {
-    coef_use  <- coef(mv); vcov_use <- vcov(mv)
-    rows_dup  <- apply(cen, 1, function(row) any(duplicated(row)))
-    cen_clean <- as.data.frame(cen[!rows_dup, ])
-  } else {
-    city_name <- if (city == "ALL") rownames(ymat)[1] else city
-    coef_use  <- as.numeric(ymat[city_name, ]); vcov_use <- Slist[[city_name]]
-    cen_clean <- cen[!(duplicated(cen) | duplicated(cen, fromLast = TRUE)), , drop = FALSE]
-  }
-  
-  perc    <- as.numeric(sub("%", "", names(rowMeans(cen_clean))))
-  ref_idx <- if (reference == '20%') paste0(min(perc), '%') else reference
-  cp_at   <- rowMeans(cen_clean)
-  cp      <- crosspred(b_mean, coef = coef_use, vcov = vcov_use, model.link = 'log',
-                       at = cp_at, cen = cp_at[ref_idx])
-  
-  overall_df <- data.frame(x = perc, z = cp$allRRfit, z_low = cp$allRRlow, z_high = cp$allRRhigh)
-  
-  keep_x <- function(x) x <= 5 | x >= 95 |
-    (x >= 5  & x <= 20 & x %% 5  == 0) |
-    (x >= 80 & x <= 95 & x %% 5  == 0) |
-    (x >= 20 & x <= 80 & x %% 10 == 0)
-  
-  fmt_rr  <- function(z, lo, hi) sprintf("%.2f (%.2f, %.2f)", z, lo, hi)
-  is_sig  <- function(lo, hi, z) !(lo <= 1 & hi >= 1) & round(z, 2) != 1.00
-  
-  filtered <- res |>
-    filter(keep_x(x)) |>
-    mutate(rr_fmt = fmt_rr(z, z_low, z_high), sig = is_sig(z_low, z_high, z))
-  
-  overall_filtered <- overall_df |>
-    filter(x %in% filtered$x) |>
-    mutate(rr_fmt = fmt_rr(z, z_low, z_high), sig = is_sig(z_low, z_high, z))
-  
-  make_wide <- function(df_long, val_col, key_prefix = "Lag=") {
-    df_long |>
-      dplyr::select(x, y, {{ val_col }}) |>
-      pivot_wider(names_from = y, values_from = {{ val_col }}, names_prefix = key_prefix) |>
-      rename(Percentile = x) |>
-      left_join(overall_filtered |> dplyr::select(x, {{ val_col }}) |> rename(Percentile = x, Cumulative = {{ val_col }}),
-                by = "Percentile")
-  }
-  
-  list(tab = make_wide(filtered, rr_fmt), sig = make_wide(filtered, sig))
-}
-
-output <- readRDS('2_DLNM/Results/cumulative_subgroup_models.rds')
-
-tab_rr_site_tmp <- setNames(
-  lapply(c("ALL", locations), function(l) get_rr_table(output$total_patients$meta_tmp, city = l)),
-  c("Pooled", locations)
+blank_row <- data.frame(
+  `Meta-predictors` = "", `Stat` = "", `df` = "", `p` = "", `AIC` = "",
+  `Stat ` = "", `df ` = "", `p ` = "", `I2 (%)` = "",
+  check.names = FALSE, stringsAsFactors = FALSE
 )
-tab_rr_site_tp <- setNames(
-  lapply(c("ALL", locations), function(l) get_rr_table(output$total_patients$meta_tp,  city = l, reference='20%')),
-  c("Pooled", locations)
-)
-make_stacked_excel(tab_rr_site_tmp, tab_rr_site_tp, paste0(path_report, "II. dlnm/ST_rr_site.xlsx"))
 
-outcomes <- names(output)
-tab_rr_pop_tmp <- setNames(lapply(outcomes[-1], function(o) get_rr_table(output[[o]]$meta_tmp, city = 'ALL')),
-                           replace_exact_matches(outcomes[-1], nm))
-tab_rr_pop_tp  <- setNames(lapply(outcomes[-1], function(o) get_rr_table(output[[o]]$meta_tp,  city = 'ALL')),
-                           replace_exact_matches(outcomes[-1], nm))
-make_stacked_excel(tab_rr_pop_tmp, tab_rr_pop_tp, paste0(path_report, "II. dlnm/ST_rr_pop.xlsx"))
+output  <- readRDS(paste0('2_DLNM/Results/', export, '_', model1, '_meta_tables.RData'))
+d_tmp   <- prep_display(output$tbl_tmp)
+d_tp    <- prep_display(output$tbl_tp)
+immediate <- rbind(blank_row, d_tmp, blank_row, d_tp)
+immediate[1, 1] <- paste0(str_to_title(model1), ' Temperature')
+immediate[19, 1] <- paste0(str_to_title(model1), ' Precipitation')
+immediate <- immediate |>
+  mutate(`Meta-predictors` = ifelse(
+    `Meta-predictors` %in% c(paste0(str_to_title(model1), ' Temperature'),
+                             paste0(str_to_title(model1), ' Precipitation'), ''),
+    `Meta-predictors`,
+    paste0("\\hspace{1em}", `Meta-predictors`)
+  ))
+
+
+output  <- readRDS(paste0('2_DLNM/Results/', export, '_', model1, '_meta_tables.RData'))
+d_tmp   <- prep_display(output$tbl_tmp)
+d_tp    <- prep_display(output$tbl_tp)
+cumulative <- rbind(blank_row, d_tmp, blank_row, d_tp)
+cumulative[1, 1] <- paste0(str_to_title(model2), ' Temperature')
+cumulative[19, 1] <- paste0(str_to_title(model2), ' Precipitation')
+cumulative <- cumulative |>
+  mutate(`Meta-predictors` = ifelse(
+    `Meta-predictors` %in% c(paste0(str_to_title(model2), ' Temperature'),
+                             paste0(str_to_title(model2), ' Precipitation'), ''),
+    `Meta-predictors`,
+    paste0("\\hspace{1em}", `Meta-predictors`)
+  ))
+
+combined <- rbind(immediate, cumulative)
+
+tab <- get_kbl_tab(
+  combined,
+  title           = "Meta-regression results for immediate and cumulative weather models",
+  note            = "LR test was used to test the significance of meta-predictors with the intercept-only model as reference. Cochran Q test was used to test the significance of residual heterogeneity with the null hypothesis as no heterogeneity. LR = likelihood ratio; AIC = Akaike information criterion; $I^2$ = heterogeneity statistic.",
+  colnames        = c("Meta-predictors", "Stat", "df", "\\textit{p}", "AIC",
+                      "Stat", "df", "\\textit{p}", "(\\%)"),
+  label           = "MT_meta_reg",
+  spanning_header = c(" " = 1, "LR test" = 3, "Model fits" = 1, "Cochran Q test" = 3, "$I^2$" = 1),
+  bold_rows       = c(1, 19, 37, 55),
+  italic_rows     = c(2, 20, 38, 56),
+  hline_after_rows = c(18, 36, 54)
+)
+
+tab <- sub(
+  "\\\\multicolumn\\{9\\}\\{l\\}\\{\\\\rule\\{0pt\\}\\{1em\\}",
+  "\\\\multicolumn{9}{p{0.8\\\\textwidth}}{\\\\rule{0pt}{1em}",
+  tab
+)
+
+writeLines(as.character(tab), paste0(path_report, "II. dlnm/ST_meta_reg_", export, ".tex"))
 

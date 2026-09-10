@@ -59,8 +59,8 @@ df_wide <- df_wide |>
   rename(rh = rh_mean)
 
 h_cols <- c('closed', 'total_patients', 'location', 'F', 'M', 'under_5',
-            'age5_14', 'age15_24', 'age25_64', 'over_65', 'general',
-            'ophthalmology') #'ent', 'gynaecology')
+            'age5_14', 'age15_24', 'age25_64', 'over_65', 
+            'general', 'ophthalmology', 'gynaecology', 'dentistry')
 
 #### FIGURES ####
 
@@ -470,7 +470,7 @@ if(export == 't2m'){
 #   
 # }
 # 
-# Subgroup exposure-response ----
+# SF: Subgroup exposure-response ----
 
 if(export == 't2m'){
   
@@ -496,25 +496,6 @@ if(export == 't2m'){
     
     data.frame(pred = perc, RR = cp$allRRfit, low = cp$allRRlow, high = cp$allRRhigh)
   }
-  
-  p_temp_imm   <- make_subgroup_plot(data=temp_imm,   x_lab="Temperature (%)",   pal=pal)
-  make_subgroup_plot <- function(data, x_lab, pal, xlim = NULL, ylim = NULL, title=NULL) {
-    p <- ggplot(data, aes(x = pred, y = RR, colour = Subgroup, fill = Subgroup, group = Subgroup)) +
-      geom_hline(yintercept = 1, color = "gray40") +
-      geom_ribbon(aes(ymin = low, ymax = high), alpha = 0.1, colour = NA) +
-      geom_line(linewidth = 1.1) +
-      scale_colour_manual(name = NULL, values = pal) +
-      scale_fill_manual(name = NULL, values = pal) +
-      labs(title=title, x = x_lab, y = "RR") +
-      theme_classic() +
-      theme(legend.position = "bottom",
-            plot.title = element_text(hjust = 0.5))
-    
-    if (!is.null(xlim)) p <- p + scale_x_continuous(limits = xlim, breaks = pretty(xlim, 5))
-    if (!is.null(ylim)) p <- p + coord_cartesian(ylim = ylim, xlim = range(data$pred, na.rm = TRUE)) +
-        scale_y_continuous(breaks = pretty(ylim, 5))
-    p
-  }
   get_curves <- function(output, outcomes){
     
     all_df <- map_dfr(outcomes, function(i) {
@@ -530,24 +511,25 @@ if(export == 't2m'){
     
     return(all_df)
   }
-  
-  # Load model outputs
-  sub1 <- readRDS(paste0('2_DLNM/Results/',  export, '_', model1, '_subgroup_plots.RData'))
-  sub2 <- readRDS(paste0('2_DLNM/Results/',  export, '_', model2, '_subgroup_plots.RData'))
-  outcomes <- h_cols[c(2,4:length(h_cols))]
-  
-  sub1_df <- get_curves(sub1$pooled_meta, outcomes)
-  sub2_df <- get_curves(sub2$pooled_meta, outcomes)
-  
-  
-  gender_groups <- c("Women", "Men")
-  age_groups    <- c("Under 5", "Ages 5-14", "Ages 65+")
-  opd_groups    <- c('General', 'Ophthalmology', 'ENT', 'Gynaecology')
-  gender_pal <- mypalette[c(2,1)] #c(scales::hue_pal()(2))
-  age_pal    <- mypalette[c(3,6,7)] #c(scales::hue_pal()(5))
-  opd_pal    <- mypalette[c(5,11)] #c(scales::hue_pal()(7))
-  
   make_panel <- function(groups=gender_groups, pal=gender_pal, title=TRUE) {
+    
+    make_subgroup_plot <- function(data, x_lab, pal, xlim = NULL, ylim = NULL, title=NULL) {
+      p <- ggplot(data, aes(x = pred, y = RR, colour = Subgroup, fill = Subgroup, group = Subgroup)) +
+        geom_hline(yintercept = 1, color = "gray40") +
+        geom_ribbon(aes(ymin = low, ymax = high), alpha = 0.1, colour = NA) +
+        geom_line(linewidth = 1.1) +
+        scale_colour_manual(name = NULL, values = pal) +
+        scale_fill_manual(name = NULL, values = pal) +
+        labs(title=title, x = x_lab, y = "RR") +
+        theme_classic() +
+        theme(legend.position = "bottom",
+              plot.title = element_text(hjust = 0.5))
+      
+      if (!is.null(xlim)) p <- p + scale_x_continuous(limits = xlim, breaks = pretty(xlim, 5))
+      if (!is.null(ylim)) p <- p + coord_cartesian(ylim = ylim, xlim = range(data$pred, na.rm = TRUE)) +
+          scale_y_continuous(breaks = pretty(ylim, 5))
+      p
+    }
     
     imm_t   <- filter(sub1_df, exposure == 'Temperature',   Subgroup %in% groups) |> droplevels()
     cum_t  <- filter(sub2_df, exposure == 'Temperature',   Subgroup %in% groups) |> droplevels()
@@ -586,6 +568,22 @@ if(export == 't2m'){
     }
   }
   
+  # Load model outputs
+  sub1 <- readRDS(paste0('2_DLNM/Results/',  export, '_', model1, '_subgroup_plots.RData'))
+  sub2 <- readRDS(paste0('2_DLNM/Results/',  export, '_', model2, '_subgroup_plots.RData'))
+  outcomes <- h_cols[c(2,4:length(h_cols))]
+  
+  sub1_df <- get_curves(sub1$pooled_meta, outcomes)
+  sub2_df <- get_curves(sub2$pooled_meta, outcomes)
+  
+  
+  gender_groups <- c("Women", "Men")
+  age_groups    <- c("Under 5", "Ages 5-14", "Ages 65+")
+  opd_groups    <- c('General', 'Ophthalmology', 'Gynaecology', 'Dentistry')
+  gender_pal <- mypalette[c(2,1)] #c(scales::hue_pal()(2))
+  age_pal    <- mypalette[c(3,6,7)] #c(scales::hue_pal()(5))
+  opd_pal    <- mypalette[c(5,8:10)] #c(scales::hue_pal()(7))
+
   panel_gender <- make_panel(gender_groups, gender_pal, title=TRUE)
   panel_age   <- make_panel(age_groups,    age_pal, title=FALSE)
   panel_opd    <- make_panel(opd_groups,    opd_pal, title=FALSE)
@@ -597,212 +595,345 @@ if(export == 't2m'){
     ncol = 2, widths = c(0.05, 1)
   )
   
-  ggsave(paste0(path_report, 'II. dlnm/SF_subgroups.png'), final_plot, width = 10, height = 8, dpi = 300, bg = 'white')
+  ggsave(paste0(path_report, 'II. dlnm/SF_subgroups_', export, '.png'), final_plot, width = 10, height = 8, dpi = 300, bg = 'white')
   
 }
 
-#### TABLES ####
 # ST: Descriptive statistics ----
 
-get_desc <- function(df, h_cols, w_cols, p_cols=NULL) {
+if(export == 't2m'){
   
-  h_cols <- h_cols[h_cols != "location"]
-  check  <- c('F', 'under_5', 'general', 't2m', 'elev')
-  labels <- c('Gender', 'Age', 'Ward', 'Weather Characteristics', 'Socio-geographic Characteristics')
-  
-  locs <- unique(df$location)
-  
-  summarise_col <- function(col, sub_df) {
-    x         <- sub_df[[col]]
-    is_binary <- all(x %in% c(0, 1, NA), na.rm = TRUE)
+  get_desc <- function(df, h_cols, w_cols, p_cols=NULL) {
     
-    total_visits <- sum(x, na.rm = TRUE)
-    raw_mean <- if (is_binary) NA else mean(x, na.rm = TRUE)
-    mean_x <- if (is_binary) NA else round(raw_mean)
-    sd_x   <- if (is_binary) NA else round(sd(x,   na.rm = TRUE))
-    min_x  <- if (is_binary) NA else round(min(x,  na.rm = TRUE))
-    max_x  <- if (is_binary) NA else round(max(x,  na.rm = TRUE))
+    h_cols <- h_cols[h_cols != "location"]
+    check  <- c('F', 'under_5', 'general', 't2m', 'elev')
+    labels <- c('Gender', 'Age', 'Ward', 'Weather Characteristics', 'Socio-geographic Characteristics')
     
-    avg <- if (is_binary || is.na(sd_x)) {
-      NA
-    } else if (col %in% p_cols) {
-      if (!is.na(raw_mean) && raw_mean >= 0 && raw_mean <= 1) {
-        as.character(round(raw_mean, 2) * 100)
+    locs <- unique(df$location)
+    
+    summarise_col <- function(col, sub_df) {
+      x         <- sub_df[[col]]
+      is_binary <- all(x %in% c(0, 1, NA), na.rm = TRUE)
+      
+      total_visits <- sum(x, na.rm = TRUE)
+      raw_mean <- if (is_binary) NA else mean(x, na.rm = TRUE)
+      mean_x <- if (is_binary) NA else round(raw_mean)
+      sd_x   <- if (is_binary) NA else round(sd(x,   na.rm = TRUE))
+      min_x  <- if (is_binary) NA else round(min(x,  na.rm = TRUE))
+      max_x  <- if (is_binary) NA else round(max(x,  na.rm = TRUE))
+      
+      avg <- if (is_binary || is.na(sd_x)) {
+        NA
+      } else if (col %in% p_cols) {
+        if (!is.na(raw_mean) && raw_mean >= 0 && raw_mean <= 1) {
+          as.character(round(raw_mean, 2) * 100)
+        } else {
+          as.character(mean_x)
+        }
       } else {
-        as.character(mean_x)
+        # paste0(mean_x, ifelse(col == 'tp', ' + ', ' ± '), sd_x, ' (', min_x, ', ', max_x, ')')
+        paste0(mean_x, ' (', min_x, ', ', max_x, ')')
       }
-    } else {
-      paste0(mean_x, ifelse(col == 'tp', ' + ', ' ± '), sd_x, ' (', min_x, ', ', max_x, ')')
+      
+      data.frame(
+        Variable     = sub('_b$', '', col),
+        total_visits = total_visits,
+        Average      = avg
+      )
     }
     
-    data.frame(
-      Variable     = sub('_b$', '', col),
-      total_visits = total_visits,
-      Average      = avg
+    all_cols <- c(h_cols, w_cols, p_cols)
+    
+    overall <- bind_rows(lapply(all_cols, summarise_col, sub_df = df)) |>
+      dplyr::select(Variable, total_visits, Overall = Average)
+    
+    per_loc <- bind_rows(lapply(locs, function(loc) {
+      bind_rows(lapply(all_cols, summarise_col, sub_df = df[df$location == loc, ])) |>
+        mutate(location = loc)
+    })) |>
+      dplyr::select(Variable, location, Average) |>
+      tidyr::pivot_wider(names_from = location, values_from = Average)
+    
+    base_desc <- overall |>
+      left_join(per_loc, by = "Variable") |>
+      dplyr::select(Variable, total_visits, Overall, all_of(as.character(locs)))
+    
+    # Sort ward rows by descending total visits
+    ward_cols <- h_cols[11:28]
+    ward_idx  <- which(base_desc$Variable %in% ward_cols)
+    if (length(ward_idx) > 0) {
+      base_desc[ward_idx, ] <- base_desc[ward_idx, ][
+        order(base_desc$total_visits[ward_idx], decreasing = TRUE, na.last = TRUE), ]
+    }
+    
+    base_desc <- base_desc |> dplyr::select(-total_visits)
+    
+    # Insert section headings
+    blank_row <- function(v) setNames(
+      as.list(c(v, rep(NA, ncol(base_desc) - 1))), names(base_desc)
+    ) |> as_tibble()
+    
+    base_desc <- bind_rows(blank_row('Hospital Characteristics'), base_desc)
+    positions <- which(base_desc$Variable %in% check)
+    new_rows  <- bind_rows(lapply(labels, blank_row))
+    for (i in rev(seq_along(positions))) {
+      pos       <- positions[i]
+      base_desc <- bind_rows(base_desc[1:(pos - 1), ], new_rows[i, ], base_desc[pos:nrow(base_desc), ])
+    }
+    
+    base_desc
+  }
+  
+  base <- get_desc(df_wide, h_cols[-1], w_cols, p_cols) |> replace_exact_matches(nm)
+  value_cols   <- setdiff(names(base), "Variable")
+  header_rows  <- which(grepl("Characteristics", base$Variable))
+  section_rows <- c(setdiff(which(rowSums(!is.na(base[value_cols])) == 0), header_rows),
+                    2, 3, header_rows[2]:nrow(base))
+  
+  base_display <- base |>
+    mutate(
+      across(all_of(value_cols), trimws),
+      across(all_of(value_cols), ~gsub("%", "\\%", .x, fixed = TRUE)),
+      across(everything(), escape_latex_unicode),
+      across(everything(), ~ifelse(is.na(.), "", .)),
+      Variable  = case_when(
+        row_number() %in% header_rows  ~ paste0("\\textbf{", Variable, "}"),
+        row_number() %in% section_rows ~ paste0("\\hspace{1em}", Variable),
+        TRUE                           ~ paste0("\\hspace{2em}\\textit{", Variable, "}")
+      )
     )
+  
+  # Split columns into two groups, e.g. first half vs second half
+  split_pt <- ceiling(length(value_cols) / 2)
+  cols1 <- value_cols[1:split_pt]
+  cols2 <- value_cols[(split_pt + 1):length(value_cols)]
+  
+  build_tab <- function(disp, cols, title, label) {
+    t <- get_kbl_tab(
+      disp[, c("Variable", cols)],
+      title    = NULL,
+      note     = "Averages are presented as daily total registrations.
+      Precipitation values are reported with positive SDs only because of its
+      inverse exponential distribution.",
+      colnames = c("Variable", cols),
+      label    = label
+    ) |>
+      column_spec(1, width = "4.5cm", latex_column_spec = "p{4.5cm}")
+    
+    for (i in seq_along(cols)) {
+      t <- t |> column_spec(i + 1, width = "2.25cm", latex_column_spec = "p{2.25cm}")
+    }
+    
+    t <- gsub("%", "\\%", t, fixed = TRUE)
+    t
   }
+  tab1 <- build_tab(base_display, cols1, "Descriptive statistics of hospital and weather characteristics", "MT_base_desc_t1")
+  tab2 <- build_tab(base_display, cols2, "Descriptive statistics of hospital and weather characteristics", "MT_base_desc_t2")
   
-  all_cols <- c(h_cols, w_cols, p_cols)
-  
-  overall <- bind_rows(lapply(all_cols, summarise_col, sub_df = df)) |>
-    dplyr::select(Variable, total_visits, Overall = Average)
-  
-  per_loc <- bind_rows(lapply(locs, function(loc) {
-    bind_rows(lapply(all_cols, summarise_col, sub_df = df[df$location == loc, ])) |>
-      mutate(location = loc)
-  })) |>
-    dplyr::select(Variable, location, Average) |>
-    tidyr::pivot_wider(names_from = location, values_from = Average)
-  
-  base_desc <- overall |>
-    left_join(per_loc, by = "Variable") |>
-    dplyr::select(Variable, total_visits, Overall, all_of(as.character(locs)))
-  
-  # Sort ward rows by descending total visits
-  ward_cols <- h_cols[11:28]
-  ward_idx  <- which(base_desc$Variable %in% ward_cols)
-  if (length(ward_idx) > 0) {
-    base_desc[ward_idx, ] <- base_desc[ward_idx, ][
-      order(base_desc$total_visits[ward_idx], decreasing = TRUE, na.last = TRUE), ]
-  }
-  
-  base_desc <- base_desc |> dplyr::select(-total_visits)
-  
-  # Insert section headings
-  blank_row <- function(v) setNames(
-    as.list(c(v, rep(NA, ncol(base_desc) - 1))), names(base_desc)
-  ) |> as_tibble()
-  
-  base_desc <- bind_rows(blank_row('Hospital Characteristics'), base_desc)
-  positions <- which(base_desc$Variable %in% check)
-  new_rows  <- bind_rows(lapply(labels, blank_row))
-  for (i in rev(seq_along(positions))) {
-    pos       <- positions[i]
-    base_desc <- bind_rows(base_desc[1:(pos - 1), ], new_rows[i, ], base_desc[pos:nrow(base_desc), ])
-  }
-  
-  base_desc
+  writeLines(as.character(tab1), paste0(path_report, "II. dlnm/ST_base_desc_t1.tex"))
+  writeLines(as.character(tab2), paste0(path_report, "II. dlnm/ST_base_desc_t2.tex"))
+
 }
 
-# replace nm % with //%
+# ST: Percentile lookup ####
 
-base <- get_desc(df_wide, h_cols[-1], w_cols, p_cols) |> replace_exact_matches(nm)
-value_cols   <- setdiff(names(base), "Variable")
-header_rows  <- which(grepl("Characteristics", base$Variable))
-section_rows <- c(setdiff(which(rowSums(!is.na(base[value_cols])) == 0), header_rows),
-                  2, 3, header_rows[2]:nrow(base))
-
-base_display <- base |>
-  mutate(
-    across(all_of(value_cols), trimws),
-    across(all_of(value_cols), ~gsub("%", "\\%", .x, fixed = TRUE)),
-    across(everything(), escape_latex_unicode),
-    across(everything(), ~ifelse(is.na(.), "", .)),
-    Variable  = case_when(
-      row_number() %in% header_rows  ~ paste0("\\textbf{", Variable, "}"),
-      row_number() %in% section_rows ~ paste0("\\hspace{1em}", Variable),
-      TRUE                           ~ paste0("\\hspace{2em}\\textit{", Variable, "}")
-    )
+if(export == 't2m'){
+  
+  datalist <- lapply(locations, function(region) df[df$location == region, ])
+  
+  make_centile <- function(data, var, locations, transform = identity, digits = 2) {
+    tab <- sapply(data, function(x) round(transform(quantile(x[[var]], (0:100)/100, na.rm = TRUE)), digits))
+    setNames(as.data.frame(tab), locations)
+  }
+  
+  var_specs <- tibble::tribble(
+    ~name,        ~col,              ~transform,
+    "t2m_sing",   "t2m",             identity,
+    "mn2t_sing",  "mn2t",            identity,
+    "mx2t_sing",  "mx2t",            identity,
+    "tp_sing",    "tp_log",          \(q) exp(q) - 2,
+    "t2m_multi",  "t2m_roll7",       identity,
+    "mn2t_multi", "mn2t_roll7",      identity,
+    "mx2t_multi", "mx2t_roll7",      identity,
+    "tp_multi",   "tp_roll7_log",    \(q) exp(q) - 10
   )
-
-# split columns into two groups, e.g. first half vs second half
-split_pt <- ceiling(length(value_cols) / 2)
-cols1 <- value_cols[1:split_pt]
-cols2 <- value_cols[(split_pt + 1):length(value_cols)]
-
-build_tab <- function(disp, cols, title, label) {
-  t <- get_kbl_tab(
-    disp[, c("Variable", cols)],
-    title    = NULL,
-    note     = "Averages are presented as daily total registrations.
-    Precipitation values are reported with positive SDs only because of its
-    inverse exponential distribution.",
-    colnames = c("Variable", cols),
-    label    = label
-  ) |>
-    column_spec(1, width = "4.5cm", latex_column_spec = "p{4.5cm}")
   
-  for (i in seq_along(cols)) {
-    t <- t |> column_spec(i + 1, width = "2.5cm", latex_column_spec = "p{2.5cm}")
+  cen <- var_specs |>
+    pmap(\(name, col, transform) make_centile(datalist, col, locations, transform)) |>
+    set_names(var_specs$name) |>
+    map(rowMeans) |>
+    as.data.frame()
+  
+  # Rename: split at last "_", replace variable part, relabel type part
+  split_names <- str_split_fixed(names(cen), "_(?=[^_]+$)", 2)
+  type_label  <- recode(split_names[, 2], sing = "Single-day", multi = "Seven-day")
+  names(cen)  <- paste0(type_label, " ", replace_exact_matches(split_names[, 1], nm))
+  
+  # Select percentiles
+  percentiles  <- c(0:2, seq(5, 20, 5), seq(30, 70, 10), seq(80, 95, 5), 98:100)
+  cen_selected <- cen[paste0(percentiles, "%"), ]
+  
+  # Stack variables on top of each other
+  stack_with_header <- function(data, cols1, cols2) {
+    block1 <- cbind(data[cols1], Percentile = rownames(data))
+    block2 <- cbind(setNames(data[cols2], names(data[cols1])), Percentile = rownames(data))
+    header <- cbind(setNames(as.data.frame(t(cols2), row.names = " "), names(data[cols1])), Percentile = "")
+    
+    out <- rbind(block1, header, block2)
+    rownames(out) <- NULL
+    out[c("Percentile", names(block1)[-length(block1)])]
   }
-  t
+  
+  stacked <- stack_with_header(cen_selected, names(cen_selected)[1:4], names(cen_selected)[5:8])
+  
+  value_cols <- setdiff(names(stacked), "Percentile")
+  stacked[value_cols] <- lapply(stacked[value_cols], \(col) ifelse(col == "0", "0.000", col))
+  
+  tab <- get_kbl_tab(stacked, title = NULL, note = NULL, label = 'ST_perc',
+                     colnames = names(stacked), hline_after_rows = c(19, 20)) |>
+    gsub("%", "\\%", x = _, fixed = TRUE) |>
+    gsub("\\midrule\\\\", "\\midrule", x = _, fixed = TRUE)
+  
+  writeLines(as.character(tab), paste0(path_report, "II. dlnm/ST_perc.tex"))
+  
+}
+# ST: RR tables (Excel) ----
+
+make_stacked_excel <- function(tab_list_tmp_imm, tab_list_tmp_cum, 
+                               tab_list_tp_imm, tab_list_tp_cum, filepath) {
+  wb <- createWorkbook()
+  
+  write_sheet <- function(tab_list, sheet_name) {
+    addWorksheet(wb, sheet_name)
+    current_row <- 1
+    
+    for (nm in names(tab_list)) {
+      df      <- as.data.frame(tab_list[[nm]]$tab)
+      sig_mat <- as.data.frame(tab_list[[nm]]$sig)
+      
+      writeData(wb, sheet_name, x = nm, startRow = current_row, startCol = 1)
+      addStyle(wb, sheet_name,
+               style = createStyle(textDecoration = "bold", fgFill = "grey30", fontColour = "white"),
+               rows = current_row, cols = 1:ncol(df))
+      current_row <- current_row + 1
+      
+      writeData(wb, sheet_name, x = df, startRow = current_row, startCol = 1,
+                headerStyle = createStyle(textDecoration = "bold",
+                                          border = "TopBottom", borderStyle = "medium"))
+      addStyle(wb, sheet_name,
+               style = createStyle(halign = "center"),
+               rows  = (current_row + 1):(current_row + nrow(df)),
+               cols  = 2:ncol(df), gridExpand = TRUE)
+      
+      for (r in seq_len(nrow(sig_mat))) {
+        for (c in which(sig_mat[r, ] == TRUE)) {
+          addStyle(wb, sheet_name,
+                   style = createStyle(halign = "center", textDecoration = "bold"),
+                   rows = current_row + r, cols = c, stack = TRUE)
+        }
+      }
+      current_row <- current_row + nrow(df) + 1
+    }
+    setColWidths(wb, sheet_name, cols = 1,     widths = 10)
+    setColWidths(wb, sheet_name, cols = 2:13,  widths = 18)
+  }
+  
+  write_sheet(tab_list_tmp_imm, "1-day Temperature")
+  write_sheet(tab_list_tmp_cum, "7-day Temperature")
+  write_sheet(tab_list_tp_imm,  "1-day Precipitation")
+  write_sheet(tab_list_tp_cum,  "7-day Precipitation")
+  saveWorkbook(wb, filepath, overwrite = TRUE)
+}
+get_rr_table <- function(meta, city = "ALL", reference = "50%") {
+  res <- city_con_res(meta = meta, city = city, reference = reference, xlab = "", title = "")$df
+  
+  list2env(meta, envir = environment())
+  
+  if (!is.null(meta$mv)) {
+    coef_use  <- coef(mv); vcov_use <- vcov(mv)
+    rows_dup  <- apply(cen, 1, function(row) any(duplicated(row)))
+    cen_clean <- as.data.frame(cen[!rows_dup, ])
+  } else {
+    city_name <- if (city == "ALL") rownames(ymat)[1] else city
+    coef_use  <- as.numeric(ymat[city_name, ]); vcov_use <- Slist[[city_name]]
+    cen_clean <- cen[!(duplicated(cen) | duplicated(cen, fromLast = TRUE)), , drop = FALSE]
+  }
+  
+  perc    <- as.numeric(sub("%", "", names(rowMeans(cen_clean))))
+  ref_idx <- if (reference == '20%') paste0(min(perc), '%') else reference
+  cp_at   <- rowMeans(cen_clean)
+  cp      <- crosspred(b_mean, coef = coef_use, vcov = vcov_use, model.link = 'log',
+                       at = cp_at, cen = cp_at[ref_idx])
+  
+  overall_df <- data.frame(x = perc, z = cp$allRRfit, z_low = cp$allRRlow, z_high = cp$allRRhigh)
+  
+  keep_x <- function(x) x <= 5 | x >= 95 |
+    (x >= 5  & x <= 20 & x %% 5  == 0) |
+    (x >= 80 & x <= 95 & x %% 5  == 0) |
+    (x >= 20 & x <= 80 & x %% 10 == 0)
+  
+  fmt_rr  <- function(z, lo, hi) sprintf("%.2f (%.2f, %.2f)", z, lo, hi)
+  is_sig  <- function(lo, hi, z) !(lo <= 1 & hi >= 1) & round(z, 2) != 1.00
+  
+  filtered <- res |>
+    filter(keep_x(x)) |>
+    mutate(rr_fmt = fmt_rr(z, z_low, z_high), sig = is_sig(z_low, z_high, z))
+  
+  overall_filtered <- overall_df |>
+    filter(x %in% filtered$x) |>
+    mutate(rr_fmt = fmt_rr(z, z_low, z_high), sig = is_sig(z_low, z_high, z))
+  
+  make_wide <- function(df_long, val_col, key_prefix = "Lag=") {
+    df_long |>
+      dplyr::select(x, y, {{ val_col }}) |>
+      pivot_wider(names_from = y, values_from = {{ val_col }}, names_prefix = key_prefix) |>
+      rename(Percentile = x) |>
+      left_join(overall_filtered |> dplyr::select(x, {{ val_col }}) |> rename(Percentile = x, Cumulative = {{ val_col }}),
+                by = "Percentile")
+  }
+  
+  list(tab = make_wide(filtered, rr_fmt), sig = make_wide(filtered, sig))
 }
 
-tab1 <- build_tab(base_display, cols1, "Descriptive statistics of hospital and weather characteristics", "MT_base_desc_t1")
-tab2 <- build_tab(base_display, cols2, "Descriptive statistics of hospital and weather characteristics", "MT_base_desc_t2")
 
-writeLines(as.character(tab1), paste0(path_report, "II. dlnm/ST_base_desc_t1.tex"))
-writeLines(as.character(tab2), paste0(path_report, "II. dlnm/ST_base_desc_t2.tex"))
+# Load model outputs
+sub1 <- readRDS(paste0('2_DLNM/Results/',  export, '_', model1, '_subgroup_models.rds'))
+sub2 <- readRDS(paste0('2_DLNM/Results/',  export, '_', model2, '_subgroup_models.rds'))
 
+tab_rr_site_tmp_imm <- setNames(
+  lapply(c("ALL", locations), function(l) get_rr_table(sub1$total_patients$meta_tmp, city = l)),
+  c("Pooled", locations)
+)
+tab_rr_site_tp_imm <- setNames(
+  lapply(c("ALL", locations), function(l) get_rr_table(sub1$total_patients$meta_tp,  city = l, reference=tp_ref)),
+  c("Pooled", locations)
+)
+tab_rr_site_tmp_cum <- setNames(
+  lapply(c("ALL", locations), function(l) get_rr_table(sub2$total_patients$meta_tmp, city = l)),
+  c("Pooled", locations)
+)
+tab_rr_site_tp_cum <- setNames(
+  lapply(c("ALL", locations), function(l) get_rr_table(sub2$total_patients$meta_tp,  city = l, reference=tp_ref)),
+  c("Pooled", locations)
+)
 
-# # ST: Meta-regression results ----
-# 
-# prep_display <- function(df) {
-#   data.frame(
-#     `Meta-predictors` = df[["Meta-predictors"]],
-#     `Stat`   = fmt_num(df$LR_stat), `df`  = fmt_int(df$LR_df),  `p`    = fmt_p(df$LR_p),
-#     `AIC`    = fmt_num(df$AIC),
-#     `Stat `  = fmt_num(df$Q_stat),  `df ` = fmt_int(df$Q_df),   `p `   = fmt_p(df$Q_p),
-#     `I2 (%)` = fmt_num(df$I2),
-#     check.names = FALSE, stringsAsFactors = FALSE
-#   )
-# }
-# 
-# blank_row <- data.frame(
-#   `Meta-predictors` = "", `Stat` = "", `df` = "", `p` = "", `AIC` = "",
-#   `Stat ` = "", `df ` = "", `p ` = "", `I2 (%)` = "",
-#   check.names = FALSE, stringsAsFactors = FALSE
-# )
-# 
-# output  <- readRDS(paste0('2_DLNM/Results/', export, '_', model1, '_meta_tables.RData'))
-# d_tmp   <- prep_display(output$tbl_tmp)
-# d_tp    <- prep_display(output$tbl_tp)
-# immediate <- rbind(blank_row, d_tmp, blank_row, d_tp)
-# immediate[1, 1] <- paste0(str_to_title(model1), ' Temperature')
-# immediate[19, 1] <- paste0(str_to_title(model1), ' Precipitation')
-# immediate <- immediate |>
-#   mutate(`Meta-predictors` = ifelse(
-#     `Meta-predictors` %in% c(paste0(str_to_title(model1), ' Temperature'), 
-#                              paste0(str_to_title(model1), ' Precipitation'), ''),
-#     `Meta-predictors`,
-#     paste0("\\hspace{1em}", `Meta-predictors`)
-#   ))
-# 
-# 
-# output  <- readRDS(paste0('2_DLNM/Results/', export, '_', model1, '_meta_tables.RData'))
-# d_tmp   <- prep_display(output$tbl_tmp)
-# d_tp    <- prep_display(output$tbl_tp)
-# cumulative <- rbind(blank_row, d_tmp, blank_row, d_tp)
-# cumulative[1, 1] <- paste0(str_to_title(model2), ' Temperature')
-# cumulative[19, 1] <- paste0(str_to_title(model2), ' Precipitation')
-# cumulative <- cumulative |>
-#   mutate(`Meta-predictors` = ifelse(
-#     `Meta-predictors` %in% c(paste0(str_to_title(model2), ' Temperature'), 
-#                              paste0(str_to_title(model2), ' Precipitation'), ''),
-#     `Meta-predictors`,
-#     paste0("\\hspace{1em}", `Meta-predictors`)
-#   ))
-# 
-# combined <- rbind(immediate, cumulative)
-# 
-# tab <- get_kbl_tab(
-#   combined,
-#   title           = "Meta-regression results for immediate and cumulative weather models",
-#   note            = "LR test was used to test the significance of meta-predictors with the intercept-only model as reference. Cochran Q test was used to test the significance of residual heterogeneity with the null hypothesis as no heterogeneity. LR = likelihood ratio; AIC = Akaike information criterion; $I^2$ = heterogeneity statistic.",
-#   colnames        = c("Meta-predictors", "Stat", "df", "\\textit{p}", "AIC",
-#                       "Stat", "df", "\\textit{p}", "(\\%)"),
-#   label           = "MT_meta_reg",
-#   spanning_header = c(" " = 1, "LR test" = 3, "Model fits" = 1, "Cochran Q test" = 3, "$I^2$" = 1),
-#   bold_rows       = c(1, 19, 37, 55),
-#   italic_rows     = c(2, 20, 38, 56),
-#   hline_after_rows = c(18, 36, 54)
-# )
-# 
-# tab <- sub(
-#   "\\\\multicolumn\\{9\\}\\{l\\}\\{\\\\rule\\{0pt\\}\\{1em\\}",
-#   "\\\\multicolumn{9}{p{0.8\\\\textwidth}}{\\\\rule{0pt}{1em}",
-#   tab
-# )
-# 
-# writeLines(as.character(tab), paste0(path_report, "II. dlnm/ST_meta_reg_", export, ".tex"))
-# 
+make_stacked_excel(tab_rr_site_tmp_imm, tab_rr_site_tmp_cum,
+                   tab_rr_site_tp_imm, tab_rr_site_tp_cum, paste0(path_report, "II. dlnm/ST_rr_site_", export, ".xlsx"))
+
+if(export=='t2m'){
+  
+  outcomes <- names(sub1)
+  tab_rr_pop_tmp_imm <- setNames(lapply(outcomes[-1], function(o) get_rr_table(sub1[[o]]$meta_tmp, city = 'ALL')),
+                                 replace_exact_matches(outcomes[-1], nm))
+  tab_rr_pop_tp_imm  <- setNames(lapply(outcomes[-1], function(o) get_rr_table(sub1[[o]]$meta_tp,  city = 'ALL')),
+                                 replace_exact_matches(outcomes[-1], nm))
+  tab_rr_pop_tmp_cum <- setNames(lapply(outcomes[-1], function(o) get_rr_table(sub2[[o]]$meta_tmp, city = 'ALL')),
+                                 replace_exact_matches(outcomes[-1], nm))
+  tab_rr_pop_tp_cum  <- setNames(lapply(outcomes[-1], function(o) get_rr_table(sub2[[o]]$meta_tp,  city = 'ALL')),
+                                 replace_exact_matches(outcomes[-1], nm))
+  make_stacked_excel(tab_rr_pop_tmp_imm, tab_rr_pop_tmp_cum, 
+                     tab_rr_pop_tp_imm, tab_rr_pop_tp_cum, 
+                     paste0(path_report, "II. dlnm/ST_rr_pop.xlsx"))
+  
+}
+
