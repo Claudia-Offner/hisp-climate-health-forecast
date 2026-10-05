@@ -181,9 +181,9 @@ df_heal <- df_heal %>%
   mutate(age_group = case_when(
     age < 0 ~ 'Unknown',
     age >= 0 & age < 5 ~ 'under_5',
-    age >=5 & age < 16 ~ 'age5_14',
-    age >= 15 & age < 25 ~ 'age15_24',
-    age >= 25 & age < 65 ~ 'age25_64',
+    # age >=5 & age < 16 ~ 'age5_14',
+    # age >= 15 & age < 25 ~ 'age15_24',
+    age >= 5 & age < 65 ~ 'age5_64',
     age >= 65 & age <= 110 ~ 'over_65',
     age > 110 ~ 'Unknown',
     TRUE ~ 'Unknown'

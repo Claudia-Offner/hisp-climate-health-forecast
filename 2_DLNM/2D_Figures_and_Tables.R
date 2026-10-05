@@ -58,9 +58,8 @@ df_wide <- df_wide |>
          date <= as.Date('2020-02-14')) |>
   rename(rh = rh_mean)
 
-h_cols <- c('closed', 'total_patients', 'location', 'F', 'M', 'under_5',
-            'age5_14', 'age15_24', 'age25_64', 'over_65', 
-            'general', 'ophthalmology', 'gynaecology', 'dentistry')
+h_cols <- c('closed', 'total_patients', 'location', 'F', 'M', 'under_5', 'age5_64', 'over_65') 
+            # 'general', 'ophthalmology', 'gynaecology', 'dentistry')
 
 #### FIGURES ####
 
@@ -173,147 +172,11 @@ get_meta_plot <- function(table){
   }
   return(tab_grob)
 }
+
 results1 <- readRDS(paste0('2_DLNM/Results/', export, '_', model1, '_pooled_plots.RData'))
 results2 <- readRDS(paste0('2_DLNM/Results/',  export, '_', model2, '_pooled_plots.RData'))
 
-# Get all exposure-response results (t2m, tp, mn2t, mx2t) ----
-
-make_exp_fig <- function(cont1, cont2, exp1, exp2) {
-  
-  imm_ov <- strip_legend(exp1$ALL$Overall)
-  cum_ov <- strip_legend(exp2$ALL$Overall)
-  exp1$ALL$Overall <- NULL
-  exp2$ALL$Overall <- NULL
-  con_imm <- strip_legend(cont1$ALL)
-  con_cum  <- strip_legend(cont2$ALL)
-  lag_imm <- lapply(exp1$ALL, function(p) tag_as_title(strip_legend(p)))
-  lag_cum  <- lapply(exp2$ALL,  function(p) tag_as_title(strip_legend(p)))
-  
-  legends <- wrap_plots(
-    list(plot_spacer(),
-         contour_legend(cont1$ALL),
-         # sig_legend(),
-         get_legend(exp1$ALL[[1]] + theme(legend.position = "bottom"))),
-    nrow = 1, widths = c(0.25, 1, 4)
-  )
-  
-  all_rows <- wrap_plots(
-    list(row_label("(A)"), wrap_plots(c(list(con_imm), imm_ov, lag_imm), nrow = 1),
-         row_label("(B)"), wrap_plots(c(list(con_cum), cum_ov, lag_cum),  nrow = 1)),
-    nrow = 2, widths = c(0.05, 1)
-  )
-  wrap_plots(list(all_rows, legends), ncol = 1, heights = c(1, 0.1))
-}
-
-if(export == 't2m'){
-  
-  cont1 <- results1$cont$tmp; exp1 <- results1$exp$tmp
-  cont2 <- results2$cont$tmp; exp2 <- results2$exp$tmp
-  fig <- make_exp_fig(cont1, cont2, exp1, exp2)
-  ggsave(paste0(path_report, 'II. dlnm/MF_',  export, '_pool.png'), fig, width = 14, height = 7, dpi = 300, bg = 'white')
-  
-  cont1 <- results1$cont$tp; exp1 <- results1$exp$tp
-  cont2 <- results2$cont$tp; exp2 <- results2$exp$tp
-  fig <- make_exp_fig(cont1, cont2, exp1, exp2)
-  ggsave(paste0(path_report, 'II. dlnm/MF_tp_pool.png'), fig, width = 14, height = 7, dpi = 300, bg = 'white')
-  
-  # SITES
-  results1$cont$tmp$ALL <- NULL
-  results1$cont$tp$ALL <- NULL
-  results2$cont$tmp$ALL <- NULL
-  results2$cont$tp$ALL <- NULL
-  site_imm_tmp <- make_panel(results1$cont$tmp)
-  site_cum_tmp <- make_panel(results2$cont$tmp)
-  site_imm_tp <- make_panel(results1$cont$tp)
-  site_cum_tp <- make_panel(results2$cont$tp)
-  
-  # META TESTS
-  output  <- readRDS(paste0('2_DLNM/Results/', export, '_', model1, '_meta_tables.RData'))
-  meta_imm_tmp <- get_meta_plot(prep_display(output$tbl_tmp))
-  meta_imm_tp <- get_meta_plot(prep_display(output$tbl_tp))
-  output  <- readRDS(paste0('2_DLNM/Results/', export, '_', model2, '_meta_tables.RData'))
-  meta_cum_tmp <- get_meta_plot(prep_display(output$tbl_tmp))
-  meta_cum_tp <- get_meta_plot(prep_display(output$tbl_tp))
-
-  all_rows <- wrap_plots(
-    list(row_label("(A)"), wrap_plots(c(site_imm_tmp, wrap_elements(full = meta_imm_tmp)), nrow = 1, widths=c(2, 1)),
-         row_label("(B)"), wrap_plots(c(site_cum_tmp, wrap_elements(full = meta_cum_tmp)), nrow = 1, widths=c(2, 1)),
-         row_label("(C)"), wrap_plots(c(site_imm_tp, wrap_elements(full = meta_imm_tp)), nrow = 1, widths=c(2, 1)),
-         row_label("(D)"), wrap_plots(c(site_cum_tp, wrap_elements(full = meta_cum_tp)), nrow = 1, widths=c(2, 1))),
-    nrow = 4, widths = c(0.05, 1)
-  )
-  
-  legends <- wrap_plots(list(plot_spacer(), contour_legend(cont1$ALL), plot_spacer()), nrow = 1, widths = c(0.05, 2, 1))
-  fig <- wrap_plots(list(legends, all_rows), ncol = 1, heights = c( 0.025, 1))
-  
-  ggsave(
-    paste0(path_report, 'II. dlnm/SF_', export, '_site.png'),
-    fig, width = 20, height = 22, dpi = 100, bg = 'white'
-  )
-  
-} else {
-  
-  cont1 <- results1$cont$tmp; exp1 <- results1$exp$tmp
-  cont2 <- results2$cont$tmp; exp2 <- results2$exp$tmp
-  
-  # POOLED
-  imm_ov <- strip_legend(exp1$ALL$Overall)
-  cum_ov <- strip_legend(exp2$ALL$Overall)
-  exp1$ALL$Overall <- NULL
-  exp2$ALL$Overall <- NULL
-  con_imm <- strip_legend(cont1$ALL)
-  con_cum  <- strip_legend(cont2$ALL)
-  lag_imm <- lapply(exp1$ALL, function(p) tag_as_title(strip_legend(p)))
-  lag_cum  <- lapply(exp2$ALL,  function(p) tag_as_title(strip_legend(p)))
-  
-  # SITES
-  results1$cont$tmp$ALL <- NULL
-  results1$cont$tp$ALL <- NULL
-  results2$cont$tmp$ALL <- NULL
-  results2$cont$tp$ALL <- NULL
-  site_imm_tmp <- make_panel(results1$cont$tmp)
-  site_cum_tmp <- make_panel(results2$cont$tmp)
-  
-  # META TESTS
-  output  <- readRDS(paste0('2_DLNM/Results/', export, '_', model1, '_meta_tables.RData'))
-  imm_tmp   <- prep_display(output$tbl_tmp)
-  meta_imm <- get_meta_plot(imm_tmp)
-  output  <- readRDS(paste0('2_DLNM/Results/', export, '_', model2, '_meta_tables.RData'))
-  cum_tmp   <- prep_display(output$tbl_tmp)
-  meta_cum <- get_meta_plot(cum_tmp)
-  
-  all_rows <- wrap_plots(
-    list(row_label("(A)"), wrap_plots(c(list(con_imm), imm_ov, lag_imm), nrow = 1),
-         row_label("(B)"), wrap_plots(c(list(con_cum), cum_ov, lag_cum),  nrow = 1),
-         row_label("(C)"), wrap_plots(c(site_imm_tmp, wrap_elements(full = meta_imm)), nrow = 1, widths=c(2, 1)),
-         row_label("(D)"), wrap_plots(c(site_cum_tmp, wrap_elements(full = meta_cum)), nrow = 1, widths=c(2, 1))),
-    nrow = 4, widths = c(0.05, 1), heights = c(1, 1, 2, 2)
-  )
-  
-  legends <- wrap_plots(
-    list(plot_spacer(),
-         contour_legend(cont1$ALL),
-         # sig_legend(),
-         get_legend(exp1$ALL[[1]] + theme(legend.position = "bottom"))),
-    nrow = 1, widths = c(0.25, 1, 4)
-  )
-  fig <- wrap_plots(list(legends, all_rows), ncol = 1, heights = c( 0.025, 1))
-  
-  ggsave(
-    paste0(path_report, 'II. dlnm/SF_', export, '_res.png'),
-    fig, width = 20, height = 20, dpi = 100, bg = 'white'
-  )
-  
-}
-
-
-
-
-
-
-
-
-# # Time series visual ####
+# MF/SF: Time series visual ####
 # 
 # if(export == 't2m'){
 #   
@@ -353,12 +216,12 @@ if(export == 't2m'){
 #     
 #     
 #     ggplot(df_weekly, aes(x = date)) +
-#       geom_col(aes(y = hosp_month), fill = "grey70", alpha = 0.7, width = 7) +
-#       geom_smooth(aes(y = hosp_month, color = "Smoothed trend"), method = "loess", span = 0.07,
+#       geom_col(aes(y = hosp_week), fill = "grey70", alpha = 0.7, width = 7) +
+#       geom_smooth(aes(y = hosp_week, color = "Smoothed trend"), method = "loess", span = 0.07,
 #                   se = FALSE, linewidth = 0.7) +
-#       geom_line(aes(y = transform_weather(tp_month), color = "Total Precipitation (mm)"), linewidth = 0.7) +
-#       geom_line(aes(y = transform_weather(mn2t_month), color = "Min Temp (°C)"), linewidth = 0.7) +
-#       geom_line(aes(y = transform_weather(mx2t_month), color = "Max Temp (°C)"), linewidth = 0.7) +
+#       geom_line(aes(y = transform_weather(tp_week), color = "Total Precipitation (mm)"), linewidth = 0.7) +
+#       geom_line(aes(y = transform_weather(mn2t_week), color = "Min Temp (°C)"), linewidth = 0.7) +
+#       geom_line(aes(y = transform_weather(mx2t_week), color = "Max Temp (°C)"), linewidth = 0.7) +
 #       scale_x_date(breaks = valid_breaks, date_labels = "%b %Y") +
 #       scale_y_continuous(
 #         name = "Total patients",
@@ -390,10 +253,10 @@ if(export == 't2m'){
 #     mutate(date = floor_date(date, "week")) %>%
 #     group_by(date) %>%
 #     summarise(
-#       mn2t_month = mean(mn2t, na.rm = TRUE),
-#       mx2t_month = mean(mx2t, na.rm = TRUE),
-#       tp_month = mean(tp, na.rm = TRUE),
-#       hosp_month = mean(total_patients, na.rm = TRUE)
+#       mn2t_week = mean(mn2t, na.rm = TRUE),
+#       mx2t_week = mean(mx2t, na.rm = TRUE),
+#       tp_week = mean(tp, na.rm = TRUE),
+#       hosp_week = mean(total_patients, na.rm = TRUE)
 #     )
 #   
 #   (fig <- get_time_series(df_weekly))
@@ -444,10 +307,10 @@ if(export == 't2m'){
 #   #     mutate(date = floor_date(date, "week")) %>%
 #   #     group_by(date) %>%
 #   #     summarise(
-#   #       mn2t_month = mean(mn2t, na.rm = TRUE),
-#   #       mx2t_month = mean(mx2t, na.rm = TRUE),
-#   #       tp_month = mean(tp, na.rm = TRUE),
-#   #       hosp_month = mean(total_patients, na.rm = TRUE)
+#   #       mn2t_week = mean(mn2t, na.rm = TRUE),
+#   #       mx2t_week = mean(mx2t, na.rm = TRUE),
+#   #       tp_week = mean(tp, na.rm = TRUE),
+#   #       hosp_week = mean(total_patients, na.rm = TRUE)
 #   #     )
 #   #
 #   #   city_ts[[l]] <- get_time_series(df_weekly, title=l, month_breaks='6 months',
@@ -470,134 +333,309 @@ if(export == 't2m'){
 #   
 # }
 # 
+# MF/SF: All exposure-lag-response results (t2m, tp, mn2t, mx2t) ----
+
+make_exp_fig <- function(cont1, cont2, exp1, exp2) {
+
+  imm_ov <- strip_legend(exp1$ALL$Overall)
+  cum_ov <- strip_legend(exp2$ALL$Overall)
+  exp1$ALL$Overall <- NULL
+  exp2$ALL$Overall <- NULL
+  con_imm <- strip_legend(cont1$ALL)
+  con_cum  <- strip_legend(cont2$ALL)
+  lag_imm <- lapply(exp1$ALL, function(p) tag_as_title(strip_legend(p)))
+  lag_cum  <- lapply(exp2$ALL,  function(p) tag_as_title(strip_legend(p)))
+
+  legends <- wrap_plots(
+    list(plot_spacer(),
+         contour_legend(cont1$ALL),
+         # sig_legend(),
+         get_legend(exp1$ALL[[1]] + theme(legend.position = "bottom"))),
+    nrow = 1, widths = c(0.25, 1, 4)
+  )
+
+  all_rows <- wrap_plots(
+    list(row_label("(A)"), wrap_plots(c(list(con_imm), imm_ov, lag_imm), nrow = 1),
+         row_label("(B)"), wrap_plots(c(list(con_cum), cum_ov, lag_cum),  nrow = 1)),
+    nrow = 2, widths = c(0.05, 1)
+  )
+  wrap_plots(list(all_rows, legends), ncol = 1, heights = c(1, 0.1))
+}
+
+if(export == 't2m'){
+
+  cont1 <- results1$cont$tmp; exp1 <- results1$exp$tmp
+  cont2 <- results2$cont$tmp; exp2 <- results2$exp$tmp
+  fig <- make_exp_fig(cont1, cont2, exp1, exp2)
+  ggsave(paste0(path_report, 'II. dlnm/MF_t2m_pool.png'), fig, width = 14, height = 7, dpi = 300, bg = 'white')
+
+  cont1 <- results1$cont$tp; exp1 <- results1$exp$tp
+  cont2 <- results2$cont$tp; exp2 <- results2$exp$tp
+  fig <- make_exp_fig(cont1, cont2, exp1, exp2)
+  ggsave(paste0(path_report, 'II. dlnm/MF_tp_pool.png'), fig, width = 14, height = 7, dpi = 300, bg = 'white')
+
+  # SITES
+  results1$cont$tmp$ALL <- NULL
+  results1$cont$tp$ALL <- NULL
+  results2$cont$tmp$ALL <- NULL
+  results2$cont$tp$ALL <- NULL
+  site_imm_tmp <- make_panel(results1$cont$tmp)
+  site_cum_tmp <- make_panel(results2$cont$tmp)
+  site_imm_tp <- make_panel(results1$cont$tp)
+  site_cum_tp <- make_panel(results2$cont$tp)
+
+  # META TESTS
+  output  <- readRDS(paste0('2_DLNM/Results/', export, '_', model1, '_meta_tables.RData'))
+  meta_imm_tmp <- get_meta_plot(prep_display(output$tbl_tmp))
+  meta_imm_tp <- get_meta_plot(prep_display(output$tbl_tp))
+  output  <- readRDS(paste0('2_DLNM/Results/', export, '_', model2, '_meta_tables.RData'))
+  meta_cum_tmp <- get_meta_plot(prep_display(output$tbl_tmp))
+  meta_cum_tp <- get_meta_plot(prep_display(output$tbl_tp))
+
+  all_rows <- wrap_plots(
+    list(row_label("(A)"), wrap_plots(c(site_imm_tmp, wrap_elements(full = meta_imm_tmp)), nrow = 1, widths=c(2, 1)),
+         row_label("(B)"), wrap_plots(c(site_cum_tmp, wrap_elements(full = meta_cum_tmp)), nrow = 1, widths=c(2, 1)),
+         row_label("(C)"), wrap_plots(c(site_imm_tp, wrap_elements(full = meta_imm_tp)), nrow = 1, widths=c(2, 1)),
+         row_label("(D)"), wrap_plots(c(site_cum_tp, wrap_elements(full = meta_cum_tp)), nrow = 1, widths=c(2, 1))),
+    nrow = 4, widths = c(0.05, 1)
+  )
+
+  legends <- wrap_plots(list(plot_spacer(), contour_legend(cont1$ALL), plot_spacer()), nrow = 1, widths = c(0.05, 2, 1))
+  fig <- wrap_plots(list(legends, all_rows), ncol = 1, heights = c( 0.025, 1))
+
+  ggsave(
+    paste0(path_report, 'II. dlnm/SF_t2m_site.png'),
+    fig, width = 20, height = 22, dpi = 100, bg = 'white'
+  )
+
+} else if (export %in% c('mx2t', 'mn2t')) {
+
+  cont1 <- results1$cont$tmp; exp1 <- results1$exp$tmp
+  cont2 <- results2$cont$tmp; exp2 <- results2$exp$tmp
+
+  # POOLED
+  imm_ov <- strip_legend(exp1$ALL$Overall)
+  cum_ov <- strip_legend(exp2$ALL$Overall)
+  exp1$ALL$Overall <- NULL
+  exp2$ALL$Overall <- NULL
+  con_imm <- strip_legend(cont1$ALL)
+  con_cum  <- strip_legend(cont2$ALL)
+  lag_imm <- lapply(exp1$ALL, function(p) tag_as_title(strip_legend(p)))
+  lag_cum  <- lapply(exp2$ALL,  function(p) tag_as_title(strip_legend(p)))
+
+  # SITES
+  results1$cont$tmp$ALL <- NULL
+  results1$cont$tp$ALL <- NULL
+  results2$cont$tmp$ALL <- NULL
+  results2$cont$tp$ALL <- NULL
+  site_imm_tmp <- make_panel(results1$cont$tmp)
+  site_cum_tmp <- make_panel(results2$cont$tmp)
+
+  # META TESTS
+  output  <- readRDS(paste0('2_DLNM/Results/', export, '_', model1, '_meta_tables.RData'))
+  imm_tmp   <- prep_display(output$tbl_tmp)
+  meta_imm <- get_meta_plot(imm_tmp)
+  output  <- readRDS(paste0('2_DLNM/Results/', export, '_', model2, '_meta_tables.RData'))
+  cum_tmp   <- prep_display(output$tbl_tmp)
+  meta_cum <- get_meta_plot(cum_tmp)
+
+  all_rows <- wrap_plots(
+    list(row_label("(A)"), wrap_plots(c(list(con_imm), imm_ov, lag_imm), nrow = 1),
+         row_label("(B)"), wrap_plots(c(list(con_cum), cum_ov, lag_cum),  nrow = 1),
+         row_label("(C)"), wrap_plots(c(site_imm_tmp, wrap_elements(full = meta_imm)), nrow = 1, widths=c(2, 1)),
+         row_label("(D)"), wrap_plots(c(site_cum_tmp, wrap_elements(full = meta_cum)), nrow = 1, widths=c(2, 1))),
+    nrow = 4, widths = c(0.05, 1), heights = c(1, 1, 2, 2)
+  )
+
+  legends <- wrap_plots(
+    list(plot_spacer(),
+         contour_legend(cont1$ALL),
+         # sig_legend(),
+         get_legend(exp1$ALL[[1]] + theme(legend.position = "bottom"))),
+    nrow = 1, widths = c(0.25, 1, 4)
+  )
+  fig <- wrap_plots(list(legends, all_rows), ncol = 1, heights = c( 0.025, 1))
+
+  ggsave(
+    paste0(path_report, 'II. dlnm/SF_', export, '_res.png'),
+    fig, width = 20, height = 20, dpi = 100, bg = 'white'
+  )
+
+}
+
+# MF: Attributable estimations ####
+
+if (export=='t2m'){
+  
+  attr1 <- readRDS(paste0('2_DLNM/Results/', export, '_', model1, '_attr.RData'))
+  attr2 <- readRDS(paste0('2_DLNM/Results/',  export, '_', model2, '_attr.RData'))
+  plot_df <- rbind(attr1, attr2)
+  
+  # Set legend colours
+  fill_values <- unlist(lapply(levels(plot_df$panel), function(p) {
+    panel_colors <- c(cold = "#1D98EB", heat = "#D74B3C", precip = "#8968CD")
+    base_col <- function(panel) {
+      hit <- names(panel_colors)[sapply(names(panel_colors), function(k) grepl(k, panel, ignore.case = TRUE))]
+      if (length(hit) == 0) "grey50" else panel_colors[[hit[1]]]
+    }
+    setNames(c(base_col(p), "grey50"), paste(p, c("FALSE", "TRUE"), sep = "."))
+  }))
+  get_color <- function(pattern) {
+    hit <- grep(paste0("^", pattern, "\\."), names(fill_values), value = TRUE)
+    hit <- hit[!grepl("TRUE$", hit)]  # exclude the "Total" (TRUE) entries
+    unname(fill_values[hit[1]])
+  }
+  legend_colors <- c(
+    Cold = get_color(".*Cold"),
+    Heat = get_color(".*Heat"),
+    Precipitation = get_color(".*Precipitation"),
+    Total = "grey50"
+  )
+  
+  fig <- ggplot(
+    plot_df,
+    aes(x = location, y = af*100, fill = interaction(panel, location == "TOTAL"))) +
+    geom_col(width = 0.7, show.legend = FALSE) +
+    geom_errorbar(aes(ymin = af_low*100, ymax = af_high*100), width = 0.25) +
+    facet_wrap(~panel, nrow = 2) +
+    scale_fill_manual(values = fill_values) +
+    new_scale_fill() +
+    geom_point(
+      data = data.frame(legend_group = names(legend_colors)),
+      aes(x = 1, y = 0, fill = factor(legend_group, levels = names(legend_colors))),
+      shape = 22, size = 0, inherit.aes = FALSE
+    ) +
+    scale_fill_manual(name = NULL, values = legend_colors,
+                      guide = guide_legend(override.aes = list(size = 5))) +
+    geom_hline(yintercept = 0, color = "black", linewidth = 0.4) +
+    labs(x = NULL, y = "Attributable fraction (%)") +
+    # coord_cartesian(ylim = c(-0.06, 0.03)) +
+    theme_classic(base_size = 11) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      strip.text = element_text(face = "bold"),
+      strip.background = element_blank(),
+      panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5),
+      panel.grid.major.x = element_line(color = "grey85", linewidth = 0.3),
+      legend.position = "bottom",
+      legend.box.spacing = unit(0, "pt")
+    )
+  
+  ggsave(paste0(path_report, 'II. dlnm/MF_af.png'), fig, width = 8, height = 5, dpi = 300, bg = 'white')
+  
+}
+
 # SF: Subgroup exposure-response ----
 
 if(export == 't2m'){
-  
-  get_pooled_df <- function(meta, reference = '50%') {
-    list2env(meta, envir = environment())
-    
-    if (!is.null(meta$mv)) {
-      coef_use  <- coef(mv)
-      vcov_use  <- vcov(mv)
-      cen_clean <- as.data.frame(cen[!apply(cen, 1, anyDuplicated), ])
-    } else {
-      city_name <- names(Slist)
-      coef_use  <- as.numeric(ymat[city_name, ])
-      vcov_use  <- Slist[[city_name]]
-      cen_clean <- cen[!duplicated(cen) & !duplicated(cen, fromLast = TRUE), , drop = FALSE]
-    }
-    
-    perc    <- as.numeric(sub("%", "", names(rowMeans(cen_clean))))
-    ref_idx <- if (reference == '0%') paste0(min(perc), '%') else reference
-    cp_at   <- rowMeans(cen_clean)
-    cp      <- crosspred(b_mean, coef = coef_use, vcov = vcov_use, model.link = 'log',
-                         at = cp_at, cen = cp_at[ref_idx])
-    
-    data.frame(pred = perc, RR = cp$allRRfit, low = cp$allRRlow, high = cp$allRRhigh)
-  }
-  get_curves <- function(output, outcomes){
-    
-    all_df <- map_dfr(outcomes, function(i) {
-      label <- as.factor(replace_exact_matches(i, nm))
-      bind_rows(
-        get_pooled_df(output$tmp[[i]], '50%') |> mutate(Subgroup = label, exposure = "Temperature"),
-        get_pooled_df(output$tp[[i]],  tp_ref) |> mutate(Subgroup = label, exposure = "Precipitation")
-      )
-    }) |>
-      mutate(pred = as.numeric(pred)) #|>
-    # filter((exposure == "Temperature"   & pred <= 20) |
-    #          (exposure == "Precipitation" & pred >= 80))
-    
-    return(all_df)
-  }
-  make_panel <- function(groups=gender_groups, pal=gender_pal, title=TRUE) {
-    
-    make_subgroup_plot <- function(data, x_lab, pal, xlim = NULL, ylim = NULL, title=NULL) {
-      p <- ggplot(data, aes(x = pred, y = RR, colour = Subgroup, fill = Subgroup, group = Subgroup)) +
-        geom_hline(yintercept = 1, color = "gray40") +
-        geom_ribbon(aes(ymin = low, ymax = high), alpha = 0.1, colour = NA) +
-        geom_line(linewidth = 1.1) +
-        scale_colour_manual(name = NULL, values = pal) +
-        scale_fill_manual(name = NULL, values = pal) +
-        labs(title=title, x = x_lab, y = "RR") +
-        theme_classic() +
-        theme(legend.position = "bottom",
-              plot.title = element_text(hjust = 0.5))
-      
-      if (!is.null(xlim)) p <- p + scale_x_continuous(limits = xlim, breaks = pretty(xlim, 5))
-      if (!is.null(ylim)) p <- p + coord_cartesian(ylim = ylim, xlim = range(data$pred, na.rm = TRUE)) +
-          scale_y_continuous(breaks = pretty(ylim, 5))
-      p
-    }
-    
-    imm_t   <- filter(sub1_df, exposure == 'Temperature',   Subgroup %in% groups) |> droplevels()
-    cum_t  <- filter(sub2_df, exposure == 'Temperature',   Subgroup %in% groups) |> droplevels()
-    imm_p   <- filter(sub1_df, exposure == 'Precipitation',   Subgroup %in% groups) |> droplevels()
-    cum_p  <- filter(sub2_df, exposure == 'Precipitation',   Subgroup %in% groups) |> droplevels()
-    
-    p_imm_t   <- make_subgroup_plot(imm_t, "Temperature (%)",   pal)
-    p_cum_t   <- make_subgroup_plot(cum_t, "Temperature (%)",   pal)
-    p_imm_p   <- make_subgroup_plot(imm_p, "Precipitation (%)",   pal)
-    p_cum_p   <- make_subgroup_plot(cum_p, "Precipitation (%)",   pal)
-    
-    if(title==TRUE){
-      wrap_plots(
-        wrap_plots(title_only('Daily'), title_only('Seven-day')),
-        wrap_plots(list(
-          p_imm_t + theme(legend.position = "none"),
-          p_imm_p + theme(legend.position = "none"),
-          plot_spacer(),
-          p_cum_t + theme(legend.position = "none"),
-          p_cum_p + theme(legend.position = "none")), nrow = 1, widths = c(1,1,0.2,1,1)),
-        get_legend(p_cum_p),
-        ncol = 1, heights = c(0.1, 1, 0.1)
-      )
-      
-    } else {
-      wrap_plots(
-        wrap_plots(list(
-          p_imm_t + theme(legend.position = "none"),
-          p_imm_p + theme(legend.position = "none"),
-          plot_spacer(),
-          p_cum_t + theme(legend.position = "none"),
-          p_cum_p + theme(legend.position = "none")), nrow = 1, widths = c(1,1,0.2,1,1)),
-        get_legend(p_cum_p),
-        ncol = 1, heights = c(1, 0.1)
-      )
-    }
-  }
-  
+ 
   # Load model outputs
   sub1 <- readRDS(paste0('2_DLNM/Results/',  export, '_', model1, '_subgroup_plots.RData'))
   sub2 <- readRDS(paste0('2_DLNM/Results/',  export, '_', model2, '_subgroup_plots.RData'))
-  outcomes <- h_cols[c(2,4:length(h_cols))]
   
-  sub1_df <- get_curves(sub1$pooled_meta, outcomes)
-  sub2_df <- get_curves(sub2$pooled_meta, outcomes)
+  # Get legend
+  leg1 <- get_legend(sub1$res_plots$immediate_tmp_gen)
+  leg2 <- get_legend(sub1$res_plots$immediate_tmp_age)
+  plt_imm <- lapply(sub1$res_plots, function(p) p + theme(legend.position = "none"))
+  plt_cum <- lapply(sub2$res_plots, function(p) p + theme(legend.position = "none"))
   
-  
-  gender_groups <- c("Women", "Men")
-  age_groups    <- c("Under 5", "Ages 5-14", "Ages 65+")
-  opd_groups    <- c('General', 'Ophthalmology', 'Gynaecology', 'Dentistry')
-  gender_pal <- mypalette[c(2,1)] #c(scales::hue_pal()(2))
-  age_pal    <- mypalette[c(3,6,7)] #c(scales::hue_pal()(5))
-  opd_pal    <- mypalette[c(5,8:10)] #c(scales::hue_pal()(7))
-
-  panel_gender <- make_panel(gender_groups, gender_pal, title=TRUE)
-  panel_age   <- make_panel(age_groups,    age_pal, title=FALSE)
-  panel_opd    <- make_panel(opd_groups,    opd_pal, title=FALSE)
-  
-  final_plot <- wrap_plots(
-    list(row_label("(A)"), wrap_plots(panel_gender, nrow = 1),
-         row_label("(B)"), wrap_plots(panel_age, nrow = 1),
-         row_label("(C)"), wrap_plots(panel_opd,  nrow = 1)),
-    ncol = 2, widths = c(0.05, 1)
+  fig <- wrap_plots(
+    wrap_plots(
+      list(
+        row_label("(A)"),
+        wrap_plots(list(plt_imm[[1]] + labs(x = "Daily temp. (%)"), 
+                        plt_cum[[1]] + labs(x = "Seven-day temp. (%)"), 
+                        plt_imm[[3]] + labs(x = "Daily temp. (%)"), 
+                        plt_cum[[3]] + labs(x = "Seven-day temp. (%)")), nrow = 1),
+        row_label("(B)"),
+        wrap_plots(list(plt_imm[[2]] + labs(x = "Daily prec. (%)"), 
+                        plt_cum[[2]] + labs(x = "Seven-day prec. (%)"), 
+                        plt_imm[[4]] + labs(x = "Daily prec. (%)"), 
+                        plt_cum[[4]] + labs(x = "Seven-day prec. (%)")), nrow = 1)
+      ),
+      nrow = 2, widths = c(0.05, 1)
+    ),
+    wrap_plots(list(leg1, leg2), nrow = 1),
+    ncol = 1, heights = c(1, 0.1)
   )
   
-  ggsave(paste0(path_report, 'II. dlnm/SF_subgroups_', export, '.png'), final_plot, width = 10, height = 8, dpi = 300, bg = 'white')
+  ggsave(paste0(path_report, 'II. dlnm/SF_subgroups_', export, '.png'), fig, width = 10, height = 5, dpi = 300, bg = 'white')
   
 }
+
+# SF: Multi-day windows ####
+
+if (grepl('roll6', export)) {
+  
+  roll_files <- list.files('2_DLNM/Results/', pattern = "roll.*\\.rds$", full.names = TRUE)
+  roll_files <- roll_files[grepl("roll[2-6](?!\\d)", basename(roll_files), perl = TRUE)]
+  roll_models <- lapply(roll_files, readRDS)
+  names(roll_models) <- sub("_cumulative_pooled_model\\.rds$", "", basename(roll_files))
+
+  get_curves <- function(x='meta_tmp', xlab='', ref='50%'){
+    
+    curves <- bind_rows(lapply(names(roll_models), function(i) {
+      cp  <- meta_predict(roll_models[[i]][[x]], city='ALL', reference=ref, blup=TRUE)
+      idx <- match(cp$at, cp$cp$predvar)
+      res <- data.frame(
+        test = i,
+        perc = cp$perc,
+        tmp  = cp$at,
+        rr   = cp$cp$allRRfit[idx],
+        lo   = cp$cp$allRRlow[idx],
+        hi   = cp$cp$allRRhigh[idx]
+      )
+      row.names(res) <- NULL
+      return(res)
+    }))
+    curves <- curves %>% mutate(test = gsub("^roll(\\d+)$", "\\1-days", test))
+    # labels <- labels[order(as.numeric(gsub("-days", "", )))]
+    labels <- unique(curves$test)
+    curves$test <- factor(curves$test, labels)
+    cols <- setNames(scales::hue_pal()(length(labels)), labels)
+    
+    fig <- ggplot() +
+      geom_ribbon(data = curves, aes(x = perc, ymin = lo, ymax = hi, fill = test),
+                  alpha = 0.2, show.legend = FALSE) +
+      geom_line(data = curves, aes(x = perc, y = rr, color = test, linetype = test),
+                linewidth = 1.2) +
+      geom_hline(yintercept = 1, color = 'gray20') +
+      scale_color_manual(name = NULL, values = cols) +
+      scale_fill_manual(name = NULL, values = cols) +
+      scale_linetype_manual(name = NULL, values = rep('solid', length(labels))) +
+      scale_x_continuous(breaks = pretty(curves$perc, n = 5)) +
+      scale_y_continuous(breaks = pretty(c(min(curves$lo), max(curves$hi)), n = 5)) +
+      labs(x = xlab, y = 'RR', title = '') +
+      coord_cartesian(ylim = c(min(curves$lo), max(curves$hi)), xlim = range(curves$perc)) +
+      guides(color = guide_legend(nrow = 1), linetype = guide_legend(nrow = 1)) +
+      theme_classic() +
+      theme(
+        axis.line = element_line(color = 'gray20'),
+        axis.text = element_text(color = 'gray20'),
+        axis.ticks = element_line(color = 'gray20'),
+        plot.title = element_blank(),
+        legend.position = 'bottom'
+      )
+  
+    return(fig)
+    
+  }
+  
+  tmp_curv <- get_curves('meta_tmp', 'Temperature (%)')
+  tp_curv <- get_curves(x='meta_tp', 'Percipitation (%)', ref=tp_ref)
+  
+  fig <- wrap_plots(
+    list(row_label("(A)"), tmp_curv, row_label("(B)"), tp_curv),
+    nrow = 1, widths = c(0.05, 1, 0.05, 1)
+  ) +
+    plot_layout(guides = 'collect') &
+    theme(legend.position = 'bottom')
+  
+  ggsave(paste0(path_report, 'II. dlnm/SF_roll_test.png'), fig, width = 8, height = 4, dpi = 300, bg = 'white')
+  
+}
+
+#### TABLES ####
 
 # ST: Descriptive statistics ----
 
@@ -631,7 +669,6 @@ if(export == 't2m'){
           as.character(mean_x)
         }
       } else {
-        # paste0(mean_x, ifelse(col == 'tp', ' + ', ' ± '), sd_x, ' (', min_x, ', ', max_x, ')')
         paste0(mean_x, ' (', min_x, ', ', max_x, ')')
       }
       
@@ -645,7 +682,7 @@ if(export == 't2m'){
     all_cols <- c(h_cols, w_cols, p_cols)
     
     overall <- bind_rows(lapply(all_cols, summarise_col, sub_df = df)) |>
-      dplyr::select(Variable, total_visits, Overall = Average)
+      dplyr::select(Variable, total_visits, Total = Average)
     
     per_loc <- bind_rows(lapply(locs, function(loc) {
       bind_rows(lapply(all_cols, summarise_col, sub_df = df[df$location == loc, ])) |>
@@ -656,17 +693,27 @@ if(export == 't2m'){
     
     base_desc <- overall |>
       left_join(per_loc, by = "Variable") |>
-      dplyr::select(Variable, total_visits, Overall, all_of(as.character(locs)))
+      dplyr::select(Variable, total_visits, Total, all_of(as.character(locs))) |> 
+      dplyr::select(-total_visits)
     
-    # Sort ward rows by descending total visits
-    ward_cols <- h_cols[11:28]
-    ward_idx  <- which(base_desc$Variable %in% ward_cols)
-    if (length(ward_idx) > 0) {
-      base_desc[ward_idx, ] <- base_desc[ward_idx, ][
-        order(base_desc$total_visits[ward_idx], decreasing = TRUE, na.last = TRUE), ]
+    # ---- Missing total_patients row, one column per location + Total ----
+    fmt_missing <- function(sub_df) {
+      n_missing <- sum(is.na(sub_df$total_patients))
+      n_total   <- nrow(sub_df)
+      sprintf("%d (%.1f%%)", n_missing, n_missing / n_total * 100)
     }
     
-    base_desc <- base_desc |> dplyr::select(-total_visits)
+    missing_row <- tibble(
+      Variable = "Missing days",
+      Total    = fmt_missing(df)
+    ) |>
+      bind_cols(
+        setNames(as.list(sapply(locs, function(loc) fmt_missing(df[df$location == loc, ]))), as.character(locs))
+      )
+    
+    if (length(tp_idx) > 0) {
+      base_desc <- bind_rows(missing_row, base_desc[1:nrow(base_desc), ])
+    }
     
     # Insert section headings
     blank_row <- function(v) setNames(
@@ -682,7 +729,7 @@ if(export == 't2m'){
     }
     
     base_desc
-  }
+  }  
   
   base <- get_desc(df_wide, h_cols[-1], w_cols, p_cols) |> replace_exact_matches(nm)
   value_cols   <- setdiff(names(base), "Variable")
@@ -693,7 +740,7 @@ if(export == 't2m'){
   base_display <- base |>
     mutate(
       across(all_of(value_cols), trimws),
-      across(all_of(value_cols), ~gsub("%", "\\%", .x, fixed = TRUE)),
+      # across(all_of(value_cols), ~gsub("%", "\%", .x, fixed = TRUE)),
       across(everything(), escape_latex_unicode),
       across(everything(), ~ifelse(is.na(.), "", .)),
       Variable  = case_when(
@@ -712,9 +759,7 @@ if(export == 't2m'){
     t <- get_kbl_tab(
       disp[, c("Variable", cols)],
       title    = NULL,
-      note     = "Averages are presented as daily total registrations.
-      Precipitation values are reported with positive SDs only because of its
-      inverse exponential distribution.",
+      note     = "Table cells present daily averages with minimum and maximum values in brackets, except missing days, which display the proportion in brackets. No ranges are provided for static socio-graphic characteristics.",
       colnames = c("Variable", cols),
       label    = label
     ) |>
@@ -725,6 +770,16 @@ if(export == 't2m'){
     }
     
     t <- gsub("%", "\\%", t, fixed = TRUE)
+    
+    # Force footnote/note rows to wrap instead of overflowing the page:
+    # replace \multicolumn{n}{l}{...} with a p{} column sized to the
+    # table's actual line width, so long notes wrap within the table.
+    t <- gsub(
+      "\\\\multicolumn\\{([0-9]+)\\}\\{l\\}",
+      "\\\\multicolumn{\\1}{p{\\\\dimexpr\\\\linewidth-2\\\\tabcolsep\\\\relax}}",
+      t
+    )
+    
     t
   }
   tab1 <- build_tab(base_display, cols1, "Descriptive statistics of hospital and weather characteristics", "MT_base_desc_t1")
@@ -766,7 +821,7 @@ if(export == 't2m'){
   
   # Rename: split at last "_", replace variable part, relabel type part
   split_names <- str_split_fixed(names(cen), "_(?=[^_]+$)", 2)
-  type_label  <- recode(split_names[, 2], sing = "Single-day", multi = "Seven-day")
+  type_label  <- recode(split_names[, 2], sing = "Daily", multi = "Seven-day")
   names(cen)  <- paste0(type_label, " ", replace_exact_matches(split_names[, 1], nm))
   
   # Select percentiles
@@ -789,7 +844,9 @@ if(export == 't2m'){
   value_cols <- setdiff(names(stacked), "Percentile")
   stacked[value_cols] <- lapply(stacked[value_cols], \(col) ifelse(col == "0", "0.000", col))
   
-  tab <- get_kbl_tab(stacked, title = NULL, note = NULL, label = 'ST_perc',
+  tab <- get_kbl_tab(stacked, title = NULL, 
+                     note = 'Please note that daily and seven-day preciptiation have diferent log transformations, which skew the zero-values.', 
+                     label = 'ST_perc',
                      colnames = names(stacked), hline_after_rows = c(19, 20)) |>
     gsub("%", "\\%", x = _, fixed = TRUE) |>
     gsub("\\midrule\\\\", "\\midrule", x = _, fixed = TRUE)
@@ -799,12 +856,104 @@ if(export == 't2m'){
 }
 # ST: RR tables (Excel) ----
 
-make_stacked_excel <- function(tab_list_tmp_imm, tab_list_tmp_cum, 
-                               tab_list_tp_imm, tab_list_tp_cum, filepath) {
+library(openxlsx)
+library(dplyr)
+library(tidyr)
+
+keep_pred <- function(pred) pred <= 5 | pred >= 95 |
+  (pred >= 5  & pred <= 20 & pred %% 5  == 0) |
+  (pred >= 80 & pred <= 95 & pred %% 5  == 0) |
+  (pred >= 20 & pred <= 80 & pred %% 10 == 0)
+
+fmt_rr <- function(rr, lo, hi) sprintf("%.2f (%.2f, %.2f)", rr, lo, hi)
+is_sig <- function(lo, hi, rr) !(lo <= 1 & hi >= 1) & round(rr, 2) != 1.00
+
+tot1 <- readRDS('2_DLNM/Results/t2m_immediate_pooled_model.rds')
+tot2 <- readRDS('2_DLNM/Results/t2m_cumulative_pooled_model.rds')
+sub1 <- readRDS('2_DLNM/Results/t2m_immediate_subgroup_plots.RData')
+sub2 <- readRDS('2_DLNM/Results/t2m_cumulative_subgroup_plots.RData')
+
+tp_ref_imm <- '55%'
+tp_ref_cum <- '20%'
+
+# One row per table: label, window (1 = daily, 2 = 7-day), exposure, reference
+specs <- list(
+  list(label = "Daily Temp",   win = 1, exp = "tmp", ref = "50%"),
+  list(label = "7-Day Temp",   win = 2, exp = "tmp", ref = "50%"),
+  list(label = "Daily Precip", win = 1, exp = "tp",  ref = tp_ref_imm),
+  list(label = "7-Day Precip", win = 2, exp = "tp",  ref = tp_ref_cum)
+)
+tot_list <- list(tot1, tot2)   # indexed by spec$win
+sub_list <- list(sub1, sub2)
+
+get_rr_table <- function(meta, city = "ALL", reference = "50%") {
+  res  <- city_con_res(meta = meta, city = city, reference = reference, xlab = "", title = "")$df
+  pred <- meta_predict(meta, city = city, reference = reference, blup = FALSE)
+  list2env(pred, envir = environment())
+  
+  idx <- match(pred$at, cp$predvar)
+  overall_df <- data.frame(pred = perc,
+                           RR   = cp$allRRfit[idx],
+                           low  = cp$allRRlow[idx],
+                           high = cp$allRRhigh[idx])
+  
+  add_fmt <- function(d) mutate(d, rr_fmt = fmt_rr(RR, low, high), sig = is_sig(low, high, RR))
+  
+  filtered         <- res |> filter(keep_pred(pred)) |> add_fmt()
+  overall_filtered <- overall_df |> filter(pred %in% filtered$pred) |> add_fmt()
+  
+  make_wide <- function(val_col) {
+    filtered |>
+      dplyr::select(pred, lag, {{ val_col }}) |>
+      pivot_wider(names_from = lag, values_from = {{ val_col }}, names_prefix = "Lag=") |>
+      rename(Percentile = pred) |>
+      left_join(
+        overall_filtered |> dplyr::select(pred, {{ val_col }}) |>
+          rename(Percentile = pred, Cumulative = {{ val_col }}),
+        by = "Percentile")
+  }
+  list(tab = make_wide(rr_fmt), sig = make_wide(sig))
+}
+
+get_site_tables <- function(meta, locs, reference = "50%") {
+  setNames(lapply(c("ALL", locs), function(l) get_rr_table(meta, city = l, reference = reference)),
+           c("Pooled", locs))
+}
+
+get_sub_table <- function(df, filter_perc = TRUE) {
+  level_col <- setdiff(names(df), c("perc", "exp", "fit", "lo", "hi"))
+  
+  long <- df |>
+    rename(level = all_of(level_col)) |>
+    mutate(Percentile = as.numeric(sub("%", "", perc)),
+           rr_fmt     = fmt_rr(fit, lo, hi),
+           sig        = is_sig(lo, hi, fit))
+  if (filter_perc) long <- filter(long, keep_pred(Percentile))
+  
+  wide <- function(val_col) {
+    long |>
+      dplyr::select(Percentile, level, {{ val_col }}) |>
+      pivot_wider(names_from = level, values_from = {{ val_col }})
+  }
+  list(tab = wide(rr_fmt), sig = wide(sig))
+}
+
+get_group_tables <- function(group, filter_perc = TRUE) {
+  setNames(lapply(specs, function(s) get_sub_table(sub_list[[s$win]]$res_data[[group]][[s$exp]], filter_perc)),
+           vapply(specs, `[[`, "", "label"))
+}
+
+write_stacked_excel <- function(sheets, filepath, col_width = 18) {
   wb <- createWorkbook()
   
-  write_sheet <- function(tab_list, sheet_name) {
+  title_style  <- createStyle(textDecoration = "bold", fgFill = "grey30", fontColour = "white")
+  header_style <- createStyle(textDecoration = "bold", border = "TopBottom", borderStyle = "medium")
+  centre_style <- createStyle(halign = "center")
+  sig_style    <- createStyle(halign = "center", textDecoration = "bold")
+  
+  for (sheet_name in names(sheets)) {
     addWorksheet(wb, sheet_name)
+    tab_list    <- sheets[[sheet_name]]
     current_row <- 1
     
     for (nm in names(tab_list)) {
@@ -812,128 +961,34 @@ make_stacked_excel <- function(tab_list_tmp_imm, tab_list_tmp_cum,
       sig_mat <- as.data.frame(tab_list[[nm]]$sig)
       
       writeData(wb, sheet_name, x = nm, startRow = current_row, startCol = 1)
-      addStyle(wb, sheet_name,
-               style = createStyle(textDecoration = "bold", fgFill = "grey30", fontColour = "white"),
-               rows = current_row, cols = 1:ncol(df))
+      addStyle(wb, sheet_name, title_style, rows = current_row, cols = 1:ncol(df))
       current_row <- current_row + 1
       
-      writeData(wb, sheet_name, x = df, startRow = current_row, startCol = 1,
-                headerStyle = createStyle(textDecoration = "bold",
-                                          border = "TopBottom", borderStyle = "medium"))
-      addStyle(wb, sheet_name,
-               style = createStyle(halign = "center"),
-               rows  = (current_row + 1):(current_row + nrow(df)),
-               cols  = 2:ncol(df), gridExpand = TRUE)
+      writeData(wb, sheet_name, x = df, startRow = current_row, startCol = 1, headerStyle = header_style)
+      addStyle(wb, sheet_name, centre_style,
+               rows = (current_row + 1):(current_row + nrow(df)),
+               cols = 2:ncol(df), gridExpand = TRUE)
       
-      for (r in seq_len(nrow(sig_mat))) {
-        for (c in which(sig_mat[r, ] == TRUE)) {
-          addStyle(wb, sheet_name,
-                   style = createStyle(halign = "center", textDecoration = "bold"),
-                   rows = current_row + r, cols = c, stack = TRUE)
+      for (r in seq_len(nrow(sig_mat))) {          # bold significant cells
+        for (c in which(unlist(sig_mat[r, ]) %in% TRUE)) {
+          addStyle(wb, sheet_name, sig_style, rows = current_row + r, cols = c, stack = TRUE)
         }
       }
-      current_row <- current_row + nrow(df) + 1
+      current_row <- current_row + nrow(df) + 2    # blank row between tables
     }
-    setColWidths(wb, sheet_name, cols = 1,     widths = 10)
-    setColWidths(wb, sheet_name, cols = 2:13,  widths = 18)
+    setColWidths(wb, sheet_name, cols = 1,     widths = 12)
+    setColWidths(wb, sheet_name, cols = 2:13,  widths = col_width)
   }
-  
-  write_sheet(tab_list_tmp_imm, "1-day Temperature")
-  write_sheet(tab_list_tmp_cum, "7-day Temperature")
-  write_sheet(tab_list_tp_imm,  "1-day Precipitation")
-  write_sheet(tab_list_tp_cum,  "7-day Precipitation")
   saveWorkbook(wb, filepath, overwrite = TRUE)
 }
-get_rr_table <- function(meta, city = "ALL", reference = "50%") {
-  res <- city_con_res(meta = meta, city = city, reference = reference, xlab = "", title = "")$df
-  
-  list2env(meta, envir = environment())
-  
-  if (!is.null(meta$mv)) {
-    coef_use  <- coef(mv); vcov_use <- vcov(mv)
-    rows_dup  <- apply(cen, 1, function(row) any(duplicated(row)))
-    cen_clean <- as.data.frame(cen[!rows_dup, ])
-  } else {
-    city_name <- if (city == "ALL") rownames(ymat)[1] else city
-    coef_use  <- as.numeric(ymat[city_name, ]); vcov_use <- Slist[[city_name]]
-    cen_clean <- cen[!(duplicated(cen) | duplicated(cen, fromLast = TRUE)), , drop = FALSE]
-  }
-  
-  perc    <- as.numeric(sub("%", "", names(rowMeans(cen_clean))))
-  ref_idx <- if (reference == '20%') paste0(min(perc), '%') else reference
-  cp_at   <- rowMeans(cen_clean)
-  cp      <- crosspred(b_mean, coef = coef_use, vcov = vcov_use, model.link = 'log',
-                       at = cp_at, cen = cp_at[ref_idx])
-  
-  overall_df <- data.frame(x = perc, z = cp$allRRfit, z_low = cp$allRRlow, z_high = cp$allRRhigh)
-  
-  keep_x <- function(x) x <= 5 | x >= 95 |
-    (x >= 5  & x <= 20 & x %% 5  == 0) |
-    (x >= 80 & x <= 95 & x %% 5  == 0) |
-    (x >= 20 & x <= 80 & x %% 10 == 0)
-  
-  fmt_rr  <- function(z, lo, hi) sprintf("%.2f (%.2f, %.2f)", z, lo, hi)
-  is_sig  <- function(lo, hi, z) !(lo <= 1 & hi >= 1) & round(z, 2) != 1.00
-  
-  filtered <- res |>
-    filter(keep_x(x)) |>
-    mutate(rr_fmt = fmt_rr(z, z_low, z_high), sig = is_sig(z_low, z_high, z))
-  
-  overall_filtered <- overall_df |>
-    filter(x %in% filtered$x) |>
-    mutate(rr_fmt = fmt_rr(z, z_low, z_high), sig = is_sig(z_low, z_high, z))
-  
-  make_wide <- function(df_long, val_col, key_prefix = "Lag=") {
-    df_long |>
-      dplyr::select(x, y, {{ val_col }}) |>
-      pivot_wider(names_from = y, values_from = {{ val_col }}, names_prefix = key_prefix) |>
-      rename(Percentile = x) |>
-      left_join(overall_filtered |> dplyr::select(x, {{ val_col }}) |> rename(Percentile = x, Cumulative = {{ val_col }}),
-                by = "Percentile")
-  }
-  
-  list(tab = make_wide(filtered, rr_fmt), sig = make_wide(filtered, sig))
-}
 
-
-# Load model outputs
-sub1 <- readRDS(paste0('2_DLNM/Results/',  export, '_', model1, '_subgroup_models.rds'))
-sub2 <- readRDS(paste0('2_DLNM/Results/',  export, '_', model2, '_subgroup_models.rds'))
-
-tab_rr_site_tmp_imm <- setNames(
-  lapply(c("ALL", locations), function(l) get_rr_table(sub1$total_patients$meta_tmp, city = l)),
-  c("Pooled", locations)
+sheets_site <- setNames(
+  lapply(specs, function(s) get_site_tables(tot_list[[s$win]][[paste0("meta_", s$exp)]],
+                                            locations, reference = s$ref)),
+  vapply(specs, `[[`, "", "label")
 )
-tab_rr_site_tp_imm <- setNames(
-  lapply(c("ALL", locations), function(l) get_rr_table(sub1$total_patients$meta_tp,  city = l, reference=tp_ref)),
-  c("Pooled", locations)
-)
-tab_rr_site_tmp_cum <- setNames(
-  lapply(c("ALL", locations), function(l) get_rr_table(sub2$total_patients$meta_tmp, city = l)),
-  c("Pooled", locations)
-)
-tab_rr_site_tp_cum <- setNames(
-  lapply(c("ALL", locations), function(l) get_rr_table(sub2$total_patients$meta_tp,  city = l, reference=tp_ref)),
-  c("Pooled", locations)
-)
+write_stacked_excel(sheets_site, paste0(path_report, "II. dlnm/ST_rr_site_", export, ".xlsx"))
 
-make_stacked_excel(tab_rr_site_tmp_imm, tab_rr_site_tmp_cum,
-                   tab_rr_site_tp_imm, tab_rr_site_tp_cum, paste0(path_report, "II. dlnm/ST_rr_site_", export, ".xlsx"))
-
-if(export=='t2m'){
-  
-  outcomes <- names(sub1)
-  tab_rr_pop_tmp_imm <- setNames(lapply(outcomes[-1], function(o) get_rr_table(sub1[[o]]$meta_tmp, city = 'ALL')),
-                                 replace_exact_matches(outcomes[-1], nm))
-  tab_rr_pop_tp_imm  <- setNames(lapply(outcomes[-1], function(o) get_rr_table(sub1[[o]]$meta_tp,  city = 'ALL')),
-                                 replace_exact_matches(outcomes[-1], nm))
-  tab_rr_pop_tmp_cum <- setNames(lapply(outcomes[-1], function(o) get_rr_table(sub2[[o]]$meta_tmp, city = 'ALL')),
-                                 replace_exact_matches(outcomes[-1], nm))
-  tab_rr_pop_tp_cum  <- setNames(lapply(outcomes[-1], function(o) get_rr_table(sub2[[o]]$meta_tp,  city = 'ALL')),
-                                 replace_exact_matches(outcomes[-1], nm))
-  make_stacked_excel(tab_rr_pop_tmp_imm, tab_rr_pop_tmp_cum, 
-                     tab_rr_pop_tp_imm, tab_rr_pop_tp_cum, 
-                     paste0(path_report, "II. dlnm/ST_rr_pop.xlsx"))
-  
-}
-
+sheets_sub <- list(Gender = get_group_tables("gender"),
+                   Age    = get_group_tables("age"))
+write_stacked_excel(sheets_sub, paste0(path_report, "II. dlnm/ST_rr_pop.xlsx"), col_width = 20)

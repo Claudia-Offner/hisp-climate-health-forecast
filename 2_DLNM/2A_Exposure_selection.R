@@ -13,7 +13,7 @@ xgboost <- function(data, title, var_list, params=NULL) {
   
   # Choose features
   # features <- names(data)[grepl(var_list, names(data))]
-  # features <- df[, var_list, drop = FALSE]
+  # features <- data[, var_list, drop = FALSE]
   X <- as.matrix(data[, var_list] %>% mutate(across(everything(), ~ suppressWarnings(as.numeric(.)))))
   y <- data$total_patients
   
@@ -127,10 +127,10 @@ xgboost <- function(data, title, var_list, params=NULL) {
 
 # Set parameters
 control_cols <- c('time', 'season', 'weekday', 'location', 'lat', 'lon', p_cols)
-cumm_cols <- grep(paste0("(", paste(w_cols, collapse="|"), ")_roll"), names(df), value=TRUE)
+cumm_cols <- grep(paste0("(", paste(w_cols, collapse="|"), ")_roll"), names(data), value=TRUE)
 cumm_cols <- cumm_cols[!grepl("^tp_roll[0-9]+$", cumm_cols)] # Remove tp not log
-lagged_cols <- grep(paste0("(", paste(w_cols, collapse="|"), ")_lag([1-9]|1[0-4])$"), names(df), value=TRUE)
-autocorr_cols <- grep(paste0("(", paste('total_patients', collapse="|"), ")_lag([1-9]|1[0-4])$"), names(df), value=TRUE)
+lagged_cols <- grep(paste0("(", paste(w_cols, collapse="|"), ")_lag([1-9]|1[0-4])$"), names(data), value=TRUE)
+autocorr_cols <- grep(paste0("(", paste('total_patients', collapse="|"), ")_lag([1-9]|1[0-4])$"), names(data), value=TRUE)
 
 # Create cumulative names
 first_half <- sub("_.*", "", cumm_cols)
@@ -143,8 +143,8 @@ nm <- c(nm, new_entries)
 
 # 1. Non parameter correlation test ####
 
-sub <- df %>% ungroup() %>% dplyr::select(total_patients, all_of(w_cols))
-# sub <- df %>% ungroup() %>% dplyr::select(total_patients, all_of(c(w_cols, cumm_cols)))
+sub <- data %>% dplyr::ungroup() %>% dplyr::select(total_patients, all_of(w_cols))
+# sub <- data %>% ungroup() %>% dplyr::select(total_patients, all_of(c(w_cols, cumm_cols)))
 cor_matrix <- cor(sub, use = 'complete.obs', method = 'spearman')
 melted_corr <- reshape2::melt(cor_matrix)
 (cor_matrix <- ggplot(data = melted_corr, aes(x=Var1, y=Var2, fill=value)) +
@@ -183,9 +183,9 @@ var_list <- c(w_cols, control_cols, cumm_cols, 'total_patients_lag14')
 # Get best parameters & results
 start_time <- Sys.time()
 xg_res <- list()
-xg_res[['all']] <- xgboost(df, "Overall", var_list, params=NULL)
+xg_res[['all']] <- xgboost(data, "Overall", var_list, params=NULL)
 for (l in locations){
-  sub <- df %>% filter(location==l)
+  sub <- data %>% filter(location==l)
   xg_res[[l]] <- xgboost(sub, l, var_list, params=NULL)
 }
 end_time <- Sys.time()
@@ -254,9 +254,9 @@ ggsave(paste0(path_report, 'II. dlnm/sensitivity/SM_xgboost_imp.png'), imp_lag, 
 # # # Get best parameters & results
 # # start_time <- Sys.time()
 # # xg_res <- list()
-# # xg_res[['all']] <- xgboost(df, "Overall", var_list, params=NULL)
+# # xg_res[['all']] <- xgboost(data, "Overall", var_list, params=NULL)
 # # for (l in locations){
-# #   sub <- df %>% filter(location==l)
+# #   sub <- data %>% filter(location==l)
 # #   xg_res[[l]] <- xgboost(sub, l, var_list, params=NULL)
 # # }
 # # end_time <- Sys.time()
@@ -317,9 +317,9 @@ ggsave(paste0(path_report, 'II. dlnm/sensitivity/SM_xgboost_imp.png'), imp_lag, 
 # # Get best parameters & results
 # start_time <- Sys.time()
 # xg_res <- list()
-# xg_res[['all']] <- xgboost(df, "Overall", var_list, params=NULL)
+# xg_res[['all']] <- xgboost(data, "Overall", var_list, params=NULL)
 # for (l in locations){
-#   sub <- df %>% filter(location==l)
+#   sub <- data %>% filter(location==l)
 #   xg_res[[l]] <- xgboost(sub, l, var_list, params=NULL)
 # }
 # end_time <- Sys.time()

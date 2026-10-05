@@ -21,12 +21,13 @@ start <- Sys.time()
 
 # Install and load packages
 pkgs <- c('xgboost', 'dplyr', 'data.table', 'caret', 'purrr', 'gridExtra', 'scales',
-          'ggplotify', 'dlnm', 'splines', 'xtable', 'mvmeta', 'MASS', 'ggplot2', 
+          'ggplotify', 'dlnm', 'splines', 'xtable', 'mixmeta', 'MASS', 'ggplot2', 
           'patchwork', 'TTR', 'openxlsx', 'colorspace', 'grid', 'reshape2', 'gtable',
           'cowplot', 'lmtest', 'flextable', 'officer', 'kableExtra', 'moments', 
-          'stringr', 'tidyr', 'lubridate', 'zoo', 'psychrolib', 'ggpattern')
+          'stringr', 'tidyr', 'lubridate', 'zoo', 'psychrolib', 'ggpattern', 'ggnewscale')
 install.packages(pkgs[!pkgs %in% installed.packages()[, 'Package']])
 invisible(lapply(pkgs, library, character.only = TRUE))
+source("https://raw.githubusercontent.com/gasparrini/2014_gasparrini_BMCmrm_Rcodedata/master/attrdl.R")
 
 # Function to identify appropriate reference for tp after log transformation
 get_tp_ref <- function(df, locations) {
@@ -91,31 +92,31 @@ s <- '2B_Parameter_selection'
 analyses <- list(
   t2m       = list(data       = data,
                    immediate  = list(tmp = 't2m',         tp = 'tp_log'),
-                   cumulative = list(tmp = 't2m_roll7',   tp = 'tp_roll7_log')),
-  mn2t      = list(data       = data,
-                   immediate  = list(tmp = 'mn2t',        tp = 'tp_log'),
-                   cumulative = list(tmp = 'mn2t_roll7',  tp = 'tp_roll7_log')),
-  mx2t      = list(data       = data,
-                   immediate  = list(tmp = 'mx2t',        tp = 'tp_log'),
-                   cumulative = list(tmp = 'mx2t_roll7',  tp = 'tp_roll7_log'))
+                   cumulative = list(tmp = 't2m_roll7',   tp = 'tp_roll7_log'))
+  # mn2t      = list(data       = data,
+  #                  immediate  = list(tmp = 'mn2t',        tp = 'tp_log'),
+  #                  cumulative = list(tmp = 'mn2t_roll7',  tp = 'tp_roll7_log')),
+  # mx2t      = list(data       = data,
+  #                  immediate  = list(tmp = 'mx2t',        tp = 'tp_log'),
+  #                  cumulative = list(tmp = 'mx2t_roll7',  tp = 'tp_roll7_log'))
 )
 
-for (a in names(analyses)) {
-  # Load model specifications and data
-  model_specs <- analyses[[a]]
-  df <- analyses[[a]]$data
-  for (model in names(model_specs[-1])) {
-    # Load parameters
-    spec <- model_specs[[model]]
-    df$tmp <- df[[spec$tmp]]
-    df$tp   <- df[[spec$tp]]
-    tp_ref  <- get_tp_ref(df, locations)
-
-    source('2_DLNM/2_Utilities.R')
-    # source(paste0(path_project, s, '.R'), echo = TRUE)
-    rm(list = setdiff(ls(), c(keep_vars, 'keep_vars', 's', 'analyses', 'a', 'df', 'model_specs', 'model')))
-  }
-}
+# for (a in names(analyses)) {
+#   # Load model specifications and data
+#   model_specs <- analyses[[a]]
+#   df <- analyses[[a]]$data
+#   for (model in names(model_specs[-1])) {
+#     # Load parameters
+#     spec <- model_specs[[model]]
+#     df$tmp <- df[[spec$tmp]]
+#     df$tp   <- df[[spec$tp]]
+#     tp_ref  <- get_tp_ref(df, locations)
+# 
+#     source('2_DLNM/2_Utilities.R')
+#     source(paste0(path_project, s, '.R'), echo = TRUE)
+#     rm(list = setdiff(ls(), c(keep_vars, 'keep_vars', 's', 'analyses', 'a', 'df', 'model_specs', 'model')))
+#   }
+# }
 
 
 # 4. Run models ####
@@ -123,21 +124,18 @@ for (a in names(analyses)) {
 analyses <- list(
   t2m       = list(data       = data,
                    immediate  = list(tmp = 't2m',         tp = 'tp_log',        file = 't2m_immediate_final_params.RData'),
-                   cumulative = list(tmp = 't2m_roll7',   tp = 'tp_roll7_log',  file = 't2m_cumulative_final_params.RData')) #,
+                   cumulative = list(tmp = 't2m_roll7',   tp = 'tp_roll7_log',  file = 't2m_cumulative_final_params.RData'))
+  # roll2  = list(data=data, cumulative = list(tmp = 't2m_roll2',  tp = 'tp_roll2_log',  file = 't2m_cumulative_final_params.RData')),
+  # roll3  = list(data=data, cumulative = list(tmp = 't2m_roll3',  tp = 'tp_roll3_log',  file = 't2m_cumulative_final_params.RData')),
+  # roll4  = list(data=data, cumulative = list(tmp = 't2m_roll4',  tp = 'tp_roll4_log',  file = 't2m_cumulative_final_params.RData')),
+  # roll5  = list(data=data, cumulative = list(tmp = 't2m_roll5',  tp = 'tp_roll5_log',  file = 't2m_cumulative_final_params.RData')),
+  # roll6  = list(data=data, cumulative = list(tmp = 't2m_roll6',  tp = 'tp_roll6_log',  file = 't2m_cumulative_final_params.RData'))
   # mx2t      = list(data       = data,
   #                  immediate  = list(tmp = 'mx2t',        tp = 'tp_log',        file = 'mx2t_immediate_final_params.RData'),
   #                  cumulative = list(tmp = 'mx2t_roll7',  tp = 'tp_roll7_log',  file = 'mx2t_cumulative_final_params.RData')),
   # mn2t      = list(data       = data,
   #                  immediate  = list(tmp = 'mn2t',        tp = 'tp_log',        file = 'mn2t_immediate_final_params.RData'),
   #                  cumulative = list(tmp = 'mn2t_roll7',  tp = 'tp_roll7_log',  file = 'mn2t_cumulative_final_params.RData'))
-  # roll3  = list(data       = data,
-  #                  immediate  = list(tmp = 't2m',        tp = 'tp_log',        file = 't2m_immediate_final_params.RData'),
-  #                  cumulative = list(tmp = 't2m_roll3',  tp = 'tp_roll3_log',  file = 't2m_cumulative_final_params.RData')),
-  # cross     = list(data       = data,
-  #                  tp         = list(tmp = 't2m',        tp = 'tp_roll7_log',  file =list(longterm=8, autocorr=14, shape='binom', lag_window=c(0,14),
-  #                                                                                           arglag_tmp=5, argvar_tmp=3, arglag_tp=4, argvar_tp=1)),
-  #                  tmp        = list(tmp = 't2m_roll7',  tp = 'tp_log',        file =list(longterm=8, autocorr=14, shape='binom', lag_window=c(0,14),
-  #                                                                                          arglag_tmp=3, argvar_tmp=1, arglag_tp=4, argvar_tp=1))),
   # winter    = list(data       = data_win,
   #                  immediate  = list(tmp = 't2m',        tp = 'tp_log',        file = 't2m_immediate_final_params.RData'),
   #                  cumulative = list(tmp = 't2m_roll7',  tp = 'tp_roll7_log',  file = 't2m_cumulative_final_params.RData')),
@@ -157,7 +155,7 @@ for (a in names(analyses)) {
     spec <- model_specs[[model]]
     if (is.character(spec$file)) {
       load(paste0(path_project, 'Results/', spec$file))
-      # if(a=='t2m'){final_params$pooled$shape <- 'quasi'}
+      final_params$pooled$shape <- 'binom'
     } else{
       final_params <- list()
       final_params$pooled <- spec$file
@@ -165,17 +163,12 @@ for (a in names(analyses)) {
     df$tmp <- df[[spec$tmp]]
     df$tp   <- df[[spec$tp]]
     tp_ref  <- get_tp_ref(df, locations)
-    df <- df %>%
-      mutate(season2 = case_when(
-        season %in% c("Winter (Jan-Feb)", "Post-Monsoon (Oct-Dec)") ~ "Winter",
-        season %in% c("Pre-Monsoon (Mar-May)", "Monsoon (Jun-Sep)")  ~ "Summer",
-        TRUE ~ NA_character_
-      ))
     source('2_DLNM/2_Utilities.R')
-    source(paste0(path_project, s, '.R'), echo = TRUE)
-    # rm(list = setdiff(ls(), c(keep_vars, 'keep_vars', 's', 'analyses', 'a', 'df', 'model_specs', 'model')))
+    # source(paste0(path_project, s, '.R'), echo = TRUE)
   }
 }
+
+rm(list = setdiff(ls(), c(keep_vars, 'keep_vars', 's', 'analyses', 'a', 'df', 'model_specs', 'model')))
 
 
 # Export figures
@@ -191,9 +184,10 @@ for (a in names(analyses)) {
   df <- analyses[[a]]$data
   tp_ref  <- get_tp_ref(df, locations)
   source('2_DLNM/2_Utilities.R')
-  source(paste0(path_project, s, '.R'), echo = TRUE)
-  rm(list = setdiff(ls(), c(keep_vars, 'keep_vars', 's', 'analyses', 'a', 'model_specs', 'model')))
+  # source(paste0(path_project, s, '.R'), echo = TRUE)
 }
+
+rm(list = setdiff(ls(), c(keep_vars, 'keep_vars', 's', 'analyses', 'a', 'model_specs', 'model')))
 
 
 # End timer: 2 hours 35 minutes 40 seconds (31/03/2026) ####

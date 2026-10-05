@@ -56,7 +56,7 @@ mypalette <- c('#1D98EB','#D74B3C','#A6B727','#FEC306','#EC800A','#E569BF','#896
 
 w_cols <- c('t2m', 'mn2t','mx2t', 'wb', 'dt','tp','fg10', 'rh_mean', 'sh_mean', 'pm25')
 h_cols <- c('total_patients',
-            'F','M','under_5','age5_14','age15_24','age25_64','over_65',
+            'F','M','under_5','age5_64','over_65',
             'general', 'emergency', 'ophthalmology', 'ent', 'paediatrics',
             'gynaecology', 'orthopaedics', 'dermatology', 'surgery',
             'psychiatry', 'pulmonary', 'disability', 'dentistry', 'oncology',
@@ -67,7 +67,7 @@ location_levels <- c("Una", 'Kangra', "Nahan", "Hamirpur", 'Mandi', "Chamba", "D
 season_levels   <- c('Winter (Jan-Feb)', 'Pre-Monsoon (Mar-May)', 'Monsoon (Jun-Sep)', 'Post-Monsoon (Oct-Dec)')
 month_levels    <- c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
 weekday_levels  <- c('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
-age_levels      <- c('under_5', 'age5_14', 'age15_24', 'age25_64',  'over_65','Unknown')
+age_levels      <- c('under_5', 'age5_64',  'over_65','Unknown')
 gender_levels   <- c('F', 'M', 'O')
 ward_levels     <- c('general', 'emergency', 'ophthalmology', 'ent', 'paediatrics',
                      'gynaecology', 'orthopaedics', 'dermatology', 'surgery',

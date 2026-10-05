@@ -5,7 +5,7 @@
 #### DEPENDENCIES  ####
 
 # Function for univariate parameter testing
-run_param <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE, 
+run_param <- function(data, locations, outcome, fam_type='binom', pooled=TRUE, 
                       control_test=NULL, var_test=NULL, 
                       longterm_df=10, autocorr_lag=0, lag_window=c(0,10),
                       arglag_var=4, argvar_var=1){
@@ -149,7 +149,7 @@ run_param <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE,
 
   # Meta metrics
   meta_comp <- list()
-  meta_comp[['sum_aic']] <- sum(sapply(Slist_comp, function(x) x$aic))
+  meta_comp[['sum_qaic']] <- sum(sapply(Slist_comp, function(x) x$qaic))
   meta_comp[['sum_acf']] <- rowMeans(sapply(Slist_comp, function(x) as.numeric(x$acf)))
   meta_comp[['sum_pacf']] <- rowMeans(sapply(Slist_comp, function(x) as.numeric(x$pacf)))
   meta_comp[['sum_esti']] <- mean(sapply(Slist_comp, function(x) as.numeric(x$esti_var)))
@@ -161,8 +161,8 @@ run_param <- function(data, locations, outcome, fam_type='quasi', pooled=TRUE,
   
 }
 
-# Function to plot AIC results (comparison)
-plot_AIC_res <- function(modelfitstats, title, best_fit, xlab='Degrees of freedom'){
+# Function to plot QAIC results (comparison)
+plot_QAIC_res <- function(modelfitstats, title, best_fit, xlab='Degrees of freedom'){
   
   modelfitstats$highlight <- ifelse(modelfitstats$model == best_fit, 'yes', 'no')
   
@@ -170,12 +170,12 @@ plot_AIC_res <- function(modelfitstats, title, best_fit, xlab='Degrees of freedo
   modelfitstats$model <- factor(modelfitstats$model, levels=modelfitstats$model)
   
   # Plot with highlighted point
-  p <- ggplot(modelfitstats, aes(x=model, y=AIC, group=1)) +
+  p <- ggplot(modelfitstats, aes(x=model, y=QAIC, group=1)) +
     geom_line(color='grey20') +
     geom_point(aes(color=highlight), size=3) +
     scale_color_manual(values=c('no'='black', 'yes'='red')) +
     labs(title=title,
-         y='Sum of AIC', x=xlab) +
+         y='Sum of QAIC', x=xlab) +
     theme_classic() +
     theme(
       axis.line=element_line(color='gray20'),
@@ -193,10 +193,10 @@ plot_AIC_res <- function(modelfitstats, title, best_fit, xlab='Degrees of freedo
 # Function to plot average estimates results (comparison)
 plot_ESTI_res <- function(modelfitstats, exp){
   
-  best_fit <- if (mean(modelfitstats$AIC) < 0) {
-    modelfitstats[which.max(modelfitstats$AIC), ]$model
+  best_fit <- if (mean(modelfitstats$QAIC) < 0) {
+    modelfitstats[which.max(modelfitstats$QAIC), ]$model
   } else {
-    modelfitstats[which.min(modelfitstats$AIC), ]$model
+    modelfitstats[which.min(modelfitstats$QAIC), ]$model
   }
   
   modelfitstats$highlight <- ifelse(modelfitstats$model == best_fit, 'yes', 'no')
@@ -229,6 +229,7 @@ plot_ESTI_res <- function(modelfitstats, exp){
 #### MAIN CODE ####
 
 export <- paste0(a, '_', model)
+df$groups <- df$location
 
 # Store results
 sens_res <- list()
@@ -238,7 +239,7 @@ sens_res <- list()
 test_longterm <- function(df, outcome, pooled=TRUE){
   
   if(length(unique(df$location)) !=1 ){
-    title <-  'Pooled AIC & Estimates: Long-term seasonality'
+    title <-  'Pooled QAIC & Estimates: Long-term seasonality'
   } else{
     title <- as.character(unique(df$location))
   }
@@ -250,32 +251,32 @@ test_longterm <- function(df, outcome, pooled=TRUE){
                              control_test='None')
     modelfitstats <- rbind(modelfitstats, data.frame(
       model  =i,
-      AIC    =test_result$meta_comp$sum_aic
+      QAIC   =test_result$meta_comp$sum_qaic
       # avg_tmp=test_result$meta_comp$avg_tmp,
       # avg_tp =test_result$meta_comp$avg_tp
     ))
   }
   
-  # Get AIC
-  best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-  aic_plot <- plot_AIC_res(modelfitstats, title, best_fit)
+  # Get QAIC
+  best_fit <- modelfitstats[which.min(modelfitstats$QAIC), ]$model
+  qaic_plot <- plot_QAIC_res(modelfitstats, title, best_fit)
   # # Get avg tmp
   # esti_tmp_plot <- plot_ESTI_res(modelfitstats, exp='tmp')
   # esti_tp_plot <- plot_ESTI_res(modelfitstats, exp='tp')
   # Combine plots
-  # all_plot <- wrap_plots(list(aic_plot+theme(plot.title=element_blank()), esti_tmp_plot, esti_tp_plot), nrow=1)  &
+  # all_plot <- wrap_plots(list(qaic_plot+theme(plot.title=element_blank()), esti_tmp_plot, esti_tp_plot), nrow=1)  &
   #   plot_annotation(title=title,theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
   
-  modelfitstats <- modelfitstats %>% arrange(AIC)
+  modelfitstats <- modelfitstats %>% arrange(QAIC)
   num <- as.numeric(sub('.*\\((\\d+)\\).*', '\\1', best_fit))
   num[is.na(num)] <- 1
   
-  return(list(modelfitstats=modelfitstats, best_fit=num, aic_plot=aic_plot))
+  return(list(modelfitstats=modelfitstats, best_fit=num, qaic_plot=qaic_plot))
 }
 
 # Pooled tests
 sens_res$pooled$longterm$res <- test_longterm(df, outcome, pooled=TRUE)
-pool_longterm_aic <- sens_res$pooled$longterm$res$aic_plot
+pool_longterm_qaic <- sens_res$pooled$longterm$res$qaic_plot
 
 # # Site specific tests
 # city_longterm_res <- list()
@@ -286,14 +287,14 @@ pool_longterm_aic <- sens_res$pooled$longterm$res$aic_plot
 #   print(l)
 # }
 # sens_res$city$longterm$res <- city_longterm_res
-# city_longterm_aic <- wrap_plots(map(city_longterm_res, 'aic_plot'), nrow=2) &
-#     plot_annotation(title='City-specific AIC & Estimates: Long-term seasonality',
+# city_longterm_qaic <- wrap_plots(map(city_longterm_res, 'qaic_plot'), nrow=2) &
+#     plot_annotation(title='City-specific QAIC & Estimates: Long-term seasonality',
 #     theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
 
 
 # EXPORT
-sens_analysis <- list('1A_pooled_longterm_AIC'=list(p=pool_longterm_aic, w=6, h=4))
-                      # '1B_city_longterm_AIC'=list(p=city_longterm_aic, w=15, h=8)
+sens_analysis <- list('1A_pooled_longterm_QAIC'=list(p=pool_longterm_qaic, w=6, h=4))
+                      # '1B_city_longterm_QAIC'=list(p=city_longterm_qaic, w=15, h=8)
 
 for (n in names(sens_analysis)) {
   ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/', export,'/SM_', n, '.png'), 
@@ -347,7 +348,7 @@ test_autocorr <- function(df, outcome, pooled=TRUE){
   
   # Select best params from previous tests
   if(pooled==TRUE){
-    title <- 'Pooled AIC'
+    title <- 'Pooled QAIC'
     longterm_df <- sens_res$pooled$longterm$res$best_fit
     name <- 'Pooled'
   } else{
@@ -371,23 +372,23 @@ test_autocorr <- function(df, outcome, pooled=TRUE){
     
     modelfitstats <- rbind(modelfitstats, data.frame(
       model  =i,
-      AIC    =test_result$meta_comp$sum_aic
+      QAIC    =test_result$meta_comp$sum_qaic
       # avg_tmp=test_result$meta_comp$avg_tmp,
       # avg_tp =test_result$meta_comp$avg_tp
     ))
   }
   
-  # Get AIC
-  best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-  aic_plot <- plot_AIC_res(modelfitstats, title, best_fit, 'Autocorrelation Lag')
+  # Get QAIC
+  best_fit <- modelfitstats[which.min(modelfitstats$QAIC), ]$model
+  qaic_plot <- plot_QAIC_res(modelfitstats, title, best_fit, 'Autocorrelation Lag')
   # Get avg tmp
   # esti_tmp_plot <- plot_ESTI_res(modelfitstats, exp='tmp')
   # esti_tp_plot <- plot_ESTI_res(modelfitstats, exp='tp')
   # # Combine plots
-  # all_plot <- wrap_plots(list(aic_plot+theme(plot.title=element_blank()), esti_tmp_plot, esti_tp_plot), nrow=1)  &
+  # all_plot <- wrap_plots(list(qaic_plot+theme(plot.title=element_blank()), esti_tmp_plot, esti_tp_plot), nrow=1)  &
   #   plot_annotation(title=title,theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
   
-  modelfitstats <- modelfitstats %>% arrange(AIC)
+  modelfitstats <- modelfitstats %>% arrange(QAIC)
   num <- as.numeric(sub('.*\\((\\d+)\\).*', '\\1', best_fit))
   num[is.na(num)] <- 1
   
@@ -396,16 +397,16 @@ test_autocorr <- function(df, outcome, pooled=TRUE){
   acf_plot_fin <- plot_pooled_acf(test_result, plot='ACF', name=name, num)
   pacf_plot_fin <- plot_pooled_acf(test_result, plot='PACF', name=name, num)
   
-  AIC_ACF <- list(); AIC_PACF <- list()
-  AIC_ACF$raw <- acf_plot_raw
-  AIC_ACF$fin <- acf_plot_fin
-  AIC_PACF$raw <- pacf_plot_raw
-  AIC_PACF$fin <- pacf_plot_fin
-  AIC_ACF$all <- acf_plot_raw + acf_plot_fin + plot_layout(ncol=2)
-  AIC_PACF$all <- pacf_plot_raw + pacf_plot_fin + plot_layout(ncol=2)
+  QAIC_ACF <- list(); QAIC_PACF <- list()
+  QAIC_ACF$raw <- acf_plot_raw
+  QAIC_ACF$fin <- acf_plot_fin
+  QAIC_PACF$raw <- pacf_plot_raw
+  QAIC_PACF$fin <- pacf_plot_fin
+  QAIC_ACF$all <- acf_plot_raw + acf_plot_fin + plot_layout(ncol=2)
+  QAIC_PACF$all <- pacf_plot_raw + pacf_plot_fin + plot_layout(ncol=2)
   
-  return(list(modelfitstats=modelfitstats,  best_fit=num, aic_plot=aic_plot,
-              AIC_ACF=AIC_ACF, AIC_PACF=AIC_PACF))
+  return(list(modelfitstats=modelfitstats,  best_fit=num, qaic_plot=qaic_plot,
+              QAIC_ACF=QAIC_ACF, QAIC_PACF=QAIC_PACF))
 }
 
 # Pooled tests
@@ -420,17 +421,17 @@ sens_res$pooled$autocorr$res <- test_autocorr(df, outcome, pooled=TRUE)
 #   print(l)
 # }
 # sens_res$city$autocorr$res <- city_autocorr_res
-# city_autocorr_aic <- wrap_plots(map(city_autocorr_res, 'aic_plot'), nrow=2) &
-#   plot_annotation(title='City-specific AIC: Autocorrelation lags',
+# city_autocorr_qaic <- wrap_plots(map(city_autocorr_res, 'qaic_plot'), nrow=2) &
+#   plot_annotation(title='City-specific QAIC: Autocorrelation lags',
 #                   theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
-# city_autocorr_acf <- (wrap_plots(map(map(city_autocorr_res, "AIC_ACF"), 'all'), nrow=4) & theme(axis.title.x=element_blank()))  +
+# city_autocorr_acf <- (wrap_plots(map(map(city_autocorr_res, "QAIC_ACF"), 'all'), nrow=4) & theme(axis.title.x=element_blank()))  +
 #   plot_annotation(
 #     title="City-specific ACF Comparison",
 #     theme=theme(plot.title=element_text(hjust=0.5, face="bold"))
 #   )
 
 # ALL plots for appendix
-all <- list(sens_res$pooled$autocorr$res$AIC_ACF$raw, sens_res$pooled$autocorr$res$aic_plot, sens_res$pooled$autocorr$res$AIC_ACF$fin)
+all <- list(sens_res$pooled$autocorr$res$QAIC_ACF$raw, sens_res$pooled$autocorr$res$qaic_plot, sens_res$pooled$autocorr$res$QAIC_ACF$fin)
 pooled_autocorr <- (wrap_plots(all, nrow=1))  +
   plot_annotation(
     tag_levels = 'A',
@@ -439,7 +440,7 @@ pooled_autocorr <- (wrap_plots(all, nrow=1))  +
 
 # EXPORT
 sens_analysis <- list('2A_pooled_autocorr_ALL'=list(p=pooled_autocorr, w=12, h=4))
-                      # '2B_city_autocorr_AIC'=list(p=city_autocorr_aic, w=14, h=8),
+                      # '2B_city_autocorr_QAIC'=list(p=city_autocorr_qaic, w=14, h=8),
                       # '2B_city_autocorr_ACF'=list(p=city_autocorr_acf, w=14, h=12))
 
 for (n in names(sens_analysis)) {
@@ -461,7 +462,7 @@ for (n in names(sens_analysis)) {
 test_var <- function (df, outcome, exp, pooled=TRUE, tmp_title='tmp'){
 
   if(pooled==TRUE){
-    title <-  paste0('Pooled AIC & Estimates: Time-varying confounders (', 
+    title <-  paste0('Pooled QAIC & Estimates: Time-varying confounders (', 
                      replace_exact_matches(exp, nm), ')')
     longterm_df <- sens_res$pooled$longterm$res$best_fit
     autocorr_lag <- sens_res$pooled$autocorr$res$best_fit
@@ -505,17 +506,17 @@ test_var <- function (df, outcome, exp, pooled=TRUE, tmp_title='tmp'){
     
     modelfitstats <- rbind(modelfitstats, data.frame(
       model  =cname,
-      AIC    =test_result$meta_comp$sum_aic
+      QAIC    =test_result$meta_comp$sum_qaic
     )) 
     
   }
 
-  # Get AIC
-  best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-  aic_plot <- plot_AIC_res(modelfitstats, title, best_fit, xlab='Model')
-  modelfitstats <- modelfitstats %>% arrange(AIC)
+  # Get QAIC
+  best_fit <- modelfitstats[which.min(modelfitstats$QAIC), ]$model
+  qaic_plot <- plot_QAIC_res(modelfitstats, title, best_fit, xlab='Model')
+  modelfitstats <- modelfitstats %>% arrange(QAIC)
 
-  return(list(modelfitstats=modelfitstats, best_fit=best_fit, aic_plot=aic_plot))
+  return(list(modelfitstats=modelfitstats, best_fit=best_fit, qaic_plot=qaic_plot))
 
 }
 
@@ -530,16 +531,15 @@ for (c in controls){
 
 sens_res$pooled$confound$res <- results
 
-plots <- map(results, 'aic_plot')
+plots <- map(results, 'qaic_plot')
 controls[1] <- a
 titles <- replace_exact_matches(controls, nm)
-pool_confound_aic <- wrap_plots(map2(plots, titles, \(p, t) p + ggtitle(t)), nrow=1) &
-  plot_annotation(title='Pooled AIC: Time-varying exposures',
+pool_confound_qaic <- wrap_plots(map2(plots, titles, \(p, t) p + ggtitle(t)), nrow=1) &
+  plot_annotation(title='Pooled QAIC: Time-varying exposures',
                   theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
 
-
 # EXPORT
-sens_analysis <- list('3A_pooled_confound_ALL'=list(p=pool_confound_aic, w=9, h=3))
+sens_analysis <- list('3A_pooled_confound_ALL'=list(p=pool_confound_qaic, w=9, h=3))
 for (n in names(sens_analysis)) {
   ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/', export,'/SM_', n, '.png'), 
          plot=sens_analysis[[n]]$p, width=sens_analysis[[n]]$w,height=sens_analysis[[n]]$h, dpi=300)
@@ -569,21 +569,21 @@ test_window <- function(df, outcome, pooled=TRUE, exp='t2m'){
                              lag_window=c(0,i))
     modelfitstats <- rbind(modelfitstats, data.frame(
       model  =i,
-      AIC    =test_result$meta_comp$sum_aic,
+      QAIC    =test_result$meta_comp$sum_qaic,
       esti   =test_result$meta_comp$sum_esti
     ))
   }
   
-  # Get AIC
-  best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-  aic_plot <- plot_AIC_res(modelfitstats, title=title, best_fit)
+  # Get QAIC
+  best_fit <- modelfitstats[which.min(modelfitstats$QAIC), ]$model
+  qaic_plot <- plot_QAIC_res(modelfitstats, title=title, best_fit)
   esti_plot <- plot_ESTI_res(modelfitstats, exp)
 
-  modelfitstats <- modelfitstats %>% arrange(AIC)
+  modelfitstats <- modelfitstats %>% arrange(QAIC)
   num <- as.numeric(sub('.*\\((\\d+)\\).*', '\\1', best_fit))
   num[is.na(num)] <- 1
   
-  return(list(modelfitstats=modelfitstats, best_fit=num, aic_plot=aic_plot, esti_plot=esti_plot))
+  return(list(modelfitstats=modelfitstats, best_fit=num, qaic_plot=qaic_plot, esti_plot=esti_plot))
 }
 
 exp <- c('tmp', 'tp')
@@ -594,12 +594,12 @@ for (i in exp){
 pooled_window_esti <- wrap_plots(imap(pooled_window_lag, ~ .x$esti), nrow=1) &
   plot_annotation(title='Pooled Estimations: Lag window',
                   theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
-pooled_window_aic <- wrap_plots(imap(pooled_window_lag, ~ .x$aic), nrow=1) &
-  plot_annotation(title='Pooled AIC: Lag window',
+pooled_window_qaic <- wrap_plots(imap(pooled_window_lag, ~ .x$qaic), nrow=1) &
+  plot_annotation(title='Pooled QAIC: Lag window',
                   theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
 
 sens_analysis <- list('4A_pooled_window_esti'=list(p=pooled_window_esti, w=12, h=4))
-                      # '4B_pooled_window_AIC'=list(p=pooled_window_aic, w=12, h=5))
+                      # '4B_pooled_window_QAIC'=list(p=pooled_window_qaic, w=12, h=5))
 for (n in names(sens_analysis)) {
   ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/', export,'/SM_', n, '.png'), 
          plot=sens_analysis[[n]]$p, width=sens_analysis[[n]]$w,height=sens_analysis[[n]]$h, dpi=300)
@@ -615,7 +615,7 @@ test_arglag <- function(df, outcome, pooled, tmp_title='tmp'){
   
   # Select best params from previous tests
   if(pooled==TRUE){
-    title <- 'Pooled AIC: Variable lag'
+    title <- 'Pooled QAIC: Variable lag'
     longterm_df <- sens_res$pooled$longterm$res$best_fit
     autocorr_lag <- sens_res$pooled$autocorr$res$best_fit
   } else{
@@ -626,22 +626,25 @@ test_arglag <- function(df, outcome, pooled, tmp_title='tmp'){
   
   # Get tmp and tp lag params
   fit_arglag <- function(param, ex) {
-    modelfitstats <- do.call(rbind, lapply(3:6, \(i) {
-      args <- list(data=df, locations=locations, outcome=outcome,
-                   pooled=pooled, longterm_df=longterm_df, autocorr_lag=autocorr_lag)
-      args[[param]] <- i
-      test_result <- do.call(run_model, args)
-      data.frame(model=i, AIC=test_result$meta_comp$sum_aic,
-                 avg_tmp=test_result$meta_comp$avg_tmp, avg_tp=test_result$meta_comp$avg_tp)
-    }))
+    modelfitstats <- purrr::map_dfr(3:6, \(i) {
+      test_result <- run_model(
+        df, groups=locations, outcome = outcome, fam_type = 'binom',
+        longterm_df = longterm_df, autocorr_lag = autocorr_lag, lag_window = c(0, 10),
+        arglag_tmp = if (param == 'arglag_tmp') i else 3, argvar_tmp = 1,
+        arglag_tp  = if (param == 'arglag_tp')  i else 3, argvar_tp  = 1,
+        group_meta = NULL, subgroup_var = NULL
+      )
+      data.frame(model = i, QAIC = test_result$meta_comp$sum_qaic,
+                 avg_tmp = test_result$meta_comp$avg_tmp, avg_tp = test_result$meta_comp$avg_tp)
+    })
     
-    best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-    aic_plot <- plot_AIC_res(modelfitstats, ex, best_fit)
-    modelfitstats <- modelfitstats %>% arrange(AIC)
+    best_fit <- modelfitstats[which.min(modelfitstats$QAIC), ]$model
+    qaic_plot <- plot_QAIC_res(modelfitstats, ex, best_fit)
+    modelfitstats <- modelfitstats %>% arrange(QAIC)
     num <- as.numeric(sub('.*\\((\\d+)\\).*', '\\1', best_fit))
     num[is.na(num)] <- 1
     
-    return(list(modelfitstats=modelfitstats, best_fit=num, aic_plot=aic_plot))
+    return(list(modelfitstats=modelfitstats, best_fit=num, qaic_plot=qaic_plot))
   }
   
   modelfitstats_tmp <- fit_arglag('arglag_tmp', replace_exact_matches(tmp_title,nm))
@@ -653,8 +656,8 @@ test_arglag <- function(df, outcome, pooled, tmp_title='tmp'){
 # Pooled tests
 pooled_arglag_res <- test_arglag(df, outcome, pooled=TRUE, tmp_title=a)
 sens_res$pooled$arglag$res <- pooled_arglag_res
-pooled_arglag_aic <- wrap_plots(map(pooled_arglag_res, 'aic_plot'), nrow=1) &
-   plot_annotation(title='Pooled AIC: Variable lag',
+pooled_arglag_qaic <- wrap_plots(map(pooled_arglag_res, 'qaic_plot'), nrow=1) &
+   plot_annotation(title='Pooled QAIC: Variable lag',
                    theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
 
 # # Site specific tests
@@ -665,23 +668,23 @@ pooled_arglag_aic <- wrap_plots(map(pooled_arglag_res, 'aic_plot'), nrow=1) &
 #   print(l)
 # }
 # sens_res$city$arglag$res <- city_arglag_res
-# city_arglag_aic_tmp <- wrap_plots(
-#   imap(city_arglag_res, \(city, locations) city$tmp$aic_plot + ggtitle(locations)),
+# city_arglag_qaic_tmp <- wrap_plots(
+#   imap(city_arglag_res, \(city, locations) city$tmp$qaic_plot + ggtitle(locations)),
 #   nrow = 2
 # ) &
-#   plot_annotation(title = paste0('City-specific AIC: ', replace_exact_matches('tmp', nm), ' lag'),
+#   plot_annotation(title = paste0('City-specific QAIC: ', replace_exact_matches('tmp', nm), ' lag'),
 #                   theme = theme(plot.title = element_text(hjust = 0.5, face = 'bold')))
-# city_arglag_aic_tp <- wrap_plots(
-#   imap(city_arglag_res, \(city, locations) city$tp$aic_plot + ggtitle(locations)),
+# city_arglag_qaic_tp <- wrap_plots(
+#   imap(city_arglag_res, \(city, locations) city$tp$qaic_plot + ggtitle(locations)),
 #   nrow = 2
 # ) &
-#   plot_annotation(title = paste0('City-specific AIC: ', replace_exact_matches('tp', nm), ' lag'),
+#   plot_annotation(title = paste0('City-specific QAIC: ', replace_exact_matches('tp', nm), ' lag'),
 #                   theme = theme(plot.title = element_text(hjust = 0.5, face = 'bold')))
 
 # EXPORT
-sens_analysis <- list('4B_pooled_arglag_AIC'=list(p=pooled_arglag_aic, w=9, h=3))
-                      # '4B_city_arglag_tmp_AIC'=list(p=city_arglag_aic_tmp, w=12, h=8),
-                      # '4B_city_arglag_tp_AIC'=list(p=city_arglag_aic_tp, w=12, h=8))
+sens_analysis <- list('4B_pooled_arglag_QAIC'=list(p=pooled_arglag_qaic, w=9, h=3))
+                      # '4B_city_arglag_tmp_QAIC'=list(p=city_arglag_qaic_tmp, w=12, h=8),
+                      # '4B_city_arglag_tp_QAIC'=list(p=city_arglag_qaic_tp, w=12, h=8))
 
 for (n in names(sens_analysis)) {
   ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/', export,'/SM_', n, '.png'), 
@@ -689,8 +692,6 @@ for (n in names(sens_analysis)) {
   print(n)
 }
 
-
-# # Updates
 # var <- controls[1:2]
 # if(test == 'immediate'){
 #   updates <- list(
@@ -743,54 +744,46 @@ test_argvar <- function(df, outcome, pooled, tmp_title='tmp'){
   
   fit_argvar <- function(param, meta_key, ref, col, title, xlab) {
     
-    var_shp <- list()
-    modelfitstats <- data.frame()
-    
-    # Linear
-    args <- list(data=df, locations=locations, outcome=outcome,
-                 pooled=pooled, longterm_df=longterm_df, autocorr_lag=autocorr_lag,
-                 arglag_tmp=arglag_tmp_df, arglag_tp=arglag_tp_df)
-    args[[param]] <- 1
-    test_result <- do.call(run_model, args)
-    modelfitstats <- rbind(modelfitstats, data.frame(
-      model=  'Linear',
-      AIC    = test_result$meta_comp$sum_aic,
-      avg_tmp= test_result$meta_comp$avg_tmp,
-      avg_tp = test_result$meta_comp$avg_tp
-    ))
-    var_shp[['Linear']] <- city_exp_res(city=city, lag=NULL, meta=test_result[[meta_key]], 
-                                        col=col, xlab=xlab, title='Linear', reference=ref)[[p]]
-    
-    # NS df=3:6
-    for (i in 3:6) {
-      name <- paste0('NS', i)
-      args[[param]] <- i
-      test_result <- do.call(run_model, args)
-      modelfitstats <- rbind(modelfitstats, data.frame(
-        model  = name,
-        AIC    = test_result$meta_comp$sum_aic,
-        avg_tmp= test_result$meta_comp$avg_tmp,
-        avg_tp = test_result$meta_comp$avg_tp
-      ))
-      var_shp[[name]] <- city_exp_res(city=city, lag=NULL, meta=test_result[[meta_key]], 
-                                      col=col, xlab='Percentiles (%)', title=name, reference=ref)[[p]]
+    run_one <- function(i) {
+      run_model(
+        df, groups=locations, outcome = outcome, fam_type = 'binom',
+        longterm_df = longterm_df, autocorr_lag = autocorr_lag, lag_window = c(0, 10),
+        arglag_tmp = arglag_tmp_df, arglag_tp = arglag_tp_df,
+        argvar_tmp = if (param == 'argvar_tmp') i else 1,
+        argvar_tp  = if (param == 'argvar_tp')  i else 1
+      )
     }
     
-    best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
-    aic_plot <- plot_AIC_res(modelfitstats, title, best_fit)
+    dfs <- c(Linear = 1, setNames(3:6, paste0('NS', 3:6)))
+    results <- purrr::imap(dfs, \(i, name) {
+      res <- run_one(i)
+      list(
+        stats = data.frame(model = name, QAIC = res$meta_comp$sum_qaic,
+                           avg_tmp = res$meta_comp$avg_tmp, avg_tp = res$meta_comp$avg_tp),
+        shp = city_exp_res(city = city, lag = NULL, meta = res[[meta_key]], col = col,
+                           xlab = if (name == 'Linear') xlab else 'Percentiles (%)',
+                           title = name, reference = ref)[[p]]
+      )
+    })
+    
+    modelfitstats <- purrr::map_dfr(results, 'stats')
+    var_shp <- purrr::map(results, 'shp')
+    
+    best_fit <- modelfitstats[which.min(modelfitstats$QAIC), ]$model
+    qaic_plot <- plot_QAIC_res(modelfitstats, title, best_fit)
     esti_tmp_plot <- plot_ESTI_res(modelfitstats, exp='tmp')
     esti_tp_plot  <- plot_ESTI_res(modelfitstats, exp='tp')
-    all_plot <- wrap_plots(list(aic_plot+theme(plot.title=element_blank()), esti_tmp_plot, esti_tp_plot), nrow=1) &
+    all_plot <- wrap_plots(list(qaic_plot+theme(plot.title=element_blank()), esti_tmp_plot, esti_tp_plot), nrow=1) &
       plot_annotation(title=title, theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
     var_shp <- wrap_plots(var_shp, nrow=1) &
       plot_annotation(title='Pooled Relationship: Variable exposure distribution, by df',
                       theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
     
-    modelfitstats <- modelfitstats %>% arrange(AIC)
+    modelfitstats <- modelfitstats %>% arrange(QAIC)
     num <- as.numeric(gsub("[^0-9.]", "", best_fit))
     num[is.na(num)] <- 1
     
-    return(list(modelfitstats=modelfitstats, best_fit=num, aic_plot=aic_plot, var_shp=var_shp))
+    return(list(modelfitstats=modelfitstats, best_fit=num, qaic_plot=qaic_plot, var_shp=var_shp))
   }
 
   res_argvar_tmp <- fit_argvar('argvar_tmp', 'meta_tmp', ref='50%', col='#D74B3C', replace_exact_matches(tmp_title, nm), 'Temperature (%)')
@@ -802,13 +795,13 @@ test_argvar <- function(df, outcome, pooled, tmp_title='tmp'){
 # Pooled tests
 pooled_argvar_res <- test_argvar(df, outcome, pooled=TRUE, tmp_title=a)
 sens_res$pooled$argvar$res <- pooled_argvar_res
-pooled_argvar_aic <- wrap_plots(map(pooled_argvar_res, 'aic_plot'), nrow=1) &
-    plot_annotation(title='Pooled AIC: Variable shape',
+pooled_argvar_qaic <- wrap_plots(map(pooled_argvar_res, 'qaic_plot'), nrow=1) &
+    plot_annotation(title='Pooled QAIC: Variable shape',
                     theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
 pooled_argvar_dis <- wrap_plots(map(pooled_argvar_res, 'var_shp'), ncol=1) +
   plot_layout(guides = "collect") &
   theme(legend.position = "none") &
-  plot_annotation(title='Pooled AIC: Variable distribution',
+  plot_annotation(title='Pooled QAIC: Variable distribution',
                   theme=theme(plot.title=element_text(hjust=0.5, face='bold')))
 
 # # Site specific tests
@@ -819,17 +812,17 @@ pooled_argvar_dis <- wrap_plots(map(pooled_argvar_res, 'var_shp'), ncol=1) +
 #   print(l)
 # }
 # sens_res$city$argvar$res <- city_argvar_res
-# city_argvar_aic_tmp <- wrap_plots(
-#   imap(city_argvar_res, \(city, locations) city$tmp$aic_plot + ggtitle(locations)),
+# city_argvar_qaic_tmp <- wrap_plots(
+#   imap(city_argvar_res, \(city, locations) city$tmp$qaic_plot + ggtitle(locations)),
 #   nrow = 2
 # ) &
-#   plot_annotation(title = paste0('City-specific AIC: ', replace_exact_matches('tmp', nm), ' shape'),
+#   plot_annotation(title = paste0('City-specific QAIC: ', replace_exact_matches('tmp', nm), ' shape'),
 #                   theme = theme(plot.title = element_text(hjust = 0.5, face = 'bold')))
-# city_argvar_aic_tp <- wrap_plots(
-#   imap(city_argvar_res, \(city, locations) city$tp$aic_plot + ggtitle(locations)),
+# city_argvar_qaic_tp <- wrap_plots(
+#   imap(city_argvar_res, \(city, locations) city$tp$qaic_plot + ggtitle(locations)),
 #   nrow = 2
 # ) &
-#   plot_annotation(title = paste0('City-specific AIC: ', replace_exact_matches('tp', nm), ' shape'),
+#   plot_annotation(title = paste0('City-specific QAIC: ', replace_exact_matches('tp', nm), ' shape'),
 #                   theme = theme(plot.title = element_text(hjust = 0.5, face = 'bold')))
 # 
 # # Get city specific distributions
@@ -843,12 +836,12 @@ pooled_argvar_dis <- wrap_plots(map(pooled_argvar_res, 'var_shp'), ncol=1) +
 # }
 
 # EXPORT
-sens_analysis <- list('5A_pooled_argvar_AIC'=list(p=pooled_argvar_aic, w=9, h=3),
+sens_analysis <- list('5A_pooled_argvar_QAIC'=list(p=pooled_argvar_qaic, w=9, h=3),
                       '5A_pooled_argvar_DIS'=list(p=pooled_argvar_dis, w=15, h=5))
-                      # '5B_city_argvar_AIC_tmp'=list(p=city_argvar_aic_tmp, w=12, h=8),
-                      # '5B_city_argvar_AIC_tp'=list(p=city_argvar_aic_tp, w=12, h=8))
+                      # '5B_city_argvar_QAIC_tmp'=list(p=city_argvar_qaic_tmp, w=12, h=8),
+                      # '5B_city_argvar_QAIC_tp'=list(p=city_argvar_qaic_tp, w=12, h=8))
 
-# AIC
+# QAIC
 for (n in names(sens_analysis)) {
   ggsave(filename=paste0(path_report, 'II. dlnm/sensitivity/', export,'/SM_', n, '.png'), 
          plot=sens_analysis[[n]]$p, width=sens_analysis[[n]]$w,height=sens_analysis[[n]]$h, dpi=300)
@@ -900,9 +893,9 @@ final_params$pooled$longterm <- sens_res$pooled$longterm$res$best_fit
 final_params$pooled$autocorr <- sens_res$pooled$autocorr$res$best_fit
 final_params$pooled$lag_window  <- sens_res$pooled$lag_window$res$best_fit
 final_params$pooled$arglag_tmp <- sens_res$pooled$arglag$res$tmp$best_fit
-final_params$pooled$argvar_tmp <- sens_res$pooled$argvar$res$tmp$best_fit
+final_params$pooled$argvar_tmp <- 3 # sens_res$pooled$argvar$res$tmp$best_fit
 final_params$pooled$arglag_tp <- sens_res$pooled$arglag$res$tp$best_fit
-final_params$pooled$argvar_tp <- sens_res$pooled$argvar$res$tp$best_fit
+final_params$pooled$argvar_tp <- 1 #sens_res$pooled$argvar$res$tp$best_fit
 
 # # Get city params
 # for (l in locations){
@@ -928,15 +921,15 @@ test_shape <- function(df, params, outcome, pooled=TRUE, city='ALL'){
   argvar_tmp <- params$argvar_tmp
   arglag_tp <- params$arglag_tp
 
-  # Run models
+    # Run models
   models <- c('quasi', 'binom')
   shapetest <- list()
   for(d in models){
-    output <- run_model(df, locations, outcome, fam_type=d, pooled=pooled,
-                            longterm_df=longterm_df, autocorr_lag=autocorr_lag, 
-                            arglag_tmp=arglag_tmp, arglag_tp=arglag_tp,
-                            argvar_tmp=argvar_tmp)
-    shapetest[[d]]$aic <- data.frame(model=d, AIC=output$meta_comp$sum_aic)
+    output <- run_model(df, groups=locations, outcome = outcome, fam_type=d,
+                        longterm_df = longterm_df, autocorr_lag = autocorr_lag, lag_window = c(0, 10),
+                        arglag_tmp=arglag_tmp, arglag_tp=arglag_tp,
+                        argvar_tmp=argvar_tmp)
+    shapetest[[d]]$qaic <- data.frame(model=d, QAIC=output$meta_comp$sum_qaic)
     
     # Exposure response (with city specs) by lag
     shapetest[[d]]$dis$p_er_tmp <- city_exp_res(city=city, lag=NULL, meta=output$meta_tmp, col='#D74B3C', xlab='Temperature (%)', title=NULL, reference='50%')$p_blup
@@ -946,8 +939,8 @@ test_shape <- function(df, params, outcome, pooled=TRUE, city='ALL'){
   }
   
   # Checks
-  modelfitstats <- rbind(shapetest$quasi$aic, shapetest$binom$aic)
-  best_fit <- modelfitstats[which.min(modelfitstats$AIC), ]$model
+  modelfitstats <- rbind(shapetest$quasi$qaic, shapetest$binom$qaic)
+  best_fit <- modelfitstats[which.min(modelfitstats$QAIC), ]$model
   
   qp_plot_titled <- wrap_plots(shapetest$quasi$dis, nrow=1) + 
     plot_annotation(title=paste0(title, 'Quasipoisson'), theme=theme(plot.title=element_text(hjust=0.5, face='bold'))) &
@@ -964,7 +957,7 @@ test_shape <- function(df, params, outcome, pooled=TRUE, city='ALL'){
 shape_res <- list()
 shape_res$pooled <- test_shape(df=df, params=final_params$pooled, outcome=outcome, pooled=TRUE, city='ALL')
 shape_res$pooled$dis_plot
-final_params$pooled$shape <- shape_res$pooled$best_fit
+final_params$pooled$shape <- 'binom'
 
 # # Get city-specific results
 # for (l in locations){
@@ -1265,7 +1258,7 @@ sprintf('%d hours %d minutes %.d seconds', hours, minutes, seconds)
 # 
 #   # Meta metrics
 #   meta_comp <- list()
-#   meta_comp[['sum_aic']] <- sum(sapply(list_comp, function(x) x$aic))
+#   meta_comp[['sum_qaic']] <- sum(sapply(list_comp, function(x) x$qaic))
 #   meta_comp[['sum_pacf']] <- rowMeans(sapply(list_comp, function(x) as.numeric(x$pacf)))
 #   meta_comp[['sum_acf']] <- rowMeans(sapply(list_comp, function(x) as.numeric(x$acf)))
 #   meta_comp[['avg']] <- mean(sapply(list_comp, function(x) x$esti))
@@ -1276,11 +1269,11 @@ sprintf('%d hours %d minutes %.d seconds', hours, minutes, seconds)
 #                                         arg_var=arg_var_list[[v]], arg_lag=arg_lag_list[[v]], ranges=ranges[[v]], cen=cen[[v]])
 #   }
 # 
-#   # Format AIC
-#   aic_result <- data.frame(paste(variables, collapse="|"), meta_comp[['sum_aic']])
-#   names(aic_result) <- c('model','AIC' )
+#   # Format QAIC
+#   qaic_result <- data.frame(paste(variables, collapse="|"), meta_comp[['sum_qaic']])
+#   names(qaic_result) <- c('model','QAIC' )
 # 
-#   return(list(aic_result=aic_result, models=list_model, meta_coef=meta_coef,
+#   return(list(qaic_result=qaic_result, models=list_model, meta_coef=meta_coef,
 #               pacf_result=meta_comp[['sum_pacf']],
 #               acf_result=meta_comp[['sum_acf']]))
 # 
@@ -1337,7 +1330,7 @@ sprintf('%d hours %d minutes %.d seconds', hours, minutes, seconds)
 #   })
 #   names(res) <- sapply(combos, paste, collapse="|")
 # 
-#   out <- do.call(rbind, lapply(res, `[[`, "aic_result"))
+#   out <- do.call(rbind, lapply(res, `[[`, "qaic_result"))
 #   row.names(out) <- NULL
 #   out
 # })
@@ -1345,7 +1338,7 @@ sprintf('%d hours %d minutes %.d seconds', hours, minutes, seconds)
 # pooled_var_res <- do.call(rbind, Map(function(d, nm) { d$type <- nm; d }, all_results, names(all_results)))
 # pooled_var_res <- pooled_var_res[, c('type', setdiff(names(pooled_var_res), 'type'))]
 # row.names(pooled_var_res) <- NULL
-# pooled_var_res[order(pooled_var_res$AIC), ]
+# pooled_var_res[order(pooled_var_res$QAIC), ]
 # 
 # 
 # # Check tmp dis
@@ -1354,8 +1347,8 @@ sprintf('%d hours %d minutes %.d seconds', hours, minutes, seconds)
 # (x <- city_exp_res(city='ALL', lag=NULL, meta=tmp_fg10$meta_coef$tmp, col='red', xlab=NULL, title='tmp_fg10', reference='50%')[['p_raw']])
 # (x <- city_exp_res(city='ALL', lag=NULL, meta=tmp_tp_fg10$meta_coef$tmp, col='red', xlab=NULL, title='tmp_tp_fg10', reference='50%')[['p_raw']])
 # 
-# # Check AIC: Suggests removing windspeed from analysis #278079.9
-# # sens_res$pooled$var$aic <- pooled_var_res[order(pooled_var_res$AIC), ]
+# # Check QAIC: Suggests removing windspeed from analysis #278079.9
+# # sens_res$pooled$var$qaic <- pooled_var_res[order(pooled_var_res$QAIC), ]
 # 
 
 

@@ -90,8 +90,8 @@ df_weekly <- df_dlnm %>%
     hosp_teach = first(hosp_teach),
     
     # --- patient visit counts -> sum across the week ---
-    across(c(total_patients, F, M, under_5, age5_14, age15_24, age25_64,
-             over_65, general, emergency, ophthalmology, ent, paediatrics,
+    across(c(total_patients, F, M, under_5, age5_64,over_65, 
+             general, emergency, ophthalmology, ent, paediatrics,
              gynaecology, orthopaedics, dermatology, surgery, psychiatry,
              pulmonary, disability, dentistry, oncology, ncd,
              antiretroviral, substance_counselling, physiotherapy),
