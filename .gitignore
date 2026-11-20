@@ -15,3 +15,7 @@
 .Ruserdata
 .RDataTmp
 
+
+# Ignore specific folder
+_archive/
+_data/
