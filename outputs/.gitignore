@@ -1,0 +1,9 @@
+
+
+# Ignore specific files
+.Rproj.user
+.Rhistory
+.Ruserdata
+.RDataTmp
+
+

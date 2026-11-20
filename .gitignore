@@ -7,6 +7,7 @@
 *.bib
 *.png
 *.tex
+*.xlsx
 
 
 # Ignore specific files
@@ -19,3 +20,4 @@
 # Ignore specific folder
 _archive/
 _data/
+.Rproj.user/
