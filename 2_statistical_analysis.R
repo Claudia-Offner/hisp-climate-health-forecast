@@ -115,9 +115,6 @@ cont_sig <- list(
   tp =make_contour_plots(meta=output$meta_tp,  "Precipitation percentiles (%)", tp_ref,  sig=TRUE)
 )
 
-# ggsave(paste0(path_report, 'test.png'), cont_sig$tmp$ALL, width = 5, height = 5, dpi = 300, bg = 'white')
-# ggsave(paste0(path_report, 'test2.png'), cont_sig$tp$ALL, width = 5, height = 5, dpi = 300, bg = 'white')
-
 # Get exposure curves
 exp <- list(
   tmp=city_exp_res(meta=output$meta_tmp, col='#8968CD', xlab="Temperature percentiles (%)", title=paste0(ttl, " cumulative risk"), reference="50%")$p_blup,
@@ -269,8 +266,8 @@ if(a=='t2m'){
 
 # 3. Meta-predictor models ----
 
-if(a %in% c('t2m', 'mn2t', 'mx2t')){
-
+if(a=='t2m'){
+  
   predictors_list <- list(
     lat         = 'Latitude',
     lon         = 'Longitude',

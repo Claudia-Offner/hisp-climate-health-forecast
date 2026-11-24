@@ -57,25 +57,18 @@ outcome <- 'total_patients'
 # Keep variables
 keep_vars <- ls()
 
-# # !!! Percentile checks !!!
-# df <- data
-# df$var <- data$tp_roll7
-# # mean(df$var, na.rm = TRUE) - 6.4
-# cen <- sapply(split(df, df$location)[locations], function(x) quantile(x$var, (0:100)/100, na.rm = TRUE))
-# cen <- cbind(cen, Pooled = rowMeans(cen))
-
 # 1. Parameter selection ####
 
 analyses <- list(
   t2m       = list(data       = data,
                    immediate  = list(tmp = 't2m',         tp = 'tp_log'),
-                   cumulative = list(tmp = 't2m_roll7',   tp = 'tp_roll7_log'))
-  # mn2t      = list(data       = data,
-  #                  immediate  = list(tmp = 'mn2t',        tp = 'tp_log'),
-  #                  cumulative = list(tmp = 'mn2t_roll7',  tp = 'tp_roll7_log')),
-  # mx2t      = list(data       = data,
-  #                  immediate  = list(tmp = 'mx2t',        tp = 'tp_log'),
-  #                  cumulative = list(tmp = 'mx2t_roll7',  tp = 'tp_roll7_log'))
+                   cumulative = list(tmp = 't2m_roll7',   tp = 'tp_roll7_log')),
+  mn2t      = list(data       = data,
+                   immediate  = list(tmp = 'mn2t',        tp = 'tp_log'),
+                   cumulative = list(tmp = 'mn2t_roll7',  tp = 'tp_roll7_log')),
+  mx2t      = list(data       = data,
+                   immediate  = list(tmp = 'mx2t',        tp = 'tp_log'),
+                   cumulative = list(tmp = 'mx2t_roll7',  tp = 'tp_roll7_log'))
 )
 
 s <- '1_parameter_selection.R'
@@ -114,7 +107,7 @@ analyses <- list(
                    cumulative = list(tmp = 'mn2t_roll7',  tp = 'tp_roll7_log',  file = 't2m_cumulative_final_params.RData'))
 )
 
-s <- '2_statistical_analysis'
+s <- '2_statistical_analysis.R'
 for (a in names(analyses)) {
   # Load model specifications and data
   model_specs <- analyses[[a]]
@@ -122,13 +115,7 @@ for (a in names(analyses)) {
   for (model in names(model_specs[-1])) {
     # Load parameters
     spec <- model_specs[[model]]
-    if (is.character(spec$file)) {
-      load(paste0(path_project, 'Results/', spec$file))
-      final_params$pooled$shape <- 'binom'
-    } else{
-      final_params <- list()
-      final_params$pooled <- spec$file
-    }
+    load(paste0(path_git, 'outputs/', spec$file))
     df$tmp <- df[[spec$tmp]]
     df$tp   <- df[[spec$tp]]
     tp_ref  <- get_tp_ref(df, locations)
@@ -142,7 +129,7 @@ rm(list = setdiff(ls(), c(keep_vars, 'keep_vars', 's', 'analyses', 'a', 'df', 'm
 
 # 3. Export figures and tables ####
 
-s <- '3_figures_and_tables'
+s <- '3_figures_and_tables.R'
 for (a in names(analyses)) {
   model_specs <- analyses[[a]]
   model1 <- names(model_specs)[2]; model2 <- names(model_specs)[3]
@@ -160,7 +147,7 @@ for (a in names(analyses)) {
 rm(list = setdiff(ls(), c(keep_vars, 'keep_vars', 's', 'analyses', 'a', 'model_specs', 'model')))
 
 
-#### End timer: 2 hours 35 minutes 40 seconds (31/03/2026) ####
+#### End timer: 5 hours 55 minutes 40 seconds (31/03/2026) ####
 end <- Sys.time()
 dt <- round(as.numeric(end - start, units = 'secs'))
 hours   <- dt %/% 3600

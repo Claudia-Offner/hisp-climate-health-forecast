@@ -717,9 +717,9 @@ final_params$pooled$longterm <- sens_res$pooled$longterm$res$best_fit
 final_params$pooled$autocorr <- sens_res$pooled$autocorr$res$best_fit
 final_params$pooled$lag_window  <- sens_res$pooled$lag_window$res$best_fit
 final_params$pooled$arglag_tmp <- sens_res$pooled$arglag$res$tmp$best_fit
-final_params$pooled$argvar_tmp <- sens_res$pooled$argvar$res$tmp$best_fit
+final_params$pooled$argvar_tmp <- 3
 final_params$pooled$arglag_tp <- sens_res$pooled$arglag$res$tp$best_fit
-final_params$pooled$argvar_tp <- sens_res$pooled$argvar$res$tp$best_fit
+final_params$pooled$argvar_tp <- 1
 
 # 7.  (Shape) Test shape of response #####
 
