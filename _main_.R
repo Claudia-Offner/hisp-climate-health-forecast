@@ -9,7 +9,7 @@ options(scipen=999); set.seed(123)
 # Set data path
 user <- 'claer14'
 path_data <- paste0('C:/Users/', user, '/OneDrive - University of Cambridge/III. Research/Data/')
-path_git <- paste0('C:/Users/', user, '/Documents/GitHub/hisp-climate-health-forecast/')
+path_git <- paste0('C:/Users/', user, '/Documents/GitHub/ind-weather-health-analysis/')
 path_report <- paste0(path_git, 'results/')
 setwd(path_git)
 start <- Sys.time()
